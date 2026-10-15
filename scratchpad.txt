@@ -14,4 +14,29 @@ Q3. Something
 Q4. Weekly Challenge
     Link
 
+-----
+STATUS 2026-10-15 — BUILT (by Manas Ranjan)
+Engine: SurveyJS Form Library (MIT, free) v3.2.1 — vendored, works offline.
+  Why: only free engine with multiple inputs under ONE question
+  (multipletext + panels), URL validation, maxSize-capped uploads,
+  full CSS-variable theming, posts anywhere (Google Apps Script).
+
+Form per scratchpad spec:
+  Q1 Instagram Reel = Input1 Reel URL + Input2 analytics screenshot
+     upload (5 MB cap, image types) + Input3 notes placeholder
+  Q2 File Formats = dual inputs under one question (multipletext)
+  Q3 Something = placeholder text
+  Q4 Weekly Challenge = validated URL link
+
+Files:
+  index.html · css/theme.css · css/vendor/ · js/{app,survey-config,gas-endpoint}.js
+  js/vendor/ · gas/Code.gs · docs/ARCHITECTURE.md · README.md · serve.sh
+
+Run local:     ./serve.sh            → http://localhost:8080
+Wire backend:  script.google.com → paste gas/Code.gs → deploy Web app
+               (Anyone) → paste /exec URL into js/gas-endpoint.js
+Go public:     GitHub Pages → Settings → Pages → main / root
+Tested:        E2E pass — validation, size cap (6 MB file rejected),
+               dual inputs, image upload, submit + completed screen.
+Mode now:      LOCAL (console + localStorage) until GAS URL is pasted.
 
