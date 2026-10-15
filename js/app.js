@@ -110,6 +110,38 @@
       });
   });
 
+  /* ---- the angry pointer ---------------------------------------------------
+     One event (submitting without a required answer), two interactions:
+     an empty input field or an untouched upload button. When Complete/Next
+     is clicked and validation fails, the pixel pointer flies in from the
+     bottom-right edge and slams 1-3 randomized times on each missing field. */
+  function pclErroredQuestions() {
+    var out = [];
+    (function walk(els) {
+      (els || []).forEach(function (el) {
+        if (el.isQuestion) {
+          if (el.errors && el.errors.length) out.push(el);
+        } else if (el.elements) {
+          walk(el.elements);
+        }
+      });
+    })(survey.currentPage && survey.currentPage.elements);
+    return out;
+  }
+
+  document.getElementById("surveyContainer").addEventListener("click",
+    function (e) {
+      var t = e.target;
+      var btn = t && t.closest ? t.closest(
+        ".sd-navigation__complete-btn, .sd-navigation__next-btn") : null;
+      if (!btn || !window.PCL_FingerSlam) return;
+      // let SurveyJS finish validating + scrolling to the first error first
+      setTimeout(function () {
+        var errs = pclErroredQuestions();
+        if (errs.length) window.PCL_FingerSlam.slam(errs);
+      }, 40);
+    }, true); // capture phase: SurveyJS stops propagation on its nav buttons
+
   /* ---- file-input bridge -------------------------------------------------
      SurveyJS normally owns the file flow, but some browsers/automation
      paths set files on the visible input without SurveyJS's chooser ever
