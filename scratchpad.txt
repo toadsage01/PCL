@@ -40,3 +40,12 @@ Tested:        E2E pass — validation, size cap (6 MB file rejected),
                dual inputs, image upload, submit + completed screen.
 Mode now:      LOCAL (console + localStorage) until GAS URL is pasted.
 
+
+[2026-10-16] Theme v3 — PIXEL ARCADE direction (per user feedback):
+- No cover image. Arcade marquee header (black band, PCL logo, blinking INSERT REEL).
+- Colors: orange #ed3b00 (leaderboard bars) + royal-blue family (logo/leaderboard bg DNA).
+- Pixel fonts vendored: Press Start 2P (display), Silkscreen (titles/labels), Pixelify Sans (body).
+- All UI pixelated: square corners, 3px borders, hard offset shadows, box-shadow pixel glyphs.
+- Dark = "Midnight Arcade" (deep indigo + neon orange glow + dot grid + scanlines).
+- Light = "Sunset Cabinet" (warm cream + navy + orange, no bland white).
+- Completed screen: LEVEL CLEARED / +100 XP. Story + humor expansion to follow in later parts.

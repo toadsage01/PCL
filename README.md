@@ -9,10 +9,13 @@ Built on the **SurveyJS Form Library** (MIT license — free): the engine
 feature Google Forms lacked (two inputs inside one question) is native
 here, and the whole form is a declarative JSON you can reshape anytime.
 
-Themed after **praper.in** — white base, navy `#1d3557` text, crimson
-`#e11d2e` accents, pink `#f5a8b8` highlighter, Poppins type — with a
-**light + dark mode** toggle (moon-ride mascot art in `assets/brand/`,
-original inspo saved in `assets/inspo/`).
+**Pixel Arcade theme** — built from the PCL brand DNA: orange `#ed3b00`
+(leaderboard bars) on a deep royal-blue family, pixel type (Press Start 2P,
+Silkscreen, Pixelify Sans — all vendored in `fonts/`), square corners and
+hard offset shadows everywhere, and **glow-driven light + dark modes**
+("Sunset Cabinet" / "Midnight Arcade" — no bland black & white). The PCL
+logo lives in the black arcade marquee header (`assets/brand/`, original
+inspo saved in `assets/inspo/`).
 
 ## Features
 

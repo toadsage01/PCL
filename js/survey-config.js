@@ -14,16 +14,21 @@
       "One form per contestant, per week. Fields marked * are required. " +
       "Attach files up to " + window.PCL_CONFIG.maxFileMB + " MB each.",
 
+    // NOTE: single-page form — a progress widget reads as noise (v3 renders a
+    // page-button list). Flip to "top" if you split this into multiple pages;
+    // the theme already styles .sd-progress as a glowing segmented XP bar.
     showProgressBar: "off",
     focusFirstQuestionAutomatic: false,
 
-    // Screen shown after a successful submit
+    // Screen shown after a successful submit — pixel arcade style
     completedHtml:
       "<div class='pcl-done'>" +
-      "<img src='assets/brand/success-dino.png' alt=''>" +
-      "<h3>Submission received!</h3>" +
-      "<p>Your entry is in — the league sees it instantly. " +
-      "See you at the next weekly challenge.</p></div>",
+      "<div class='pcl-done-stars' aria-hidden='true'>\u2605\u2605\u2605</div>" +
+      "<h3>LEVEL CLEARED!</h3>" +
+      "<p class='pcl-done-sub'>Reel Submitted &middot; Entry Logged</p>" +
+      "<div class='pcl-done-xp'>+100 XP</div>" +
+      "<p class='pcl-done-note'>Your entry is in — the league sees it " +
+      "instantly. See you at the next weekly challenge.</p></div>",
 
     elements: [
       /* ---------------------------------------------------------------
@@ -37,7 +42,8 @@
         type: "panel",
         name: "q1_reel",
         title: "Q1. Instagram Reel Submission",
-        description: "One reel entry = link + analytics screenshot + notes.",
+        description: "One reel entry = link + analytics screenshot + notes. " +
+          "Complete all three inputs to clear this stage.",
         elements: [
           {
             type: "text",
