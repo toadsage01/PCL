@@ -1,0 +1,17 @@
+I need to make a form with custom design power, 
+currently leave placeholders for the questions or answer or any sort text where I've not give specification upon,
+
+Q1. Instagram reel placeholder
+Answer section
+INPUT 1, Reel URL Link
+INPUT 2, Image or Screenshot Upload of Analytics of that Reel
+INPUT 3, Text based input about something I'll Later specify
+
+Q2. File Formats
+
+Q3. Something
+
+Q4. Weekly Challenge
+    Link
+
+
