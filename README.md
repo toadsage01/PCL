@@ -9,6 +9,11 @@ Built on the **SurveyJS Form Library** (MIT license — free): the engine
 feature Google Forms lacked (two inputs inside one question) is native
 here, and the whole form is a declarative JSON you can reshape anytime.
 
+Themed after **praper.in** — white base, navy `#1d3557` text, crimson
+`#e11d2e` accents, pink `#f5a8b8` highlighter, Poppins type — with a
+**light + dark mode** toggle (moon-ride mascot art in `assets/brand/`,
+original inspo saved in `assets/inspo/`).
+
 ## Features
 
 - One question, many inputs — panels + `multipletext` (see Q1/Q2)
@@ -47,11 +52,32 @@ the browser console and are kept in `localStorage` (`pcl_submissions`).
 
 ## Go public (free)
 
-GitHub Pages — the site is a static root `index.html`, so just:
+**Option A — GitHub Pages** (pure static, GAS URL visible in client config):
 
-**Settings → Pages → Deploy from branch → `main` / `(root)` → Save**
+Settings → Pages → Deploy from branch → `main` / `(root)` → Save
 
-Your form: `https://toadsage01.github.io/Praper-Contest-League/`
+**Option B — Vercel** (free tier, keeps the GAS URL secret server-side):
+
+1. Push this repo, then in Vercel: **Add New → Project → Import** the repo
+2. Framework preset: **Other** (it's a static site + one serverless fn)
+3. Settings → Environment Variables → add
+   `GOOGLE_SCRIPT_WEBAPP_URL` = your `/exec` URL
+4. Deploy. Then flip `submitViaApi: true` in `js/gas-endpoint.js` so
+   submissions route through `/api/submit` (the serverless forwarder in
+   `api/submit.js`) instead of hitting GAS directly from the browser.
+
+**Local dev like Vercel prod** (`vercel dev`):
+
+```bash
+npm i -g vercel        # once
+vercel link            # follow prompts
+cp .env.example .env.local   # then paste your GAS /exec URL inside
+vercel dev             # → http://localhost:3000
+```
+
+> Scale notes: the form page is static → effectively unlimited concurrent
+> viewers; the real bottleneck is Google Apps Script itself (fine for a
+> weekly contest; for massive spikes, queue submissions before GAS).
 
 ## Customize
 
@@ -59,9 +85,11 @@ Your form: `https://toadsage01.github.io/Praper-Contest-League/`
 |---|---|
 | Questions / labels / required flags | `js/survey-config.js` |
 | Attachment cap + accepted types | `js/gas-endpoint.js` (`maxFileMB`, `fileTypes`) |
-| Colors, fonts, radius, branding | `css/theme.css` (`:root` tokens) |
+| Colors / dark & light palettes | `css/theme.css` (`:root` + `html[data-pcl-theme="dark"]` tokens) |
+| Hero & success art | `assets/brand/` (swap the PNGs) |
 | Backend sheet/folder names, server cap | `gas/Code.gs` (top CONFIG block) |
 | Success message | `completedHtml` in `survey-config.js` |
+| Submit mode (direct vs Vercel API) | `js/gas-endpoint.js` (`submitViaApi`) |
 
 Placeholders from the scratchpad (Q2 "File Formats", Q3 "Something",
 Q1 Input 3) are clearly marked — swap the text when the spec lands.
