@@ -8,6 +8,12 @@ window.PCL_CONFIG = {
   // console + localStorage so you can demo the form without any backend.
   gasWebAppUrl: "",
 
+  // Set true on a Vercel deployment: submissions POST to /api/submit and the
+  // serverless function forwards them to Google Apps Script using the
+  // GOOGLE_SCRIPT_WEBAPP_URL environment variable (URL stays secret, no CORS
+  // concerns). Keep false for pure static hosting (GitHub Pages / local).
+  submitViaApi: false,
+
   // Hard cap per uploaded attachment, in MB.
   // Enforced client-side (SurveyJS maxSize) AND server-side (Code.gs guard).
   maxFileMB: 5,

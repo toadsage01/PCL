@@ -19,8 +19,11 @@
 
     // Screen shown after a successful submit
     completedHtml:
-      "<h3 style='margin:0 0 8px'>Submission received</h3>" +
-      "<p style='margin:0'>Your entry is in. See you at the next weekly challenge.</p>",
+      "<div class='pcl-done'>" +
+      "<img src='assets/brand/success-dino.png' alt=''>" +
+      "<h3>Submission received!</h3>" +
+      "<p>Your entry is in — the league sees it instantly. " +
+      "See you at the next weekly challenge.</p></div>",
 
     elements: [
       /* ---------------------------------------------------------------

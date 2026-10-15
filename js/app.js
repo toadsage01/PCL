@@ -11,16 +11,33 @@
 (function () {
   var cfg = window.PCL_CONFIG;
 
+  /* ---- theme toggle (light = praper brand, dark = night ride) ---- */
+  var THEME_KEY = "pcl_theme";
+  var toggleBtn = document.getElementById("pclThemeToggle");
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", function () {
+      var current =
+        document.documentElement.getAttribute("data-pcl-theme") === "dark"
+          ? "dark"
+          : "light";
+      var next = current === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-pcl-theme", next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ok */ }
+    });
+  }
+
   /* ---- header/footer status widgets ---- */
   var maxMb = document.getElementById("pclMaxSize");
   if (maxMb) maxMb.textContent = String(cfg.maxFileMB);
 
   var mode = document.getElementById("pclMode");
   if (mode) {
-    mode.textContent = cfg.gasWebAppUrl
-      ? "Mode: Google Apps Script connected"
-      : "Mode: LOCAL — submissions logged to console + localStorage " +
-        "(paste your GAS /exec URL into js/gas-endpoint.js)";
+    mode.textContent = cfg.submitViaApi
+      ? "Mode: Vercel API → Google Apps Script (URL kept secret server-side)"
+      : cfg.gasWebAppUrl
+        ? "Mode: Google Apps Script connected"
+        : "Mode: LOCAL — submissions logged to console + localStorage " +
+          "(paste your GAS /exec URL into js/gas-endpoint.js)";
   }
 
   /* ---- build the survey ---- */
@@ -37,7 +54,22 @@
     if (options.showDataSaving) options.showDataSaving();
 
     var done;
-    if (cfg.gasWebAppUrl) {
+    if (cfg.submitViaApi) {
+      // Vercel mode: same-origin POST → /api/submit serverless function
+      // forwards to GAS using process.env.GOOGLE_SCRIPT_WEBAPP_URL.
+      done = fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (res) {
+        if (!res.ok) throw new Error("API route responded HTTP " + res.status);
+        return res.json().catch(function () { return { ok: true }; });
+      }).then(function (out) {
+        if (out && out.ok === false) {
+          throw new Error(out.error || "API route rejected the submission");
+        }
+      });
+    } else if (cfg.gasWebAppUrl) {
       done = fetch(cfg.gasWebAppUrl, {
         method: "POST",
         // NOTE: no explicit Content-Type header → simple request → no
