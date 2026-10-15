@@ -837,6 +837,38 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   padding: 10px 16px 9px;
 }
 
+/* ---- PCL form cat (submit-button guardian) ---------------------------------------
+   Lives inside the nav row, left of the Complete button, bottom-aligned with
+   it. pointer-events:none — it never blocks clicks; z-index under the
+   finger-slam stage (99999). The shoved button slides past the card padding,
+   so nav ancestors must not clip it. */
+.sd-root-modern .sd-navigation {
+  position: relative;
+}
+.sd-root-modern .sd-footer,
+.sd-root-modern .sd-action-bar {
+  position: relative;
+}
+.sd-root-modern .sd-page,
+.sd-root-modern .sd-body,
+.sd-root-modern .sd-form,
+.sd-root-modern .sd-clear-buttons {
+  overflow: visible;
+}
+#pclCat {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 2;
+  will-change: transform;
+  filter: drop-shadow(0 3px 0 rgba(27, 18, 56, 0.25));
+}
+#pclCat canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
 /* ---- Completed screen: LEVEL CLEARED -------------------------------------------- */
 .pcl-done {
   text-align: center;
