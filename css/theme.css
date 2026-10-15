@@ -1,0 +1,146 @@
+/* ============================================================================
+   PCL custom theme — "custom design power" layer
+   SurveyJS v3 renders its palette from CSS custom properties, so this file
+   overrides the tokens (—sjs2-* namespace) on the survey root. Everything
+   below the brand tokens re-skins the engine; change the tokens to re-brand.
+   ========================================================================== */
+
+:root {
+  /* PCL brand tokens (edit these freely) */
+  --pcl-bg-1: #0f1220;
+  --pcl-bg-2: #1a1033;
+  --pcl-surface: #171b2e;
+  --pcl-surface-2: #1e2340;
+  --pcl-surface-3: #232949;
+  --pcl-primary: #6c5ce7;     /* violet — buttons, focus rings, accents   */
+  --pcl-primary-hi: #8b7bf5;
+  --pcl-accent: #00d1b2;      /* teal — highlights, completed state       */
+  --pcl-text: #eef0ff;
+  --pcl-muted: #9aa0c3;
+  --pcl-radius: 14px;
+  --pcl-line: rgba(255, 255, 255, 0.14);
+}
+
+/* ---- Page shell ---------------------------------------------------------- */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color: var(--pcl-text);
+  background:
+    radial-gradient(1100px 500px at 85% -10%, rgba(108, 92, 231, 0.25), transparent 60%),
+    radial-gradient(900px 420px at -10% 110%, rgba(0, 209, 178, 0.14), transparent 55%),
+    linear-gradient(160deg, var(--pcl-bg-1), var(--pcl-bg-2));
+  background-attachment: fixed;
+}
+
+.pcl-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 820px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 20px 10px;
+}
+
+.pcl-badge {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  color: #fff;
+  border-radius: var(--pcl-radius);
+  background: linear-gradient(135deg, var(--pcl-primary), var(--pcl-accent));
+  box-shadow: 0 8px 24px rgba(108, 92, 231, 0.45);
+}
+
+.pcl-header-text h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.pcl-header-text p {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--pcl-muted);
+}
+
+.pcl-main {
+  flex: 1;
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 12px 20px 32px;
+}
+
+.pcl-footer {
+  max-width: 820px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 14px 20px 26px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--pcl-muted);
+  text-align: center;
+}
+
+/* ---- SurveyJS v3 token mapping (dark card look) -------------------------- */
+.sd-root-modern {
+  /* let the page gradient show through the engine background */
+  --sjs2-color-utility-body: transparent;
+  --sjs2-color-utility-surface-survey: transparent;
+  --sjs2-color-utility-sheet: transparent;
+
+  /* surfaces / cards */
+  --sjs2-color-bg-basic-primary: var(--pcl-surface);
+  --sjs2-color-bg-basic-secondary: var(--pcl-surface-2);
+  --sjs2-color-bg-basic-tertiary: var(--pcl-surface-3);
+  --sjs2-color-bg-static-1-primary: rgba(255, 255, 255, 0.04);
+  --sjs2-color-bg-static-2-primary: rgba(255, 255, 255, 0.07);
+  --sjs2-color-bg-note-primary: var(--pcl-surface-2);
+
+  /* brand & accent (buttons, focus, links) */
+  --sjs2-color-bg-brand-primary: var(--pcl-primary);
+  --sjs2-color-bg-brand-secondary: var(--pcl-accent);
+  --sjs2-color-bg-brand-tertiary: var(--pcl-primary-hi);
+  --sjs2-color-bg-accent-primary: var(--pcl-primary);
+  --sjs2-color-bg-accent-secondary: var(--pcl-accent);
+  --sjs2-color-fg-brand-on-primary: #ffffff;
+  --sjs2-color-fg-accent-on-primary: #04121f;
+  --sjs2-color-border-brand-primary: var(--pcl-primary-hi);
+
+  /* typography */
+  --sjs2-color-fg-basic-primary: var(--pcl-text);
+  --sjs2-color-fg-basic-secondary: var(--pcl-muted);
+  --sjs2-color-fg-basic-tertiary: var(--pcl-muted);
+
+  /* borders */
+  --sjs2-color-border-basic-primary: var(--pcl-line);
+  --sjs2-color-border-basic-secondary: rgba(255, 255, 255, 0.09);
+
+  /* corner radii */
+  --sjs2-radius-component-action: 10px;
+  --sjs2-radius-component-formbox: 10px;
+  --sjs2-radius-component-checkbox: 6px;
+  --sjs2-radius-component-boolean: 8px;
+  --sjs2-radius-component-boolean-item: 6px;
+  --sjs2-radius-component-drop: 10px;
+  --sjs2-radius-component-drop-item: 8px;
+  --sjs2-radius-component-buttongroup-item: 8px;
+}
+
+/* Success screen highlight */
+.sd-root-modern .sd-completedpage .sd-title,
+.sd-root-modern .sd-title.sd-page__title {
+  color: var(--pcl-text);
+}
