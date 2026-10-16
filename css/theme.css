@@ -849,6 +849,11 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 .sd-root-modern .sd-action-bar {
   position: relative;
 }
+/* the cat hangs left of the nav column — every wrapping layer must let it
+   show: v3.2.1 clips at .sv-scroll__scroller (overflow-x: hidden, sits ABOVE
+   .sd-root-modern in the tree) and .sd-root-modern (computed auto) */
+body .sv-scroll__scroller,
+.sd-root-modern.sd-theme-root,
 .sd-root-modern .sd-page,
 .sd-root-modern .sd-body,
 .sd-root-modern .sd-form,
