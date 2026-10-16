@@ -88,6 +88,7 @@ vercel dev             # → http://localhost:3000
 |---|---|
 | Questions / labels / required flags | `js/survey-config.js` |
 | Attachment cap + accepted types | `js/gas-endpoint.js` (`maxFileMB`, `fileTypes`) |
+| Cat + angry-pointer extras on/off | `js/gas-endpoint.js` (`features.cat`, `features.fingerSlam` — `false` ships the plain form) |
 | Colors / dark & light palettes | `css/theme.css` (`:root` + `html[data-pcl-theme="dark"]` tokens) |
 | Hero & success art | `assets/brand/` (swap the PNGs) |
 | Backend sheet/folder names, server cap | `gas/Code.gs` (top CONFIG block) |

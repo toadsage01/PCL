@@ -68,7 +68,7 @@ html[data-pcl-theme="light"] {
   --pcl-input-bg: #fffdf6;
 
   --pcl-text: #14235f;          /* leaderboard royal navy */
-  --pcl-muted: #5a66a0;
+  --pcl-muted: #4a5590;         /* readable grey-navy on cream */
   --pcl-primary: #ed3b00;       /* PCL orange (user spec) */
   --pcl-primary-hi: #ff5a1f;
   --pcl-primary-deep: #b52c00;
@@ -112,7 +112,7 @@ html[data-pcl-theme="dark"] {
   --pcl-input-bg: #0a0f3e;
 
   --pcl-text: #eef0ff;
-  --pcl-muted: #aab4f0;
+  --pcl-muted: #c9cfff;         /* bright periwinkle — readable at night */
   --pcl-primary: #ed3b00;
   --pcl-primary-hi: #ff5a1f;
   --pcl-primary-deep: #8f2400;
@@ -132,7 +132,8 @@ html[data-pcl-theme="dark"] {
   --pcl-focus-ring: rgba(237, 59, 0, 0.38);
   --pcl-inset: rgba(0, 0, 0, 0.32);
   --pcl-error: #ff4d6f;
-  --pcl-scan: rgba(0, 0, 0, 0.16);
+  --pcl-scan: transparent;      /* no scanlines: banded lines read as
+                                   background seams/repeats on dark gradients */
 
   color-scheme: dark;
 }
@@ -140,7 +141,12 @@ html[data-pcl-theme="dark"] {
 /* ---- Page shell ------------------------------------------------------------- */
 * { box-sizing: border-box; }
 
-html { height: 100%; }
+/* NOTE: html must NOT get a fixed height (e.g. height:100%). The body's
+   background propagates to the document canvas and positions against the
+   HTML box — a 100%-tall html made every gradient layer TILE once per
+   viewport height, showing seam lines + repeated glow orbs (visible in
+   dark mode, invisible in light). Auto height → one seamless painting. */
+html { height: auto; }
 
 body {
   margin: 0;
@@ -148,12 +154,14 @@ body {
   display: flex;
   flex-direction: column;
   font-family: var(--pcl-font-body);
-  font-size: 16px;
+  font-size: 17px;
   color: var(--pcl-text);
+  background-color: var(--pcl-bg-3);   /* seamless continuation past gradient */
   background:
     radial-gradient(1000px 480px at 12% -6%, var(--pcl-orb-1), transparent 62%),
     radial-gradient(900px 520px at 96% 30%, var(--pcl-orb-2), transparent 60%),
     linear-gradient(180deg, var(--pcl-bg-1) 0%, var(--pcl-bg-2) 58%, var(--pcl-bg-3) 100%);
+  background-repeat: no-repeat;
   transition: background 0.25s steps(4), color 0.25s steps(4);
 }
 
@@ -204,6 +212,25 @@ body::before {
   gap: 18px;
 }
 
+/* brand column: logo with the SEASON title directly below it */
+.pcl-header-brand {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.pcl-season {
+  font-family: var(--pcl-font-display);
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: var(--pcl-primary-hi);
+  text-shadow: 2px 2px 0 #000, 0 0 14px var(--pcl-glow);
+  margin: 0;
+  white-space: nowrap;
+}
+
 .pcl-logo {
   display: block;
   width: 172px;
@@ -226,16 +253,16 @@ body::before {
 .pcl-header-text .pcl-kicker {
   font-family: var(--pcl-font-title);
   font-weight: 400;
-  font-size: 10px;
+  font-size: 11.5px;
   letter-spacing: 2.5px;
   color: var(--pcl-marquee-accent);
   text-transform: uppercase;
-  margin: 0 0 7px;
+  margin: 0 0 8px;
 }
 
 .pcl-header-text .pcl-insert {
   font-family: var(--pcl-font-display);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.8;
   letter-spacing: 0.5px;
   color: #fff;
@@ -329,15 +356,30 @@ body::before {
     -8px 0 0 currentColor, 8px 0 0 currentColor;
 }
 
-/* pixel moon: right-opening crescent */
+/* pixel moon: FULL round disc with craters (the old half-open crescent
+   read as a cut-off half moon) */
 .pcl-px-moon::before {
-  left: 8px; top: 0;
+  left: 8px; top: 8px;
   box-shadow:
-    0 0 0 currentColor, 0 4px 0 currentColor, 0 8px 0 currentColor,
-    0 12px 0 currentColor,
-    -4px 4px 0 currentColor, -4px 8px 0 currentColor, -4px 12px 0 currentColor,
-    -8px 8px 0 currentColor, -8px 12px 0 currentColor,
-    -4px 16px 0 currentColor;
+    -4px -8px 0 currentColor, 0 -8px 0 currentColor, 4px -8px 0 currentColor,
+    -8px -4px 0 currentColor, -4px -4px 0 currentColor, 0 -4px 0 currentColor,
+    4px -4px 0 currentColor, 8px -4px 0 currentColor,
+    -8px 0 0 currentColor, -4px 0 0 currentColor, 4px 0 0 currentColor,
+    8px 0 0 currentColor,
+    -8px 4px 0 currentColor, -4px 4px 0 currentColor, 0 4px 0 currentColor,
+    4px 4px 0 currentColor, 8px 4px 0 currentColor,
+    -4px 8px 0 currentColor, 0 8px 0 currentColor, 4px 8px 0 currentColor;
+}
+.pcl-px-moon::after {
+  content: "";
+  position: absolute;
+  left: 4px; top: 0;
+  width: 4px;
+  height: 4px;
+  background: rgba(16, 16, 36, 0.5);
+  box-shadow:
+    8px 8px 0 rgba(16, 16, 36, 0.5),
+    0 12px 0 rgba(16, 16, 36, 0.35);
 }
 
 .pcl-toggle .pcl-px-sun { display: none; }
@@ -362,15 +404,14 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   padding: 16px 20px 28px;
   font-family: var(--pcl-font-title);
   font-weight: 400;
-  font-size: 10px;
-  letter-spacing: 1.2px;
-  line-height: 2;
+  font-size: 12px;
+  letter-spacing: 1.6px;
+  line-height: 1.9;
   color: var(--pcl-muted);
   text-align: center;
   text-transform: uppercase;
   border-top: 3px dashed var(--pcl-line);
 }
-.pcl-footer .pcl-footer-score { color: var(--pcl-primary-hi); }
 
 /* ============================================================================
    SURVEYJS v3 TOKEN MAPPING — pixel arcade
@@ -425,6 +466,16 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   --sjs2-color-fg-alert-primary: var(--pcl-error);
   --sjs2-color-bg-alert-primary: var(--pcl-error);
 
+  /* foregrounds — the survey description (.sd-description) renders with
+     fg-basic-secondary = 60% alpha of fg-basic-primary; left unmapped it
+     was a light-theme grey at 60% → near-invisible in dark mode. */
+  --sjs2-color-fg-basic-primary: var(--pcl-text);
+  --sjs2-color-fg-basic-secondary: var(--pcl-muted);
+  --sjs2-color-fg-basic-primary-dim: var(--pcl-text);
+  --sjs2-color-fg-neutral-primary: var(--pcl-text);
+  --sjs2-color-fg-note-primary: var(--pcl-muted);
+  --sjs2-color-component-survey-header-default-description: var(--pcl-muted);
+
   /* positives */
   --sjs2-color-fg-positive-primary: #2fbf5f;
 
@@ -457,19 +508,22 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   color: var(--pcl-text);
 }
 .sd-root-modern .sd-title .sd-title__text {
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1.9;
   letter-spacing: 0.5px;
 }
 .sd-root-modern .sd-page__title {
   font-family: var(--pcl-font-display);
-  font-size: 15px !important;
+  font-size: 18px !important;
   line-height: 1.9;
 }
+/* v3.2.1 renders the survey description as .sd-description (not
+   .sv-header__description) — target the real class + map its var above */
+.sd-root-modern .sd-description,
 .sd-root-modern .sv-header__description,
 .sd-root-modern .sd-page__description {
   font-family: var(--pcl-font-body);
-  font-size: 15px;
+  font-size: 16.5px;
   color: var(--pcl-muted);
   opacity: 1;
 }
@@ -489,17 +543,17 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   color: #fff;
   font-family: var(--pcl-font-title);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 14.5px;
   letter-spacing: 1px;
   text-transform: uppercase;
   line-height: 1.6;
-  padding: 5px 12px 4px;
+  padding: 6px 13px 5px;
   box-shadow: 3px 3px 0 var(--pcl-hard);
   margin-bottom: 4px;
 }
 .sd-root-modern .sd-panel__description {
   color: var(--pcl-muted);
-  font-size: 14px;
+  font-size: 16px;
   margin: 8px 2px 4px;
 }
 
@@ -507,7 +561,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 .sd-root-modern .sd-question__title {
   font-family: var(--pcl-font-title);
   font-weight: 700;
-  font-size: 13.5px;
+  font-size: 15px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--pcl-text);
@@ -518,7 +572,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 }
 .sd-root-modern .sd-question__description {
   color: var(--pcl-muted);
-  font-size: 14px;
+  font-size: 15.5px;
 }
 .sd-root-modern .sd-question__required-text {
   color: var(--pcl-primary-hi);
@@ -550,7 +604,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   border: none;
   color: var(--pcl-text);
   font-family: var(--pcl-font-body);
-  font-size: 15.5px;
+  font-size: 17px;
   caret-color: var(--pcl-primary);
 }
 .sd-root-modern .sd-formbox__input::placeholder {
@@ -564,7 +618,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 /* multipletext label chip = pixel plate */
 .sd-root-modern .sd-formbox__label {
   font-family: var(--pcl-font-title);
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.4px;
   background: var(--pcl-surface-3);
   color: var(--pcl-text);
@@ -580,7 +634,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 .sd-root-modern .sd-file__drag-area-placeholder {
   color: var(--pcl-muted);
   font-family: var(--pcl-font-body);
-  font-size: 14.5px;
+  font-size: 16px;
 }
 
 /* ---- Buttons: hard-shadow press ------------------------------------------------
@@ -590,7 +644,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   border: 3px solid var(--pcl-primary-deep);
   border-radius: 0;
   font-family: var(--pcl-font-display);
-  font-size: 9px !important;
+  font-size: 10px !important;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   line-height: 1.9;
@@ -639,7 +693,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 }
 /* small action (e.g. file "Select File") keeps readable sizing */
 .sd-root-modern .sd-action--small {
-  font-size: 8px !important;
+  font-size: 9px !important;
   padding: 8px 12px 7px;
 }
 
@@ -779,7 +833,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   background: var(--pcl-surface);
   color: var(--pcl-error);
   font-family: var(--pcl-font-title);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.5px;
   box-shadow: 3px 3px 0 var(--pcl-hard);
 }
@@ -821,7 +875,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 }
 .sd-root-modern .sd-progress__text {
   font-family: var(--pcl-font-title);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1px;
   color: var(--pcl-text);
 }
@@ -882,7 +936,7 @@ body .sv-scroll__scroller,
 }
 .pcl-done-stars {
   font-family: var(--pcl-font-display);
-  font-size: 26px;
+  font-size: 30px;
   letter-spacing: 8px;
   color: var(--pcl-gold);
   text-shadow: 0 0 14px var(--pcl-glow), 3px 3px 0 var(--pcl-hard);
@@ -891,7 +945,7 @@ body .sv-scroll__scroller,
 }
 .pcl-done h3 {
   font-family: var(--pcl-font-display);
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.9;
   letter-spacing: 1px;
   color: var(--pcl-primary-hi);
@@ -901,7 +955,7 @@ body .sv-scroll__scroller,
 .pcl-done-sub {
   font-family: var(--pcl-font-title);
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13.5px;
   letter-spacing: 2.5px;
   text-transform: uppercase;
   color: var(--pcl-text);
@@ -910,7 +964,7 @@ body .sv-scroll__scroller,
 .pcl-done-xp {
   display: inline-block;
   font-family: var(--pcl-font-display);
-  font-size: 11px;
+  font-size: 12.5px;
   color: #fff;
   background: linear-gradient(180deg, var(--pcl-primary-hi), var(--pcl-primary));
   border: 3px solid var(--pcl-primary-deep);
@@ -920,7 +974,7 @@ body .sv-scroll__scroller,
 }
 .pcl-done p.pcl-done-note {
   color: var(--pcl-muted);
-  font-size: 15px;
+  font-size: 16.5px;
   margin: 0;
 }
 @keyframes pclPop {
@@ -929,17 +983,31 @@ body .sv-scroll__scroller,
   100% { transform: scale(1); }
 }
 
+/* ---- Dark-mode grey-text readability --------------------------------------------
+   The pixel fonts get jaggy on dark gradients; a soft periwinkle halo
+   lifts the muted copy off the background without turning it neon. */
+html[data-pcl-theme="dark"] .sd-root-modern .sd-description,
+html[data-pcl-theme="dark"] .sd-root-modern .sd-panel__description,
+html[data-pcl-theme="dark"] .sd-root-modern .sd-question__description,
+html[data-pcl-theme="dark"] .sd-root-modern .sd-file__drag-area-placeholder,
+html[data-pcl-theme="dark"] .sd-root-modern .sd-formbox__input::placeholder,
+html[data-pcl-theme="dark"] .pcl-footer {
+  text-shadow: 0 0 9px rgba(160, 172, 255, 0.35);
+}
+
 /* ---- Mobile ---------------------------------------------------------------------- */
 @media (max-width: 620px) {
   .pcl-header { gap: 12px; padding: 12px 14px; }
   .pcl-logo { width: 118px; }
+  .pcl-season { font-size: 10.5px; letter-spacing: 2px; }
   .pcl-marquee-divider { display: none; }
-  .pcl-header-text .pcl-kicker { font-size: 8.5px; letter-spacing: 1.6px; }
-  .pcl-header-text .pcl-insert { font-size: 8px; }
+  .pcl-header-text .pcl-kicker { font-size: 10px; letter-spacing: 1.6px; }
+  .pcl-header-text .pcl-insert { font-size: 9.5px; }
   .pcl-main { padding: 16px 14px 28px; }
-  .sd-root-modern .sd-question__title { font-size: 12px; }
-  .sd-root-modern .sd-panel__title { font-size: 11.5px; }
-  .pcl-done h3 { font-size: 15px; }
+  .sd-root-modern .sd-question__title { font-size: 13.5px; }
+  .sd-root-modern .sd-panel__title { font-size: 13px; }
+  .pcl-done h3 { font-size: 17px; }
+  .pcl-footer { font-size: 10.5px; letter-spacing: 1.2px; }
 }
 
 /* ---- Reduced motion ---------------------------------------------------------------- */

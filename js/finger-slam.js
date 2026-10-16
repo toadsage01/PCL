@@ -17,6 +17,8 @@
 (function () {
   "use strict";
   if (window.PCL_FingerSlam) return;
+  var FEAT = window.PCL_CONFIG && window.PCL_CONFIG.features;
+  if (FEAT && FEAT.fingerSlam === false) return;  // flag off → plain form
 
   /* ---- tunables ---------------------------------------------------------- */
   var GRID = 32;                       // sprite is a 32x32 cell pixel map

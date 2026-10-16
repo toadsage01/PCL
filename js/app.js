@@ -26,18 +26,14 @@
     });
   }
 
-  /* ---- header/footer status widgets ---- */
-  var maxMb = document.getElementById("pclMaxSize");
-  if (maxMb) maxMb.textContent = String(cfg.maxFileMB);
-
-  var mode = document.getElementById("pclMode");
-  if (mode) {
-    mode.textContent = cfg.submitViaApi
-      ? "Mode: Vercel API → Google Apps Script (URL kept secret server-side)"
-      : cfg.gasWebAppUrl
-        ? "Mode: Google Apps Script connected"
-        : "Mode: LOCAL — submissions logged to console + localStorage " +
-          "(paste your GAS /exec URL into js/gas-endpoint.js)";
+  /* ---- footer: today's date (the only footer content per design) ---- */
+  var dateEl = document.getElementById("pclDate");
+  if (dateEl) {
+    var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    var now = new Date();
+    dateEl.textContent = now.getDate() + " " + MONTHS[now.getMonth()] +
+      " " + now.getFullYear();
   }
 
   /* ---- build the survey ---- */
@@ -114,7 +110,10 @@
      One event (submitting without a required answer), two interactions:
      an empty input field or an untouched upload button. When Complete/Next
      is clicked and validation fails, the pixel pointer flies in from the
-     bottom-right edge and slams 1-3 randomized times on each missing field. */
+     bottom-right edge and slams 1-3 randomized times on each missing field.
+     Skipped entirely when PCL_CONFIG.features.fingerSlam is false. */
+  var FEATURES = cfg.features || {};
+
   function pclErroredQuestions() {
     var out = [];
     (function walk(els) {
@@ -129,18 +128,20 @@
     return out;
   }
 
-  document.getElementById("surveyContainer").addEventListener("click",
-    function (e) {
-      var t = e.target;
-      var btn = t && t.closest ? t.closest(
-        ".sd-navigation__complete-btn, .sd-navigation__next-btn") : null;
-      if (!btn || !window.PCL_FingerSlam) return;
-      // let SurveyJS finish validating + scrolling to the first error first
-      setTimeout(function () {
-        var errs = pclErroredQuestions();
-        if (errs.length) window.PCL_FingerSlam.slam(errs);
-      }, 40);
-    }, true); // capture phase: SurveyJS stops propagation on its nav buttons
+  if (FEATURES.fingerSlam !== false) {
+    document.getElementById("surveyContainer").addEventListener("click",
+      function (e) {
+        var t = e.target;
+        var btn = t && t.closest ? t.closest(
+          ".sd-navigation__complete-btn, .sd-navigation__next-btn") : null;
+        if (!btn || !window.PCL_FingerSlam) return;
+        // let SurveyJS finish validating + scrolling to the first error first
+        setTimeout(function () {
+          var errs = pclErroredQuestions();
+          if (errs.length) window.PCL_FingerSlam.slam(errs);
+        }, 40);
+      }, true); // capture phase: SurveyJS stops propagation on its nav buttons
+  }
 
   /* ---- file-input bridge -------------------------------------------------
      SurveyJS normally owns the file flow, but some browsers/automation
