@@ -1,37 +1,47 @@
 # Praper Contest League — Submission Form
 
-A free, self-hostable contest submission form with **dual/multiple input
-fields under a single question**, URL validation, **size-capped image
-uploads**, full design customizability, and **Google Apps Script**
-tracking (Google Sheets + Drive) for data and metrics.
+A free, self-hostable contest submission form for a **views-first league**:
+players paste **all** their post links at once, every link becomes a chip,
+the platform + format + multiplier is auto-detected, and each post carries
+its own **analytics screenshot**. Google Apps Script + Sheets/Drive track it
+all in a duplicate-proof ledger.
 
-Built on the **SurveyJS Form Library** (MIT license — free): the engine
-feature Google Forms lacked (two inputs inside one question) is native
-here, and the whole form is a declarative JSON you can reshape anytime.
+No form framework — the engine is ~600 lines of dependency-free vanilla JS
+(`js/app.js`) over a static skeleton (`index.html`), so every interaction is
+exactly as specified.
 
 **Pixel Arcade theme** — built from the PCL brand DNA: orange `#ed3b00`
 (leaderboard bars) on a deep royal-blue family, pixel type (Press Start 2P,
 Silkscreen, Pixelify Sans — all vendored in `fonts/`), square corners and
 hard offset shadows everywhere, and **glow-driven light + dark modes**
 ("Sunset Cabinet" / "Midnight Arcade" — no bland black & white). The PCL
-logo lives in the black arcade marquee header (`assets/brand/`, original
-inspo saved in `assets/inspo/`).
+logo lives in the black arcade marquee header with the SEASON 2 tag above
+the SUBMISSION TERMINAL kicker (`assets/brand/`, original inspo in
+`assets/inspo/`).
 
 ## Features
 
-- Rulebook-shaped form: player details, bulk link paste (spaces / commas /
-  new lines), one auto-created row per post (format · content type · count ·
-  screenshot), optional weekly challenge
-- 50:50 ratio ready — every post is tagged Praper / PAVE or Personal
-- Format-aware validation — each link must match the format picked in its row
-- Image/screenshot uploads with a hard MB cap, previews, type filter
-- Duplicate-proof ledger: same post URL = UPDATE snapshot, never double
-  views; one row per post rolls up per player (`gas/Code.gs`)
-- Customizable: every question lives in `js/survey-config.js`; theme in
-  `css/theme.css`; more question types documented inline (dropdown,
-  rating, repeatable groups…)
-- Backend: `gas/Code.gs` → Sheets row per submission + Drive attachments
-- LOCAL mode out of the box — works with no backend at all
+- **Bulk link paste** — throw every URL in one box (spaces, commas,
+  semicolons or new lines). Valid links become chips (hover → × to remove);
+  bad ones become red chips with the reason on hover. Enter / `+ ADD`
+  commits more links anytime.
+- **Format auto-detection** — no manual dropdown: the URL decides
+  IG Reel ×1.25 / IG Post ×1 / YT Shorts ×1.25 / YT Video ×2 / LinkedIn
+  Post ×1. Accepts `https://…`, `www.…` or bare-domain shapes.
+- **Post Details, two modes** — EDIT (compact columnar: link · format badge ·
+  views · screenshot) and VIEW (confirmation rows + floating screenshot
+  lightbox with details line, thumbnail strip and PREV/NEXT).
+- **Honest error UX** — missing required field: red border + shadow + small
+  "Required" below, navy restored on input. Link errors appear at commit
+  time, never after the final submit. (Amber state reserved for a future
+  link-liveness / privacy check.)
+- **Duplicate-proof ledger** — Media ID extracted per URL (`ig_<shortcode>`,
+  `yt_<videoId>`, `li_<activityId>`); the same post re-submitted is an
+  UPDATE snapshot, never double-counted views. One row per post rolls up
+  per player — `doGet` returns per-player post counts, unique media,
+  format ratio and projected points.
+- **Image uploads** with a hard 5 MB cap, type filter, per-row thumbnails.
+- **LOCAL mode** out of the box — works with no backend at all.
 
 ## Run locally
 
@@ -51,12 +61,14 @@ the browser console and are kept in `localStorage` (`pcl_submissions`).
    - Execute as: **Me**
    - Who has access: **Anyone**
 4. Copy the `/exec` URL into `js/gas-endpoint.js` → `gasWebAppUrl`
-5. Done. Submissions now land in a "Submissions" sheet; uploads go to a
-   "Praper Contest League Uploads" Drive folder. `GET` the `/exec` URL for
-   `{totalSubmissions, lastSubmissionAt}` metrics.
+5. Done. Submissions land in a "Submissions" sheet (one row per post);
+   uploads go to a "Praper Contest League Uploads" Drive folder. `GET` the
+   `/exec` URL for `{totalSubmissions, totalPosts, uniqueMedia, players[], …}`
+   metrics.
 
-> Edited `Code.gs` later? Deploy → Manage deployments → New version, or
-> the `/exec` URL keeps serving the old code.
+> Already deployed an earlier version? Re-paste `Code.gs` and create a NEW
+> deployment version so `/exec` picks it up. The `Content Type` column is
+> deprecated but kept in `HEADERS` — existing sheets keep working.
 
 ## Go public (free)
 
@@ -91,16 +103,13 @@ vercel dev             # → http://localhost:3000
 
 | What | Where |
 |---|---|
-| Questions / labels / required flags | `js/survey-config.js` |
+| Section copy / week list | `index.html` (form skeleton) |
+| URL → format rules, multipliers | `js/app.js` (`FORMATS`, `classifyUrl`) |
 | Attachment cap + accepted types | `js/gas-endpoint.js` (`maxFileMB`, `fileTypes`) |
 | Colors / dark & light palettes | `css/theme.css` (`:root` + `html[data-pcl-theme="dark"]` tokens) |
-| Hero & success art | `assets/brand/` (swap the PNGs) |
+| Success screen | `#pclDone` markup in `index.html` |
 | Backend sheet/folder names, server cap | `gas/Code.gs` (top CONFIG block) |
-| Success message | `completedHtml` in `survey-config.js` |
 | Submit mode (direct vs Vercel API) | `js/gas-endpoint.js` (`submitViaApi`) |
-
-The form structure now mirrors the official Rulebook (Q1–Q6); tweak copy
-and choices in `js/survey-config.js` as the league's needs evolve.
 
 ## Docs
 

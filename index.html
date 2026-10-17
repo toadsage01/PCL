@@ -19,27 +19,21 @@
     })();
   </script>
 
-  <!-- SurveyJS Form Library v3.2.1 — MIT license, vendored locally so the
-       form works offline / on flaky networks. Source: unpkg.com/survey-core
-       and unpkg.com/survey-js-ui. Swap to the CDN URLs below if preferred:
-         https://unpkg.com/survey-core@3.2.1/survey-core.min.css
-         https://unpkg.com/survey-core@3.2.1/survey.core.min.js
-         https://unpkg.com/survey-js-ui@3.2.1/survey-js-ui.min.js            -->
-  <link rel="stylesheet" href="css/vendor/survey-core.min.css" />
+  <!-- PCL custom form engine — no form framework. js/app.js renders the
+       chips, post rows and lightbox into this markup. -->
   <link rel="stylesheet" href="css/theme.css" />
 </head>
 <body>
-  <!-- Arcade marquee: the PCL logo's native black band, both themes.
-       No cover image — the theme itself carries the look. -->
+  <!-- Arcade marquee: the PCL logo's native black band, both themes. -->
   <div class="pcl-marquee">
     <header class="pcl-header">
       <div class="pcl-header-brand">
         <img class="pcl-logo" src="assets/brand/pcl-logo-web.png"
              alt="Praper Content League" />
-        <p class="pcl-season">SEASON 2</p>
       </div>
       <div class="pcl-marquee-divider" aria-hidden="true"></div>
       <div class="pcl-header-text">
+        <p class="pcl-season">SEASON 2</p>
         <p class="pcl-kicker">Submission Terminal</p>
         <p class="pcl-insert">
           <span class="pcl-px-play" aria-hidden="true"></span>
@@ -55,18 +49,143 @@
   </div>
 
   <main class="pcl-main">
-    <div id="surveyContainer"></div>
+    <form id="pclForm" class="pcl-form" novalidate autocomplete="off">
+      <p class="pcl-form-note">Fields marked <span class="pcl-req-star">*</span> are required.</p>
+
+      <!-- 1 · PLAYER DETAILS -->
+      <section class="pcl-panel">
+        <h2 class="pcl-panel-title">1 &middot; Player Details</h2>
+        <div class="pcl-grid2">
+          <div class="pcl-field" data-field="fullName">
+            <label class="pcl-label" for="fullName">Full name <span class="pcl-req-star">*</span></label>
+            <input class="pcl-input" id="fullName" name="fullName"
+                   type="text" placeholder="e.g. Priya" />
+            <p class="pcl-err">Required</p>
+          </div>
+          <div class="pcl-field" data-field="reportingManager">
+            <label class="pcl-label" for="reportingManager">Reporting manager <span class="pcl-req-star">*</span></label>
+            <input class="pcl-input" id="reportingManager" name="reportingManager"
+                   type="text" placeholder="e.g. Rahul" />
+            <p class="pcl-err">Required</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2 · POST LINKS — paste many, they become chips -->
+      <section class="pcl-panel">
+        <h2 class="pcl-panel-title">2 &middot; Post Links</h2>
+        <p class="pcl-hint">Paste every post link — spaces, commas or new lines between them. Enter or ADD commits them.</p>
+        <div class="pcl-field" data-field="postLinks">
+          <div class="pcl-chipbox" id="chipBox">
+            <span class="pcl-px-link" aria-hidden="true"></span>
+            <span class="pcl-chips" id="chipList"></span>
+            <input id="linkInput" class="pcl-chipinput" type="text"
+                   placeholder="Paste links here…"
+                   aria-label="Paste post links, separated by spaces, commas or new lines" />
+            <button type="button" id="addLinksBtn" class="pcl-addbtn">+ ADD</button>
+          </div>
+          <p class="pcl-err" id="linksErr">Paste at least one post link.</p>
+        </div>
+      </section>
+
+      <!-- 3 · POST DETAILS — one row per link · EDIT / VIEW modes -->
+      <section class="pcl-panel">
+        <div class="pcl-details-head">
+          <h2 class="pcl-panel-title">3 &middot; Post Details</h2>
+          <span class="pcl-count" id="postCount" hidden>0 POSTS</span>
+          <div class="pcl-viewtoggle" id="viewToggle" hidden>
+            <button type="button" class="pcl-vbtn is-active" data-mode="edit">EDIT</button>
+            <button type="button" class="pcl-vbtn" data-mode="view">VIEW</button>
+          </div>
+        </div>
+        <div id="postRows"></div>
+        <p class="pcl-empty" id="postEmpty">No posts yet — add links above.</p>
+      </section>
+
+      <!-- 4 · WEEKLY CHALLENGE (optional) -->
+      <section class="pcl-panel">
+        <h2 class="pcl-panel-title">4 &middot; Weekly Challenge <span class="pcl-opt">OPTIONAL</span></h2>
+        <div class="pcl-field" data-field="challengeWeek">
+          <label class="pcl-label" for="challengeWeek">Week</label>
+          <div class="pcl-selectwrap">
+            <select class="pcl-input pcl-select" id="challengeWeek">
+              <option value="">Not entering</option>
+              <option value="Week 1 — Best Original Content">Week 1 · Best Original Content</option>
+              <option value="Week 2 — Best Storytelling Debut">Week 2 · Best Storytelling Debut</option>
+              <option value="Week 3 — A Day in My Life">Week 3 · A Day in My Life</option>
+              <option value="Week 4 — Best Collaboration">Week 4 · Best Collaboration</option>
+              <option value="Week 5 — Behind the Scenes at Praper">Week 5 · Behind the Scenes at Praper</option>
+              <option value="Week 6 — Most Improved Creator">Week 6 · Most Improved Creator</option>
+              <option value="Week 7 — Consistency Reward">Week 7 · Consistency Reward</option>
+              <option value="Week 8 — The One-Take Challenge">Week 8 · The One-Take Challenge</option>
+              <option value="Week 9 — The Trend Takeover">Week 9 · The Trend Takeover</option>
+              <option value="Week 10 — The Comment Magnet">Week 10 · The Comment Magnet — Final Showdown</option>
+            </select>
+            <span class="pcl-chevron" aria-hidden="true"></span>
+          </div>
+          <p class="pcl-err">Required</p>
+        </div>
+        <div class="pcl-field" data-field="challengeUrl" hidden>
+          <label class="pcl-label" for="challengeUrl">Challenge link</label>
+          <input class="pcl-input" id="challengeUrl" type="text" placeholder="https://…" />
+          <p class="pcl-err">Enter a valid link.</p>
+        </div>
+        <div class="pcl-field" data-field="additionalNotes" hidden>
+          <label class="pcl-label" for="additionalNotes">Notes</label>
+          <textarea class="pcl-input pcl-textarea" id="additionalNotes"
+                    rows="2" placeholder="Optional…"></textarea>
+        </div>
+      </section>
+
+      <!-- submit -->
+      <div class="pcl-submitbar">
+        <button type="submit" id="pclSubmit" class="pcl-btn pcl-btn--primary">
+          <span class="pcl-px-play" aria-hidden="true"></span>SUBMIT<span class="pcl-blink" aria-hidden="true">_</span>
+        </button>
+        <span class="pcl-savestate" id="pclSaveState" role="status" hidden></span>
+      </div>
+    </form>
+
+    <!-- shown after a successful submission -->
+    <div id="pclDone" class="pcl-done" hidden>
+      <div class="pcl-done-stars" aria-hidden="true">&#9733;&#9733;&#9733;</div>
+      <h3>LEVEL CLEARED!</h3>
+      <p class="pcl-done-sub">Entry Logged &middot; Points Queued</p>
+      <div class="pcl-done-xp">+100 XP</div>
+      <p class="pcl-done-note">All posts logged. See you next week.</p>
+    </div>
   </main>
 
   <footer class="pcl-footer">
     Praper Content League &middot; Season 2 &middot; <span id="pclDate">2026</span>
   </footer>
 
-  <!-- Load order matters: core → UI bindings → config → bootstrap -->
-  <script src="js/vendor/survey.core.min.js"></script>
-  <script src="js/vendor/survey-js-ui.min.js"></script>
+  <!-- floating screenshot viewer (EDIT/VIEW photo buttons open this) -->
+  <div class="pcl-lightbox" id="pclLightbox" hidden role="dialog" aria-modal="true"
+       aria-label="Screenshot preview">
+    <div class="pcl-lb-back" data-act="close"></div>
+    <figure class="pcl-lb-card">
+      <button type="button" class="pcl-lb-nav pcl-lb-prev" data-act="prev">
+        <span class="pcl-px-arr pcl-px-arr--left" aria-hidden="true"></span>PREV
+      </button>
+      <div class="pcl-lb-stage">
+        <img id="pclLbImg" class="pcl-lb-img" alt="Analytics screenshot" />
+        <p class="pcl-lb-line" id="pclLbLine"></p>
+        <div class="pcl-lb-strip" id="pclLbStrip"></div>
+      </div>
+      <button type="button" class="pcl-lb-nav pcl-lb-next" data-act="next">
+        NEXT<span class="pcl-px-arr" aria-hidden="true"></span>
+      </button>
+      <button type="button" class="pcl-lb-close" data-act="close" aria-label="Close preview">
+        <span class="pcl-px-x" aria-hidden="true"></span>
+      </button>
+    </figure>
+  </div>
+
+  <!-- shared screenshot picker (per-post buttons target it) -->
+  <input type="file" id="shotInput" hidden />
+
   <script src="js/gas-endpoint.js"></script>
-  <script src="js/survey-config.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

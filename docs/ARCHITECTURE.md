@@ -1,7 +1,8 @@
 # Architecture — Praper Contest League Form (Season 2)
 
-Small, free, zero-build architecture. Static front end + Google Apps Script
-backend + Google Sheets/Drive storage. Nothing to pay for, nothing to patch.
+Small, free, zero-build architecture. Static front end (custom form engine, no
+framework) + Google Apps Script backend + Google Sheets/Drive storage.
+Nothing to pay for, nothing to patch.
 
 ## Diagram
 
@@ -10,20 +11,32 @@ backend + Google Sheets/Drive storage. Nothing to pay for, nothing to patch.
 │  Browser — static site (this repo, root)                 │
 │                                                          │
 │  index.html                                              │
-│   ├─ SurveyJS Form Library (MIT, vendored 3.2.1)         │
-│   ├─ css/theme.css        ← brand tokens → --sjs2-* vars │
+│   ├─ form markup (4 sections, static skeleton)           │
+│   ├─ css/theme.css        ← pixel design system, tokens  │
 │   ├─ js/gas-endpoint.js   ← CONFIG: GAS URL, max file MB │
-│   ├─ js/survey-config.js  ← declarative form definition  │
-│   └─ js/app.js            ← bootstrap + bulk-link parser  │
-│                             + row sync + submit hook      │
+│   └─ js/app.js            ← PCL form engine:             │
+│        · URL engine — parses a paste of many links       │
+│          (spaces / commas / semicolons / new lines),     │
+│          auto-detects platform + format + multiplier,    │
+│          extracts the Media ID client-side too           │
+│        · link chips — every parsed link becomes a tag    │
+│          in the box (× removes it; invalid links become  │
+│          red chips with the reason on hover; amber       │
+│          `.is-status` reserved for link-liveness later)  │
+│        · Post Details — EDIT (columnar) / VIEW (compact  │
+│          rows) modes + floating screenshot lightbox      │
+│          with PREV/NEXT and a thumbnail strip            │
+│        · validation — red border + "Required" under the  │
+│          field, navy restored on input                   │
+│        · CORS-safe POST / LOCAL fallback                 │
 │                                                          │
 │  Validations (client, instant):                          │
-│   • Post Links box → at least one parseable URL          │
-│   • Each row's link → regex matched to the row's format  │
-│     (IG reel/post, YT shorts/long, LinkedIn post — the   │
-│     league's only 3 platforms)                           │
-│   • Attachments → maxSize (bytes) + acceptedTypes        │
-│   • Counts → numeric, min 0                              │
+│   • name / manager required                              │
+│   • ≥1 valid link; per-link platform+shape check at      │
+│     commit time (paste / Enter / + ADD) — never on the   │
+│     final submit                                         │
+│   • per-post: views count + analytics screenshot         │
+│     (PNG / JPG / WEBP, ≤5 MB)                            │
 └───────────────┬──────────────────────────────────────────┘
                 │  HTTPS POST — JSON body, simple request
                 │  (text/plain content-type → no CORS preflight,
@@ -43,9 +56,11 @@ backend + Google Sheets/Drive storage. Nothing to pay for, nothing to patch.
 │       (5 MB server-side guard)                           │
 │    5. append one ledger row per post (schema below)      │
 │                                                          │
-│   doGet: metrics JSON                                    │
+│   doGet: metrics + per-player roll-up JSON               │
 │    → {ok, totalSubmissions, totalPosts, uniqueMedia,     │
-│       lastSubmissionAt}                                  │
+│       lastSubmissionAt, players:[{player, manager,       │
+│       submissions, posts, uniqueMedia, formatRatio,      │
+│       projectedPoints}], generatedAt}                    │
 └───────────────┬──────────────────────────────────────────┘
                 ▼
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -59,34 +74,47 @@ backend + Google Sheets/Drive storage. Nothing to pay for, nothing to patch.
 
 | Piece | File | Role |
 |---|---|---|
-| Form page | `index.html` | Shell; loads vendored SurveyJS (offline-ready) |
-| Theme | `css/theme.css` | Brand tokens + SurveyJS `--sjs2-*` variable mapping |
-| Form definition | `js/survey-config.js` | 4 sections per the Rulebook (declarative JSON) |
-| Endpoint config | `js/gas-endpoint.js` | GAS URL, `maxFileMB`, accepted file types |
-| Bootstrap | `js/app.js` | Renders survey; bulk-link parsing + row sync + per-row validation; CORS-safe POST; LOCAL-mode fallback |
-| Backend | `gas/Code.gs` | Media-ID dedup, ledger append, Drive upload, metrics |
+| Form page | `index.html` | Shell + static form skeleton (panels, chip box, rows, lightbox) |
+| Theme | `css/theme.css` | Pixel design system: tokens, marquee, panels, chips, rows, lightbox, error states |
+| Endpoint config | `js/gas-endpoint.js` | GAS URL, `maxFileMB`, accepted file types, Vercel switch |
+| Form engine | `js/app.js` | URL engine, chips, EDIT/VIEW rows, screenshots, lightbox, validation, POST |
+| Backend | `gas/Code.gs` | Media-ID dedup, per-post ledger rows, Drive upload, metrics + per-player roll-up |
 | Local hosting | `serve.sh` | One command: `./serve.sh [port]` |
+
+> SurveyJS was dropped in this iteration: the chips box, dual-view post
+> details, lightbox and the custom error model were all custom-rendered, so
+> the library owned almost nothing. The engine is ~600 lines of dependency-free
+> JS (the old vendored files remain in git history if ever needed).
 
 ## Form structure (from the official Rulebook)
 
-| # | Question | Type | Behaviour |
+| # | Section | UI | Behaviour |
 |---|---|---|---|
-| 1 | Player Details | name + manager, side-by-side, required | roster identity on every submission |
-| 2 | Post Links | multiline paste box, required | accepts URLs separated by spaces, commas, semicolons or new lines |
-| 3 | Post Details | dynamic rows — one per parsed link | row: link (read-only) · format (5 rulebook formats) · content type (Praper / PAVE vs Personal) · views/impressions · screenshot (≤5 MB) |
-| 4 | Weekly Challenge | optional panel: week + link + notes | all 10 rulebook weeks pre-listed |
+| 1 | Player Details | two inputs, required | roster identity on every submission |
+| 2 | Post Links | chip box + `+ ADD` | paste ALL links at once — spaces, commas, semicolons or new lines; each becomes a chip (× on hover removes); bad links become red chips with the reason on hover |
+| 3 | Post Details | EDIT / VIEW toggle | one compact row per link. **EDIT** (default): link + auto format badge + views/impressions + screenshot button. **VIEW**: compact rows (# · link · format · PHOTO/ADD SHOT) with a centered lightbox — image, one-line details below, thumbnail strip, PREV/NEXT arrows |
+| 4 | Weekly Challenge | optional select + link + notes | all 10 rulebook weeks; link/notes reveal only when a week is picked |
 
-Rows in "Post Details" are system-managed: `js/app.js` parses the link box
-(debounced) and syncs the row count 1:1. Re-pasting or editing the list keeps
-each row's format/screenshot — rows are matched by link first, then by
-position, so a typo fix doesn't wipe entered data.
+**Format auto-detection** (replaces the old manual dropdown): the URL decides
+the format and its rulebook §3 multiplier —
+`instagram.com/reel|reels → IG Reel ×1.25`, `/p → IG Post ×1`,
+`youtube.com/shorts → YT Shorts ×1.25`, `watch?v= | youtu.be | /live → YT Video ×2`,
+`linkedin.com/posts|feed/update → LinkedIn Post ×1`. Every pasteable shape is
+accepted (`https://…`, `www.…`, bare `instagram.com/…`). Duplicate content is
+caught client-side too — same Media ID twice → red chip "Already added".
+
+**Error model (per spec):**
+- Missing required field → red border + shadow + small "Required" below the
+  field; the navy well returns the moment data is entered.
+- Link problems are surfaced when the links are committed (paste / Enter /
+  `+ ADD`) as red chips with the reason on hover — never as a surprise after
+  the final submit. `.is-status` (amber) is reserved for the future
+  link-liveness check (private / followers-only posts).
 
 ## Ledger & the anti-double-count model
 
 Every POST = one append-only ledger row; a submission with N posts writes N
-rows sharing one Submission ID (plus a per-row `Content Type` — Praper / PAVE
-vs Personal — which feeds the rulebook's 50:50 ratio tracking; per-player
-totals roll up by Full Name). The dedup key is the **Media ID** extracted
+rows sharing one Submission ID. The dedup key is the **Media ID** extracted
 from the post URL (`ig_<shortcode>`, `yt_<videoId>`, `li_<activityId>`).
 Re-submitting a post (fresh counts, days later, bulk at the end — any
 pattern) produces an `UPDATE` row with `Snapshot #` incremented: counts are
@@ -99,6 +127,15 @@ Claimed Views/Impressions → OCR Count (from screenshot)
     → Cross-Check: PENDING OCR → MATCH / MISMATCH / BOOST?
     → Verified Count → Verified Points   (final leaderboard input)
 ```
+
+The `Content Type` column (Praper/PAVE vs Personal) is deprecated — the form
+no longer tags posts — but the column stays in `HEADERS` so existing sheet
+layouts keep their column order; new rows leave it blank.
+
+**Per-player roll-up (`doGet → players[]`)**: the league can see, per
+candidate, submissions count, total posts, unique media, the format ratio
+(`{"Instagram Reel": 3, "YouTube Video": 1, …}`) and projected points —
+without double-counting, because unique media is keyed by Media ID.
 
 Boost / gaming detection hooks built into this layout:
 - **Snapshot timeline**: weekly snapshots per Media ID give views/day
@@ -135,9 +172,11 @@ future re-parse never loses fidelity.
   `localStorage["pcl_submissions"]`. Great for demos; zero setup.
 - **GAS returns an error** → the form shows the save-failure state and logs
   the reason; the user can retry without retyping.
-- **Attachment over cap** → blocked client-side; if a file sneaks through
-  (e.g. client edited), `Code.gs` writes a `REJECTED — over N MB cap` marker
-  in the Screenshot File cell instead of polluting Drive.
+- **Attachment over cap / wrong type** → blocked at pick time with a red
+  "Over 5 MB" / "PNG / JPG / WEBP only" state on that row; if a file sneaks
+  through (e.g. client edited), `Code.gs` writes a
+  `REJECTED — over N MB cap` marker in the Screenshot File cell instead of
+  polluting Drive.
 
 ## Scaling notes
 

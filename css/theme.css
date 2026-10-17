@@ -8,11 +8,18 @@
        leaderboard background)                    → backgrounds
      · Pixel fonts: Press Start 2P (arcade display),
        Silkscreen (titles/labels), Pixelify Sans (body)
-     · Pixelated inputs, buttons, checkboxes, icons
+     · Pixelated inputs, buttons, chips, icons
        (square corners, hard offset shadows, stepped glyphs)
      · Dark mode  = "MIDNIGHT ARCADE"  (royal-blue night + neon orange glow)
      · Light mode = "SUNSET CABINET"   (warm cream + royal navy, no bland white)
    Theme switch: <html data-pcl-theme="light|dark"> (see js/app.js).
+
+   The form UI is PCL-custom (no form framework): panels, retro-well inputs,
+   link chips, post rows (EDIT/VIEW), screenshot lightbox. Error model per
+   spec: missing field → red border + shadow + small "Required" below, back
+   to navy the moment data is entered. Link errors → red chips with the
+   reason on hover (amber `.is-status` reserved for the future link-liveness
+   check).
    ========================================================================== */
 
 /* ---- Pixel fonts (vendored) ------------------------------------------------ */
@@ -88,6 +95,8 @@ html[data-pcl-theme="light"] {
   --pcl-focus-ring: rgba(237, 59, 0, 0.30);
   --pcl-inset: rgba(20, 35, 95, 0.10);
   --pcl-error: #d81b4e;
+  --pcl-error-soft: rgba(216, 27, 78, 0.40);
+  --pcl-status: #b97900;        /* reserved: link-liveness warnings */
   --pcl-scan: transparent;      /* no scanlines in light mode */
 
   color-scheme: light;
@@ -132,6 +141,8 @@ html[data-pcl-theme="dark"] {
   --pcl-focus-ring: rgba(237, 59, 0, 0.38);
   --pcl-inset: rgba(0, 0, 0, 0.32);
   --pcl-error: #ff4d6f;
+  --pcl-error-soft: rgba(255, 77, 111, 0.42);
+  --pcl-status: #ffd21e;
   --pcl-scan: transparent;      /* no scanlines: banded lines read as
                                    background seams/repeats on dark gradients */
 
@@ -140,6 +151,10 @@ html[data-pcl-theme="dark"] {
 
 /* ---- Page shell ------------------------------------------------------------- */
 * { box-sizing: border-box; }
+
+/* author display values must never resurrect [hidden] elements
+   (e.g. .pcl-viewtoggle is display:flex but starts hidden) */
+[hidden] { display: none !important; }
 
 /* NOTE: html must NOT get a fixed height (e.g. height:100%). The body's
    background propagates to the document canvas and positions against the
@@ -212,32 +227,7 @@ body::before {
   gap: 18px;
 }
 
-/* brand column: logo with the SEASON title centered directly below it */
-.pcl-header-brand {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-/* SEASON tag — locked to the middle of the CONTENT LEAGUE arch.
-   The arch's glyph-mass center sits at 49.27% of the logo width, so the
-   tag spans exactly the logo's width, centers within it, and shifts left
-   by that sliver. 9px is the ceiling (user spec). */
-.pcl-season {
-  font-family: var(--pcl-font-display);
-  font-size: 9px;
-  letter-spacing: 2px;
-  padding-left: 2px;             /* balance trailing letter-space */
-  width: 172px;                  /* == logo width */
-  text-align: center;
-  transform: translateX(-1.5px); /* arch center, 172px scale */
-  color: var(--pcl-marquee-text);
-  text-shadow: 2px 2px 0 #000, 0 0 12px rgba(74, 104, 255, 0.5);
-  margin: 0;
-  white-space: nowrap;
-}
+.pcl-header-brand { flex: 0 0 auto; display: flex; }
 
 .pcl-logo {
   display: block;
@@ -257,6 +247,18 @@ body::before {
 }
 
 .pcl-header-text { flex: 1; min-width: 0; }
+
+/* SEASON 2 — sits directly ABOVE the "Submission Terminal" kicker, periwinkle
+   blue (a step darker than --pcl-marquee-text) so it reads as the season tag. */
+.pcl-season {
+  font-family: var(--pcl-font-display);
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: #8d98f2;
+  text-shadow: 2px 2px 0 #000, 0 0 12px rgba(77, 116, 255, 0.55);
+  margin: 0 0 7px;
+  white-space: nowrap;
+}
 
 .pcl-header-text .pcl-kicker {
   font-family: var(--pcl-font-title);
@@ -367,8 +369,7 @@ body::before {
     -8px 0 0 currentColor, 8px 0 0 currentColor;
 }
 
-/* pixel moon: FULL round disc with craters (the old half-open crescent
-   read as a cut-off half moon) */
+/* pixel moon: FULL round disc with craters */
 .pcl-px-moon::before {
   left: 8px; top: 8px;
   box-shadow:
@@ -425,372 +426,131 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 }
 
 /* ============================================================================
-   SURVEYJS v3 TOKEN MAPPING — pixel arcade
+   FORM — panels, fields, inputs
    ========================================================================== */
-.sd-root-modern {
-  /* let the themed page show through */
-  --sjs2-color-utility-body: transparent;
-  --sjs2-color-utility-surface-survey: transparent;
-  --sjs2-color-utility-sheet: transparent;
-
-  /* surfaces */
-  --sjs2-color-bg-basic-primary: var(--pcl-surface);
-  --sjs2-color-bg-basic-secondary: var(--pcl-surface-2);
-  --sjs2-color-bg-basic-tertiary: var(--pcl-surface-3);
-  --sjs2-color-bg-static-1-primary: var(--pcl-surface-2);
-  --sjs2-color-bg-static-2-primary: var(--pcl-surface-3);
-  --sjs2-color-bg-note-primary: var(--pcl-surface-2);
-
-  /* brand & accent */
-  --sjs2-color-bg-brand-primary: var(--pcl-primary);
-  --sjs2-color-bg-brand-secondary: var(--pcl-secondary);
-  --sjs2-color-bg-brand-tertiary: var(--pcl-primary-hi);
-  --sjs2-color-bg-accent-primary: var(--pcl-primary);
-  --sjs2-color-bg-accent-secondary: var(--pcl-secondary);
-  --sjs2-color-fg-brand-on-primary: var(--pcl-on-primary);
-  --sjs2-color-fg-accent-on-primary: var(--pcl-on-primary);
-  --sjs2-color-border-brand-primary: var(--pcl-primary-hi);
-
-  /* typography — pixel families per component role */
-  --sjs2-typography-font-family-text: var(--pcl-font-body);
-  --sjs2-typography-font-family-component-page-title: var(--pcl-font-display);
-  --sjs2-typography-font-family-component-page-description: var(--pcl-font-body);
-  --sjs2-typography-font-family-component-panel-title: var(--pcl-font-title);
-  --sjs2-typography-font-family-component-panel-description: var(--pcl-font-body);
-  --sjs2-typography-font-family-component-question-title: var(--pcl-font-title);
-  --sjs2-typography-font-family-component-question-description: var(--pcl-font-body);
-  --sjs2-typography-font-family-component-label-content: var(--pcl-font-body);
-  --sjs2-typography-font-family-component-label-hint: var(--pcl-font-title);
-  --sjs2-typography-font-family-component-caption-content: var(--pcl-font-body);
-  --sjs2-typography-font-family-component-caption-hint: var(--pcl-font-title);
-  --sjs2-typography-font-family-component-input-content: var(--pcl-font-body);
-  --sjs2-typography-font-family-component-message-content: var(--pcl-font-body);
-  --sjs2-typography-font-family-component-action-small-content: var(--pcl-font-display);
-  --sjs2-typography-font-family-component-action-medium-content: var(--pcl-font-display);
-  --sjs2-typography-font-family-component-action-large-content: var(--pcl-font-display);
-
-  /* borders */
-  --sjs2-color-border-basic-primary: var(--pcl-line);
-  --sjs2-color-border-basic-secondary: var(--pcl-line-soft);
-
-  /* alerts / errors */
-  --sjs2-color-fg-alert-primary: var(--pcl-error);
-  --sjs2-color-bg-alert-primary: var(--pcl-error);
-
-  /* foregrounds — the survey description (.sd-description) renders with
-     fg-basic-secondary = 60% alpha of fg-basic-primary; left unmapped it
-     was a light-theme grey at 60% → near-invisible in dark mode. */
-  --sjs2-color-fg-basic-primary: var(--pcl-text);
-  --sjs2-color-fg-basic-secondary: var(--pcl-muted);
-  --sjs2-color-fg-basic-primary-dim: var(--pcl-text);
-  --sjs2-color-fg-neutral-primary: var(--pcl-text);
-  --sjs2-color-fg-note-primary: var(--pcl-muted);
-  --sjs2-color-component-survey-header-default-description: var(--pcl-muted);
-
-  /* positives */
-  --sjs2-color-fg-positive-primary: #2fbf5f;
-
-  /* PIXEL = everything square */
-  --sjs2-radius-component-action: 0px;
-  --sjs2-radius-component-formbox: 0px;
-  --sjs2-radius-component-checkbox: 0px;
-  --sjs2-radius-component-boolean: 0px;
-  --sjs2-radius-component-boolean-item: 0px;
-  --sjs2-radius-component-drop: 0px;
-  --sjs2-radius-component-drop-item: 0px;
-  --sjs2-radius-component-buttongroup-item: 0px;
-  --sjs2-radius-component-panel: 0px;
-  --sjs2-radius-component-panel-simple: 0px;
-  --sjs2-radius-component-panel-dynamic: 0px;
-  --sjs2-radius-component-page: 0px;
-  --sjs2-radius-component-radio: 0px;
-  --sjs2-radius-component-rating: 0px;
-  --sjs2-radius-component-message: 0px;
-  --sjs2-radius-component-modal: 0px;
-  --sjs2-radius-component-tooltip: 0px;
-  --sjs2-radius-form: 0px;
-  --sjs2-radius-form-item: 0px;
-  --sjs2-radius-round: 0px;
-}
-
-/* ---- Survey title block ------------------------------------------------------ */
-.sd-root-modern .sd-title {
-  font-family: var(--pcl-font-display);
-  color: var(--pcl-text);
-}
-.sd-root-modern .sd-title .sd-title__text {
-  font-size: 18px;
-  line-height: 1.9;
-  letter-spacing: 0.5px;
-}
-.sd-root-modern .sd-page__title {
-  font-family: var(--pcl-font-display);
-  font-size: 18px !important;
-  line-height: 1.9;
-}
-/* v3.2.1 renders the survey description as .sd-description (not
-   .sv-header__description) — target the real class + map its var above */
-.sd-root-modern .sd-description,
-.sd-root-modern .sv-header__description,
-.sd-root-modern .sd-page__description {
+.pcl-form-note {
   font-family: var(--pcl-font-body);
-  font-size: 16.5px;
+  font-size: 16px;
   color: var(--pcl-muted);
-  opacity: 1;
+  margin: 0 0 16px;
 }
 
-/* ---- Panels = orange leaderboard plates + hard-shadow cards ------------------ */
-.sd-root-modern .sd-panel {
+.pcl-panel {
   background: var(--pcl-surface);
   border: 3px solid var(--pcl-panel-border);
   box-shadow: 6px 6px 0 var(--pcl-hard);
-  padding-top: 14px;
+  padding: 16px 18px 18px;
+  margin: 0 0 26px;
 }
 
 /* panel title as an ORANGE BAR (leaderboard DNA) */
-.sd-root-modern .sd-panel__title {
+.pcl-panel-title {
   display: inline-block;
   background: linear-gradient(90deg, var(--pcl-primary) 0%, var(--pcl-primary-hi) 100%);
   color: #fff;
   font-family: var(--pcl-font-title);
   font-weight: 700;
-  font-size: 14.5px;
+  font-size: 13.5px;
   letter-spacing: 1px;
   text-transform: uppercase;
   line-height: 1.6;
   padding: 6px 13px 5px;
   box-shadow: 3px 3px 0 var(--pcl-hard);
-  margin-bottom: 4px;
-}
-.sd-root-modern .sd-panel__description {
-  color: var(--pcl-muted);
-  font-size: 16px;
-  margin: 8px 2px 4px;
+  margin: 0 0 14px;
 }
 
-/* ---- Question titles: Silkscreen caps + orange pixel marker ------------------ */
-.sd-root-modern .sd-question__title {
+.pcl-opt {
+  display: inline-block;
+  vertical-align: 2px;
+  margin-left: 8px;
+  font-family: var(--pcl-font-title);
+  font-weight: 400;
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  color: var(--pcl-muted);
+  background: var(--pcl-surface-2);
+  border: 2px solid var(--pcl-line-soft);
+  padding: 3px 6px 2px;
+}
+
+.pcl-hint {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--pcl-muted);
+  margin: -4px 2px 12px;
+}
+
+.pcl-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* ---- Fields ---------------------------------------------------------------- */
+.pcl-field { min-width: 0; }
+
+.pcl-label {
+  display: block;
   font-family: var(--pcl-font-title);
   font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.6px;
+  font-size: 12px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--pcl-text);
-  line-height: 1.7;
-}
-.sd-root-modern .sd-question__title .sd-question__num {
-  color: var(--pcl-primary-hi);
-}
-.sd-root-modern .sd-question__description {
-  color: var(--pcl-muted);
-  font-size: 15.5px;
-}
-.sd-root-modern .sd-question__required-text {
-  color: var(--pcl-primary-hi);
+  margin: 0 0 6px;
 }
 
-/* ---- Inputs: retro wells (square, inset, orange focus glow) ------------------
-   SurveyJS v3.2.1 structure: .sd-formbox = the well, .sd-formbox__input = the
-   inner control (transparent), .sd-formbox__label = multipletext chip label. */
-.sd-root-modern .sd-formbox {
+/* retro well — navy border, inset shade, orange focus glow */
+.pcl-input {
+  display: block;
+  width: 100%;
   background: var(--pcl-input-bg);
   border: 3px solid var(--pcl-input-border);
-  border-radius: 0 !important;
+  border-radius: 0;
   box-shadow: inset 3px 3px 0 var(--pcl-inset);
+  color: var(--pcl-text);
+  font-family: var(--pcl-font-body);
+  font-size: 17px;
+  padding: 10px 12px 9px;
+  caret-color: var(--pcl-primary);
   transition: border-color 0.1s steps(2), box-shadow 0.1s steps(2);
 }
-.sd-root-modern .sd-formbox:hover {
-  border-color: var(--pcl-primary);
+.pcl-input::placeholder {
+  color: var(--pcl-muted);
+  opacity: 0.8;
 }
-.sd-root-modern .sd-formbox:focus-within {
+.pcl-input:hover { border-color: var(--pcl-primary); }
+.pcl-input:focus {
+  outline: none;
   border-color: var(--pcl-primary);
   box-shadow:
     inset 3px 3px 0 var(--pcl-inset),
     0 0 0 2px var(--pcl-focus-ring),
     0 0 14px var(--pcl-glow);
 }
-.sd-root-modern .sd-formbox__input,
-.sd-root-modern .sd-formbox__label {
-  background: transparent;
-  border: none;
-  color: var(--pcl-text);
-  font-family: var(--pcl-font-body);
-  font-size: 17px;
-  caret-color: var(--pcl-primary);
-}
-.sd-root-modern .sd-formbox__input::placeholder {
-  color: var(--pcl-muted);
-  opacity: 0.8;
-  font-family: var(--pcl-font-body);
-}
-.sd-root-modern .sd-formbox__input:focus {
-  outline: none;
-}
-/* multipletext label chip = pixel plate */
-.sd-root-modern .sd-formbox__label {
-  font-family: var(--pcl-font-title);
-  font-size: 13px;
-  letter-spacing: 0.4px;
-  background: var(--pcl-surface-3);
-  color: var(--pcl-text);
-  border-right: 3px solid var(--pcl-input-border);
-  padding: 9px 10px;
-}
-/* dropdown / comment are formbox variants — covered above */
-.sd-root-modern .sd-dropdown,
-.sd-root-modern .sd-comment {
-  border-radius: 0;
-}
-/* file drop-zone text */
-.sd-root-modern .sd-file__drag-area-placeholder {
-  color: var(--pcl-muted);
-  font-family: var(--pcl-font-body);
-  font-size: 16px;
-}
+.pcl-textarea { min-height: 64px; resize: vertical; line-height: 1.5; }
 
-/* ---- Buttons: hard-shadow press ------------------------------------------------
-   v3.2.1: actions render as .sd-action.sd-action--{variant} (single element). */
-.sd-root-modern .sd-btn,
-.sd-root-modern .sd-action {
-  border: 3px solid var(--pcl-primary-deep);
-  border-radius: 0;
-  font-family: var(--pcl-font-display);
-  font-size: 10px !important;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  line-height: 1.9;
-  box-shadow: 4px 4px 0 var(--pcl-hard);
-  transition: transform 0.06s steps(2), box-shadow 0.06s steps(2),
-              background 0.1s steps(2);
+/* select keeps the pixel well + a stepped chevron */
+.pcl-selectwrap { position: relative; }
+.pcl-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 38px;
 }
-.sd-root-modern .sd-btn:hover,
-.sd-root-modern .sd-action:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 5px 5px 0 var(--pcl-hard), 0 0 14px var(--pcl-glow);
+.pcl-chevron {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translateY(-4px);
+  pointer-events: none;
 }
-.sd-root-modern .sd-btn:active,
-.sd-root-modern .sd-action:active {
-  transform: translate(3px, 3px);
-  box-shadow: 1px 1px 0 var(--pcl-hard);
-}
-.sd-root-modern .sd-btn:focus-visible,
-.sd-root-modern .sd-action:focus-visible {
-  outline: 2px solid var(--pcl-cyan);
-  outline-offset: 2px;
-}
-
-/* primary = orange neon */
-.sd-root-modern .sd-btn--primary,
-.sd-root-modern .sd-action--primary,
-.sd-root-modern .sd-action.sd-action--brand.sd-action--primary {
-  background: linear-gradient(180deg, var(--pcl-primary-hi), var(--pcl-primary));
-  border-color: var(--pcl-primary-deep);
-  color: #fff;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
-}
-
-/* secondary / ghost = arcade cabinet panel button */
-.sd-root-modern .sd-btn--secondary,
-.sd-root-modern .sd-action--secondary,
-.sd-root-modern .sd-action--tertiary {
-  background: var(--pcl-surface-2);
-  color: var(--pcl-text);
-  border-color: var(--pcl-input-border);
-  text-shadow: none;
-}
-.sd-root-modern .sd-action--secondary:hover,
-.sd-root-modern .sd-action--tertiary:hover {
-  background: var(--pcl-surface-3);
-}
-/* small action (e.g. file "Select File") keeps readable sizing */
-.sd-root-modern .sd-action--small {
-  font-size: 9px !important;
-  padding: 8px 12px 7px;
-}
-
-/* ---- Checkboxes: pixel squares with box-shadow checkmarks -------------------- */
-.sd-root-modern .sd-checkbox__decorator,
-.sd-root-modern .sd-radio__decorator,
-.sd-root-modern .sd-checkbox__control,
-.sd-root-modern .sd-radio__control {
-  border-radius: 0 !important;
-}
-.sd-root-modern .sd-checkbox__decorator,
-.sd-root-modern .sd-radio__control {
-  width: 22px;
-  height: 22px;
-  border: 3px solid var(--pcl-input-border);
-  background: var(--pcl-input-bg);
-  box-shadow: inset 2px 2px 0 var(--pcl-inset);
-  position: relative;
-  transition: border-color 0.1s steps(2), background 0.1s steps(2);
-}
-.sd-root-modern .sd-checkbox:hover .sd-checkbox__decorator,
-.sd-root-modern .sd-radio:hover .sd-radio__control {
-  border-color: var(--pcl-primary);
-}
-.sd-root-modern .sd-checkbox__svg,
-.sd-root-modern .sd-radio__svg {
-  display: none; /* replaced by pixel glyphs below */
-}
-/* pixel check (2px-cell staircase) */
-.sd-root-modern .sd-checkbox--checked .sd-checkbox__decorator {
-  background: var(--pcl-primary);
-  border-color: var(--pcl-primary-deep);
-  box-shadow: 0 0 10px var(--pcl-glow);
-}
-.sd-root-modern .sd-checkbox--checked .sd-checkbox__decorator::before {
+.pcl-chevron::after {
   content: "";
   position: absolute;
-  left: 4px;
-  top: 10px;
-  width: 2px;
-  height: 2px;
-  background: #fff;
-  box-shadow:
-    2px 2px 0 #fff, 4px 4px 0 #fff, 6px 2px 0 #fff,
-    8px 0 0 #fff, 10px -2px 0 #fff, 12px -4px 0 #fff,
-    12px -6px 0 #fff, 12px -8px 0 #fff;
-}
-/* pixel radio dot = inner square */
-.sd-root-modern .sd-radio--checked .sd-radio__control {
-  border-color: var(--pcl-primary-deep);
-  box-shadow: 0 0 10px var(--pcl-glow);
-}
-.sd-root-modern .sd-radio--checked .sd-radio__control::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  width: 8px;
-  height: 8px;
-  background: var(--pcl-primary);
-  box-shadow: 0 0 8px var(--pcl-glow);
-}
-
-/* ---- Boolean switch: square thumb --------------------------------------------- */
-.sd-root-modern .sd-boolean-switch__thumb,
-.sd-root-modern .sd-boolean__thumb {
-  border-radius: 0 !important;
-}
-
-/* ---- Dropdown: pixel chevron --------------------------------------------------- */
-.sd-root-modern .sd-dropdown__chevron-button svg,
-.sd-root-modern .sd-dropdown svg use {
-  display: none;
-}
-.sd-root-modern .sd-dropdown__chevron-button {
-  position: relative;
-  width: 26px;
-  height: 26px;
-  border: none;
-  background: transparent;
-}
-.sd-root-modern .sd-dropdown__chevron-button::after {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 7px;
+  left: 0;
+  top: 0;
   width: 4px;
   height: 4px;
   background: var(--pcl-primary-hi);
@@ -799,118 +559,686 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
     2px 4px 0 var(--pcl-primary-hi), 6px 4px 0 var(--pcl-primary-hi),
     4px 8px 0 var(--pcl-primary-hi);
 }
-/* dropdown popup list */
-.sd-root-modern .sd-dropdown__popup,
-.sd-root-modern .sv-popup__container {
-  border-radius: 0 !important;
-  border: 3px solid var(--pcl-input-border) !important;
-  box-shadow: 6px 6px 0 var(--pcl-hard) !important;
-}
-.sd-root-modern .sv-list__item--selected {
-  background: var(--pcl-surface-3);
-}
 
-/* ---- File question: drop-well + pixel actions ---------------------------------- */
-.sd-root-modern .sd-file {
-  border: 3px dashed var(--pcl-line);
-  background: var(--pcl-surface-2);
-  box-shadow: inset 3px 3px 0 var(--pcl-inset);
-}
-.sd-root-modern .sd-file--answered {
-  border-style: solid;
-  border-color: var(--pcl-primary);
-  box-shadow: inset 3px 3px 0 var(--pcl-inset), 0 0 12px var(--pcl-glow-soft);
-}
-.sd-root-modern .sd-file__wrapper,
-.sd-root-modern .sd-file__preview {
-  border-radius: 0;
-}
-.sd-root-modern .sd-file__preview img {
-  border: 3px solid var(--pcl-input-border);
-  border-radius: 0;
-  image-rendering: auto;
-  box-shadow: 4px 4px 0 var(--pcl-hard);
-}
-.sd-root-modern .sd-file__remove-button,
-.sd-root-modern .sd-file__choose-btn {
-  border-radius: 0;
-}
-
-/* ---- Errors: pixel alarm ------------------------------------------------------- */
-.sd-root-modern .sd-question__erbox,
-.sd-root-modern .sd-panel__errbox {
-  border-radius: 0;
-  border: 2px solid var(--pcl-error);
-  background: var(--pcl-surface);
-  color: var(--pcl-error);
+/* ---- Error model ------------------------------------------------------------
+   Missing required input → red border + red shadow + small "Required" under
+   the field; the moment data is entered the navy well returns. */
+.pcl-err {
+  display: none;
   font-family: var(--pcl-font-title);
-  font-size: 12px;
-  letter-spacing: 0.5px;
-  box-shadow: 3px 3px 0 var(--pcl-hard);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  color: var(--pcl-error);
+  margin: 5px 2px 0;
+}
+.pcl-field.is-error .pcl-err,
+.pcl-cell.is-error .pcl-err { display: block; }
+.pcl-field.is-error .pcl-input {
+  border-color: var(--pcl-error);
+  box-shadow: 4px 4px 0 var(--pcl-error-soft), 0 0 12px var(--pcl-error-soft);
+}
+.pcl-field.is-error .pcl-input:focus {
+  box-shadow: 4px 4px 0 var(--pcl-error-soft), 0 0 14px var(--pcl-error-soft);
 }
 
-/* ---- Progress bar = XP bar (segmented, glowing) -------------------------------- */
-.sd-root-modern .sd-progress {
-  height: 22px;
+/* ============================================================================
+   POST LINKS — chip box
+   ========================================================================== */
+.pcl-chipbox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  min-height: 56px;
+  background: var(--pcl-input-bg);
   border: 3px solid var(--pcl-input-border);
-  background: var(--pcl-surface-3);
   border-radius: 0;
-  box-shadow: 4px 4px 0 var(--pcl-hard);
-  padding: 0 !important;
-  overflow: hidden;
+  box-shadow: inset 3px 3px 0 var(--pcl-inset);
+  transition: border-color 0.1s steps(2), box-shadow 0.1s steps(2);
+  cursor: text;
 }
-.sd-root-modern .sd-progress__bar {
-  height: 100%;
-  background:
-    repeating-linear-gradient(90deg,
-      var(--pcl-primary) 0 12px,
-      var(--pcl-primary-hi) 12px 24px);
-  border-radius: 0;
-  box-shadow: 0 0 10px var(--pcl-glow);
+.pcl-chipbox:hover { border-color: var(--pcl-primary); }
+.pcl-chipbox:focus-within {
+  border-color: var(--pcl-primary);
+  box-shadow:
+    inset 3px 3px 0 var(--pcl-inset),
+    0 0 0 2px var(--pcl-focus-ring),
+    0 0 14px var(--pcl-glow);
+}
+.pcl-field.is-error .pcl-chipbox {
+  border-color: var(--pcl-error);
+  box-shadow: 4px 4px 0 var(--pcl-error-soft), 0 0 12px var(--pcl-error-soft);
+}
+
+/* pixel chain-link glyph at the box start — says "links go here" */
+.pcl-px-link {
   position: relative;
-  transition: width 0.2s steps(6);
+  width: 14px;
+  height: 12px;
+  flex: 0 0 auto;
+  opacity: 0.85;
 }
-/* animated shine sweep */
-.sd-root-modern .sd-progress__bar::after {
+.pcl-px-link::before,
+.pcl-px-link::after {
   content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 14px;
-  background: rgba(255, 255, 255, 0.28);
-  animation: pclShine 2.4s steps(12) infinite;
+  top: 2px;
+  width: 8px;
+  height: 8px;
+  border: 3px solid var(--pcl-primary-hi);
 }
-@keyframes pclShine {
-  0% { left: -20px; }
-  100% { left: 110%; }
+.pcl-px-link::before { left: 0; border-right: none; }
+.pcl-px-link::after { left: 6px; border-left: none; }
+.pcl-chipbox:focus-within .pcl-px-link { opacity: 1; }
+
+.pcl-chips {
+  display: contents;   /* chips participate in the box's own wrap flow */
 }
-.sd-root-modern .sd-progress__text {
+
+.pcl-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
   font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface-3);
+  border: 2px solid var(--pcl-input-border);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 5px 6px 4px 9px;
+}
+.pcl-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.pcl-chip-x {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  opacity: 0.45;
+  flex: 0 0 auto;
+}
+.pcl-chip-x::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  width: 4px;
+  height: 4px;
+  background: currentColor;
+  box-shadow:
+    -3px -3px 0 currentColor, 3px 3px 0 currentColor,
+    -3px 3px 0 currentColor, 3px -3px 0 currentColor;
+}
+.pcl-chip-x:hover { opacity: 1; color: var(--pcl-error); }
+/* cross reveals on hover (desktop); always faintly visible on touch */
+@media (hover: hover) {
+  .pcl-chip .pcl-chip-x { opacity: 0; }
+  .pcl-chip:hover .pcl-chip-x,
+  .pcl-chip-x:focus-visible { opacity: 1; }
+}
+
+/* link error chip — red, reason on hover.
+   `.is-status` (amber) is reserved for the future link-liveness check. */
+.pcl-chip.is-error {
+  color: var(--pcl-error);
+  border-color: var(--pcl-error);
+  background: var(--pcl-surface);
+  box-shadow: 2px 2px 0 var(--pcl-error-soft);
+  cursor: help;
+}
+.pcl-chip.is-status {
+  color: var(--pcl-status);
+  border-color: var(--pcl-status);
+}
+.pcl-chip.is-error::after {
+  content: attr(data-reason);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 9px);
+  z-index: 40;
+  width: max-content;
+  max-width: 260px;
+  background: #0b0b14;
+  color: #fff;
+  font-family: var(--pcl-font-body);
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+  text-align: left;
+  padding: 7px 10px 6px;
+  border: 2px solid var(--pcl-error);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity 0.12s steps(2), transform 0.12s steps(2);
+}
+.pcl-chip.is-error:hover::after,
+.pcl-chip.is-error:focus-within::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pcl-chipinput {
+  flex: 1 1 200px;
+  min-width: 160px;
+  background: transparent;
+  border: none;
+  color: var(--pcl-text);
+  font-family: var(--pcl-font-body);
+  font-size: 17px;
+  padding: 6px 2px;
+  caret-color: var(--pcl-primary);
+}
+.pcl-chipinput:focus { outline: none; }
+.pcl-chipinput::placeholder { color: var(--pcl-muted); opacity: 0.8; }
+
+/* small "+ ADD" committer */
+.pcl-addbtn {
+  flex: 0 0 auto;
+  font-family: var(--pcl-font-display);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, var(--pcl-primary-hi), var(--pcl-primary));
+  border: 2px solid var(--pcl-primary-deep);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  padding: 9px 10px 8px;
+  cursor: pointer;
+  transition: transform 0.06s steps(2), box-shadow 0.06s steps(2);
+}
+.pcl-addbtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--pcl-hard), 0 0 12px var(--pcl-glow);
+}
+.pcl-addbtn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--pcl-hard);
+}
+.pcl-addbtn:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+
+/* ============================================================================
+   POST DETAILS — header (count + EDIT/VIEW), rows in both modes
+   ========================================================================== */
+.pcl-details-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.pcl-details-head .pcl-panel-title { margin-bottom: 0; }
+
+.pcl-count {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  color: var(--pcl-muted);
+  border: 2px dashed var(--pcl-line);
+  padding: 6px 9px 5px;
+}
+
+.pcl-viewtoggle { margin-left: auto; display: flex; gap: 6px; }
+.pcl-vbtn {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--pcl-muted);
+  background: var(--pcl-surface-2);
+  border: 2px solid var(--pcl-input-border);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 7px 10px 6px;
+  cursor: pointer;
+  transition: background 0.1s steps(2), color 0.1s steps(2);
+}
+.pcl-vbtn:hover { background: var(--pcl-surface-3); color: var(--pcl-text); }
+.pcl-vbtn.is-active {
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, var(--pcl-primary-hi), var(--pcl-primary));
+  border-color: var(--pcl-primary-deep);
+  box-shadow: 2px 2px 0 var(--pcl-hard), 0 0 10px var(--pcl-glow-soft);
+}
+.pcl-vbtn:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+
+.pcl-empty {
+  font-size: 16.5px;
+  color: var(--pcl-muted);
+  margin: 12px 2px 2px;
+}
+
+/* format badge — auto-detected from the link, multiplier included */
+.pcl-fmt {
+  flex: 0 0 auto;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface-3);
+  border: 2px solid var(--pcl-line-soft);
+  padding: 4px 7px 3px;
+  white-space: nowrap;
+}
+.pcl-fmt b { color: var(--pcl-primary-hi); font-weight: 700; }
+
+/* ---- EDIT mode: compact columnar rows ---------------------------------------
+   grid: # | link + badge | views | screenshot                               */
+.pcl-post {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 176px 132px;
+  gap: 8px 12px;
+  align-items: start;
+  padding: 13px 0 15px;
+  border-bottom: 2px dashed var(--pcl-line-soft);
+}
+.pcl-post:last-child { border-bottom: none; padding-bottom: 6px; }
+
+.pcl-post-num {
+  font-family: var(--pcl-font-display);
+  font-size: 11px;
+  color: var(--pcl-primary-hi);
+  text-shadow: 0 0 8px var(--pcl-glow-soft);
+  padding-top: 13px;
+}
+
+.pcl-post-main {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding-top: 9px;
+}
+.pcl-post-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  font-size: 15.5px;
+  color: var(--pcl-secondary);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.pcl-post-link:hover { color: var(--pcl-primary); }
+
+.pcl-views { font-size: 15px; padding: 9px 10px 8px; }
+
+/* screenshot button — dashed "add" well → solid orange once attached */
+.pcl-shotbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  color: var(--pcl-muted);
+  background: var(--pcl-surface-2);
+  border: 3px dashed var(--pcl-line);
+  padding: 9px 8px 8px;
+  cursor: pointer;
+  transition: border-color 0.1s steps(2), box-shadow 0.1s steps(2),
+              color 0.1s steps(2);
+}
+.pcl-shotbtn:hover { border-color: var(--pcl-primary); color: var(--pcl-text); }
+.pcl-shotbtn.is-set {
+  border-style: solid;
+  border-color: var(--pcl-primary);
+  color: var(--pcl-text);
+  background: var(--pcl-surface-3);
+  box-shadow: 3px 3px 0 var(--pcl-hard), 0 0 10px var(--pcl-glow-soft);
+}
+.pcl-shotbtn:focus-visible,
+.pcl-vshot:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+
+.pcl-shotbtn .pcl-thumb {
+  width: 24px;
+  height: 19px;
+  object-fit: cover;
+  border: 2px solid var(--pcl-input-border);
+  flex: 0 0 auto;
+}
+
+/* pixel photo icon (camera frame + dot) */
+.pcl-px-photo {
+  position: relative;
+  width: 13px;
+  height: 11px;
+  border: 2px solid currentColor;
+  flex: 0 0 auto;
+}
+.pcl-px-photo::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 4px;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 13px 0 0 currentColor;
+}
+.pcl-px-photo::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 2px;
+  width: 3px;
+  height: 3px;
+  background: currentColor;
+}
+
+/* missing-screenshot error state (red well + "Required") */
+.pcl-cell.is-error .pcl-shotbtn {
+  border-color: var(--pcl-error);
+  color: var(--pcl-error);
+  box-shadow: 3px 3px 0 var(--pcl-error-soft);
+}
+
+/* ---- VIEW mode: compact confirmation rows ------------------------------------ */
+.pcl-vrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 11px 2px 12px;
+  border-bottom: 2px dashed var(--pcl-line-soft);
+}
+.pcl-vrow:last-child { border-bottom: none; padding-bottom: 4px; }
+.pcl-vnum {
+  font-family: var(--pcl-font-display);
+  font-size: 10px;
+  color: var(--pcl-primary-hi);
+  text-shadow: 0 0 8px var(--pcl-glow-soft);
+  min-width: 22px;
+}
+.pcl-vlink {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15.5px;
+  color: var(--pcl-secondary);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.pcl-vlink:hover { color: var(--pcl-primary); }
+.pcl-vshot {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  color: var(--pcl-muted);
+  background: var(--pcl-surface-2);
+  border: 2px dashed var(--pcl-line);
+  padding: 8px 10px 7px;
+  cursor: pointer;
+}
+.pcl-vshot:hover { border-color: var(--pcl-primary); color: var(--pcl-text); }
+.pcl-vshot.is-set {
+  border-style: solid;
+  border-color: var(--pcl-primary);
+  color: var(--pcl-text);
+  background: var(--pcl-surface-3);
+  box-shadow: 2px 2px 0 var(--pcl-hard), 0 0 10px var(--pcl-glow-soft);
+}
+.pcl-vshot.is-missing { color: var(--pcl-error); border-color: var(--pcl-error); }
+
+/* ============================================================================
+   SUBMIT BAR
+   ========================================================================== */
+.pcl-submitbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 28px 0 8px;
+}
+.pcl-btn--primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--pcl-font-display);
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, var(--pcl-primary-hi), var(--pcl-primary));
+  border: 3px solid var(--pcl-primary-deep);
+  box-shadow: 5px 5px 0 var(--pcl-hard), 0 0 16px var(--pcl-glow-soft);
+  padding: 14px 22px 13px;
+  cursor: pointer;
+  transition: transform 0.06s steps(2), box-shadow 0.06s steps(2);
+}
+.pcl-btn--primary:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--pcl-hard), 0 0 18px var(--pcl-glow);
+}
+.pcl-btn--primary:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--pcl-hard);
+}
+.pcl-btn--primary:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 3px; }
+.pcl-btn--primary[disabled] { opacity: 0.6; cursor: wait; transform: none; }
+
+.pcl-savestate {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
   font-size: 11px;
   letter-spacing: 1px;
-  color: var(--pcl-text);
+  color: var(--pcl-muted);
 }
+.pcl-savestate.is-fail { color: var(--pcl-error); }
 
-/* progress label "XP" flavor */
-.sd-root-modern .sd-progress-buttons__text { display: none; }
-
-/* ---- Navigation footer row ------------------------------------------------------ */
-.sd-root-modern .sd-navigation {
+/* ============================================================================
+   SCREENSHOT LIGHTBOX — floating window, centered; details line below the
+   image; thumbnail strip beside/below; PREV / NEXT arrows with text.
+   ========================================================================== */
+.pcl-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.pcl-lightbox[hidden] { display: none; }
+.pcl-lb-back {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 4, 24, 0.86);
+}
+.pcl-lb-card {
+  position: relative;
+  display: flex;
+  align-items: stretch;
   gap: 12px;
+  margin: 0;
+  max-width: min(960px, 96vw);
+  max-height: 90vh;
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-panel-border);
+  box-shadow: 8px 8px 0 var(--pcl-hard), 0 0 34px rgba(237, 59, 0, 0.25);
+  padding: 16px;
 }
-.sd-root-modern .sd-btn.sd-navigation__btn {
-  padding: 10px 16px 9px;
+.pcl-lb-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  overflow: auto;
+}
+.pcl-lb-img {
+  display: block;
+  max-width: 100%;
+  max-height: 56vh;
+  object-fit: contain;
+  background: var(--pcl-input-bg);
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 4px 4px 0 var(--pcl-hard);
+}
+.pcl-lb-line {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--pcl-text);
+  text-align: center;
+}
+.pcl-lb-line a {
+  color: var(--pcl-secondary);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.pcl-lb-line b { color: var(--pcl-primary-hi); }
+.pcl-lb-strip {
+  display: flex;
+  gap: 8px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 3px 2px;
+}
+.pcl-lb-thumb {
+  width: 68px;
+  height: 48px;
+  overflow: hidden;
+  object-fit: cover;
+  border: 2px solid var(--pcl-line-soft);
+  opacity: 0.72;
+  cursor: pointer;
+  padding: 0;
+  background: var(--pcl-input-bg);
+}
+.pcl-lb-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pcl-lb-thumb:hover { opacity: 1; }
+.pcl-lb-thumb.is-active {
+  border-color: var(--pcl-primary);
+  box-shadow: 0 0 10px var(--pcl-glow-soft);
+  opacity: 1;
 }
 
-/* ---- PCL form cat — REMOVED (season 2 directive: cat + angry pointer are
-   gone from the deployment entirely; styles, scripts and config included). */
+.pcl-lb-nav {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface-2);
+  border: 2px solid var(--pcl-input-border);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  padding: 12px 12px 11px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.pcl-lb-nav:hover {
+  background: var(--pcl-surface-3);
+  box-shadow: 3px 3px 0 var(--pcl-hard), 0 0 12px var(--pcl-glow-soft);
+}
+.pcl-lb-nav:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
 
-/* ---- Completed screen: LEVEL CLEARED -------------------------------------------- */
+/* pixel arrows: right-pointing by default; PREV mirrors */
+.pcl-px-arr {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+.pcl-px-arr::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  width: 4px;
+  height: 4px;
+  background: var(--pcl-primary-hi);
+  box-shadow:
+    -8px -8px 0 var(--pcl-primary-hi), -8px -4px 0 var(--pcl-primary-hi),
+    -8px 0 0 var(--pcl-primary-hi), -8px 4px 0 var(--pcl-primary-hi),
+    -8px 8px 0 var(--pcl-primary-hi), -4px -4px 0 var(--pcl-primary-hi),
+    -4px 0 0 var(--pcl-primary-hi), -4px 4px 0 var(--pcl-primary-hi),
+    0 0 0 var(--pcl-primary-hi);
+}
+.pcl-px-arr--left { transform: scaleX(-1); }
+
+.pcl-lb-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(180deg, var(--pcl-primary-hi), var(--pcl-primary));
+  border: 3px solid var(--pcl-primary-deep);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  cursor: pointer;
+}
+.pcl-lb-close:hover { box-shadow: 3px 3px 0 var(--pcl-hard), 0 0 14px var(--pcl-glow); }
+.pcl-lb-close:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+
+.pcl-px-x {
+  position: relative;
+  width: 14px;
+  height: 14px;
+}
+.pcl-px-x::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  width: 4px;
+  height: 4px;
+  background: currentColor;
+  box-shadow:
+    -4px -4px 0 currentColor, 4px 4px 0 currentColor,
+    -4px 4px 0 currentColor, 4px -4px 0 currentColor;
+}
+
+/* ============================================================================
+   Completed screen: LEVEL CLEARED
+   ============================================================================ */
 .pcl-done {
   text-align: center;
   padding: 30px 8px 12px;
   font-family: var(--pcl-font-body);
 }
+.pcl-done[hidden] { display: none; }
 .pcl-done-stars {
   font-family: var(--pcl-font-display);
   font-size: 30px;
@@ -960,78 +1288,66 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   100% { transform: scale(1); }
 }
 
-/* ---- Dark-mode grey-text readability --------------------------------------------
-   The pixel fonts get jaggy on dark gradients; a soft periwinkle halo
-   lifts the muted copy off the background without turning it neon. */
-html[data-pcl-theme="dark"] .sd-root-modern .sd-description,
-html[data-pcl-theme="dark"] .sd-root-modern .sd-panel__description,
-html[data-pcl-theme="dark"] .sd-root-modern .sd-question__description,
-html[data-pcl-theme="dark"] .sd-root-modern .sd-file__drag-area-placeholder,
-html[data-pcl-theme="dark"] .sd-root-modern .sd-formbox__input::placeholder,
-html[data-pcl-theme="dark"] .pcl-footer {
-  text-shadow: 0 0 9px rgba(160, 172, 255, 0.35);
-}
-
-/* ---- Dynamic post rows (paneldynamic) ----------------------------------------
-   Rows are system-managed: they exist 1:1 with the links parsed from the
-   "Post Links" box, so the add/remove/counter chrome stays hidden. */
-.sd-root-modern .sd-paneldynamic__button,
-.sd-root-modern .sd-paneldynamic__add-btn,
-.sd-root-modern .sd-paneldynamic__remove-btn,
-.sd-root-modern .sd-paneldynamic__panel-count,
-.sd-root-modern .sd-paneldynamic__placeholder { display: none; }
-.sd-root-modern .sd-paneldynamic__panels-container {
-  counter-reset: pclrow;
-}
-.sd-root-modern .sd-paneldynamic__panel-wrapper {
-  padding: 14px 0 16px;
-  border-bottom: 2px dashed var(--pcl-line-soft);
-  counter-increment: pclrow;
-}
-.sd-root-modern .sd-paneldynamic__panel-wrapper--list + .sd-paneldynamic__panel-wrapper--list {
-  margin-top: 2px;
-}
-/* "POST n" row label — CSS counter, survives every re-render */
-.sd-root-modern .sd-paneldynamic__panel-wrapper::before {
-  content: "POST " counter(pclrow);
-  display: block;
-  font-family: var(--pcl-font-title);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 1.5px;
-  color: var(--pcl-primary);
-  margin: 0 0 8px;
-}
-
-/* ---- Required-star in the header sentence ----------------------------------------
-   "Fields marked * are required" — the star itself pops in PCL orange so it
-   reads as the same marker used on required question titles. */
+/* ---- Required-star ----------------------------------------------------------- */
 .pcl-req-star {
   color: var(--pcl-primary-hi);
   font-weight: 700;
   text-shadow: 0 0 8px var(--pcl-glow-soft);
 }
 
+/* dark-mode halo on muted copy (pixel fonts get jaggy on gradients) */
+html[data-pcl-theme="dark"] .pcl-form-note,
+html[data-pcl-theme="dark"] .pcl-hint,
+html[data-pcl-theme="dark"] .pcl-empty,
+html[data-pcl-theme="dark"] .pcl-footer,
+html[data-pcl-theme="dark"] .pcl-done-note,
+html[data-pcl-theme="dark"] .pcl-chipinput::placeholder,
+html[data-pcl-theme="dark"] .pcl-input::placeholder {
+  text-shadow: 0 0 9px rgba(160, 172, 255, 0.35);
+}
+
 /* ---- Mobile ---------------------------------------------------------------------- */
 @media (max-width: 620px) {
   .pcl-header { gap: 12px; padding: 12px 14px; }
   .pcl-logo { width: 118px; }
-  .pcl-season { width: 118px; font-size: 9px; letter-spacing: 2px; transform: translateX(-1px); }
+  .pcl-season { font-size: 8px; letter-spacing: 2px; margin-bottom: 6px; }
   .pcl-marquee-divider { display: none; }
-  .pcl-toggle { margin-right: 4px; }
+  .pcl-toggle { margin-right: 4px; width: 42px; height: 42px; }
   .pcl-header-text .pcl-kicker { font-size: 10px; letter-spacing: 1.6px; }
   .pcl-header-text .pcl-insert { font-size: 9.5px; }
   .pcl-main { padding: 16px 14px 28px; }
-  .sd-root-modern .sd-question__title { font-size: 13.5px; }
-  .sd-root-modern .sd-panel__title { font-size: 13px; }
-  .pcl-done h3 { font-size: 17px; }
+
+  .pcl-panel { padding: 14px 12px 16px; }
+  .pcl-panel-title { font-size: 12.5px; }
+  .pcl-grid2 { grid-template-columns: 1fr; }
+
+  .pcl-post {
+    grid-template-columns: 22px minmax(0, 1fr) 118px;
+    grid-template-areas:
+      "num main shot"
+      "num views views";
+    gap: 8px 10px;
+  }
+  .pcl-post-num { grid-area: num; padding-top: 10px; }
+  .pcl-post-main { grid-area: main; }
+  .pcl-cell--views { grid-area: views; }
+  .pcl-cell--shot { grid-area: shot; }
+
+  .pcl-btn--primary { width: 100%; justify-content: center; }
+
+  .pcl-lb-card {
+    flex-wrap: wrap;
+    padding: 12px;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+  .pcl-lb-stage { order: -1; flex: 1 1 100%; }
+  .pcl-lb-nav { flex: 1 1 auto; justify-content: center; }
+  .pcl-lb-close { top: -12px; right: -8px; }
   .pcl-footer { font-size: 10.5px; letter-spacing: 1.2px; }
 }
 
 /* ---- Reduced motion ---------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  .pcl-blink,
-  .sd-root-modern .sd-progress__bar::after {
-    animation: none;
-  }
+  .pcl-blink { animation: none; }
 }

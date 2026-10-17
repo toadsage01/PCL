@@ -16,7 +16,11 @@
  *            5. replies {ok:true, id, posts:<count>}
  *
  *   doGet  → metrics JSON: {ok, totalSubmissions, totalPosts, uniqueMedia,
- *            lastSubmissionAt}
+ *            lastSubmissionAt, players:[…]}
+ *            `players` aggregates the ledger per candidate — submissions,
+ *            post count, unique media, format ratio and projected points
+ *            — so the league can see who uploaded how much and in what
+ *            mix without ever double-counting (Media ID dedup holds).
  *
  * LEDGER LAYOUT ("Submissions" sheet) — one row PER POST; a submission
  * with 5 posts writes 5 rows sharing one Submission ID:
@@ -30,8 +34,9 @@
  *   Audit:      Raw JSON (base64 stripped — screenshots live in Drive)
  *   (→ pipeline: Name/UID → per-post media + claimed data → OCR'd ×
  *    cross-verification → total analytics)
- * Content Type (Praper / PAVE vs Personal) per post feeds the rulebook's
- * 50:50 content-ratio tracking; per-player totals roll up by Full Name.
+ * NOTE: the Content Type column is DEPRECATED (the form no longer tags
+ * posts Praper/PAVE vs Personal) but stays in HEADERS so existing sheet
+ * layouts keep their column order; new rows simply leave it blank.
  *
  * Points rule (rulebook §3): Leaderboard Points = views/impressions ×
  * multiplier, fractional points rounded UP. Verified Points always wins over
@@ -151,7 +156,7 @@ function doPost(e) {
       row['Snapshot #'] = snapshotNo;
       row['Full Name'] = fullName;
       row['Reporting Manager'] = manager;
-      row['Content Type'] = str_(p.contentType);
+      row['Content Type'] = '';           // deprecated — column kept for layout
       row['Platform'] = PLATFORM_LABELS[fmt] || '';
       row['Format'] = FORMAT_LABELS[fmt] || fmt;
       row['Multiplier'] = mult;
@@ -187,23 +192,62 @@ function doGet() {
     var lastRow = sheet.getLastRow();
     var totalPosts = Math.max(0, lastRow - 1);
     var media = {}, subs = {}, last = null;
+    var players = {};                    // per-candidate roll-up
     if (totalPosts > 0) {
       var values = sheet.getRange(2, 1, totalPosts, HEADERS.length).getValues();
+      var c = {};
+      HEADERS.forEach(function (h, i) { c[h] = i; });
       values.forEach(function (r) {
-        var mid = r[HEADERS.indexOf('Media ID')];
+        var mid = r[c['Media ID']];
         if (mid) media[mid] = true;
-        var sid = r[HEADERS.indexOf('Submission ID')];
+        var sid = r[c['Submission ID']];
         if (sid) subs[sid] = true;
+
+        var name = str_(r[c['Full Name']]);
+        if (!name) return;
+        if (!players[name]) {
+          players[name] = {
+            player: name,
+            manager: str_(r[c['Reporting Manager']]),
+            submissions: {},
+            posts: 0,
+            media: {},
+            formats: {},
+            projectedPoints: 0
+          };
+        }
+        var pl = players[name];
+        if (sid) pl.submissions[sid] = true;
+        pl.posts++;
+        if (mid) pl.media[mid] = true;   // unique media never double-counts
+        var fmt = str_(r[c['Format']]);
+        if (fmt) pl.formats[fmt] = (pl.formats[fmt] || 0) + 1;
+        var pts = Number(r[c['Projected Points']]);
+        if (!isNaN(pts)) pl.projectedPoints += pts;
       });
       var v = values[values.length - 1][0];
       last = v instanceof Date ? v.toISOString() : String(v);
     }
+    var playerList = Object.keys(players).map(function (k) {
+      var pl = players[k];
+      return {
+        player: pl.player,
+        manager: pl.manager,
+        submissions: Object.keys(pl.submissions).length,
+        posts: pl.posts,
+        uniqueMedia: Object.keys(pl.media).length,
+        formatRatio: pl.formats,
+        projectedPoints: pl.projectedPoints
+      };
+    }).sort(function (a, b) { return b.posts - a.posts; });
     return json_({
       ok: true,
       totalSubmissions: Object.keys(subs).length,
       totalPosts: totalPosts,
       uniqueMedia: Object.keys(media).length,
-      lastSubmissionAt: last
+      lastSubmissionAt: last,
+      players: playerList,
+      generatedAt: new Date().toISOString()
     });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
