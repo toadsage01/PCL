@@ -221,15 +221,20 @@ body::before {
   gap: 6px;
 }
 
-/* SEASON tag — sits symmetrically under the logo's midline.
-   Periwinkle blue (the marquee's native text blue) + a soft blue glow,
-   sized just above the original 11px treatment. */
+/* SEASON tag — locked to the middle of the CONTENT LEAGUE arch.
+   The arch's glyph-mass center sits at 49.27% of the logo width, so the
+   tag spans exactly the logo's width, centers within it, and shifts left
+   by that sliver. 9px is the ceiling (user spec). */
 .pcl-season {
   font-family: var(--pcl-font-display);
-  font-size: 13px;
-  letter-spacing: 3px;
+  font-size: 9px;
+  letter-spacing: 2px;
+  padding-left: 2px;             /* balance trailing letter-space */
+  width: 172px;                  /* == logo width */
+  text-align: center;
+  transform: translateX(-1.5px); /* arch center, 172px scale */
   color: var(--pcl-marquee-text);
-  text-shadow: 2px 2px 0 #000, 0 0 14px rgba(74, 104, 255, 0.5);
+  text-shadow: 2px 2px 0 #000, 0 0 12px rgba(74, 104, 255, 0.5);
   margin: 0;
   white-space: nowrap;
 }
@@ -312,9 +317,11 @@ body::before {
   56%, 100% { opacity: 0; }
 }
 
-/* ---- Pixel theme toggle (sun/moon drawn as box-shadow pixels) -------------- */
+/* pixel theme toggle — kept a step inside the header edge so the right
+   side doesn't read as congested against the marquee border */
 .pcl-toggle {
   flex: 0 0 auto;
+  margin-right: 10px;
   width: 46px;
   height: 46px;
   display: grid;
@@ -965,6 +972,37 @@ html[data-pcl-theme="dark"] .pcl-footer {
   text-shadow: 0 0 9px rgba(160, 172, 255, 0.35);
 }
 
+/* ---- Dynamic post rows (paneldynamic) ----------------------------------------
+   Rows are system-managed: they exist 1:1 with the links parsed from the
+   "Post Links" box, so the add/remove/counter chrome stays hidden. */
+.sd-root-modern .sd-paneldynamic__button,
+.sd-root-modern .sd-paneldynamic__add-btn,
+.sd-root-modern .sd-paneldynamic__remove-btn,
+.sd-root-modern .sd-paneldynamic__panel-count,
+.sd-root-modern .sd-paneldynamic__placeholder { display: none; }
+.sd-root-modern .sd-paneldynamic__panels-container {
+  counter-reset: pclrow;
+}
+.sd-root-modern .sd-paneldynamic__panel-wrapper {
+  padding: 14px 0 16px;
+  border-bottom: 2px dashed var(--pcl-line-soft);
+  counter-increment: pclrow;
+}
+.sd-root-modern .sd-paneldynamic__panel-wrapper--list + .sd-paneldynamic__panel-wrapper--list {
+  margin-top: 2px;
+}
+/* "POST n" row label — CSS counter, survives every re-render */
+.sd-root-modern .sd-paneldynamic__panel-wrapper::before {
+  content: "POST " counter(pclrow);
+  display: block;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  color: var(--pcl-primary);
+  margin: 0 0 8px;
+}
+
 /* ---- Required-star in the header sentence ----------------------------------------
    "Fields marked * are required" — the star itself pops in PCL orange so it
    reads as the same marker used on required question titles. */
@@ -978,8 +1016,9 @@ html[data-pcl-theme="dark"] .pcl-footer {
 @media (max-width: 620px) {
   .pcl-header { gap: 12px; padding: 12px 14px; }
   .pcl-logo { width: 118px; }
-  .pcl-season { font-size: 12px; letter-spacing: 2px; }
+  .pcl-season { width: 118px; font-size: 9px; letter-spacing: 2px; transform: translateX(-1px); }
   .pcl-marquee-divider { display: none; }
+  .pcl-toggle { margin-right: 4px; }
   .pcl-header-text .pcl-kicker { font-size: 10px; letter-spacing: 1.6px; }
   .pcl-header-text .pcl-insert { font-size: 9.5px; }
   .pcl-main { padding: 16px 14px 28px; }

@@ -1,188 +1,167 @@
 /* ============================================================================
-   PCL FORM DEFINITION — Season 2, built from the official Rulebook PDF.
+   PCL FORM DEFINITION — Season 2 · bulk view reporting
    ----------------------------------------------------------------------------
-   Structure (matches the league's flow — every submission is ONE post):
-     Q1  Player Registration ..... full name + reporting manager (side by side)
-     Q2  Format & Multiplier ..... the 5 rulebook formats; only 3 platforms
-                                   (Instagram / YouTube / LinkedIn) exist here,
-                                   so only valid platforms can be picked
-     Q3  Post URL ................ validated AGAINST the chosen format
-     Q4  Views / Impressions ..... self-reported, cross-verified via screenshot
-     Q5  Analytics Screenshot .... proof + OCR cross-check (Drive-stored)
-     Q6  Weekly Challenge ........ optional: week, URL, notes for the judges
+   The league counts VIEWS on everything a candidate posts, so one
+   submission carries MANY posts:
 
-   Rulebook facts baked into the copy:
-     • Multipliers: YT long 2x · YT shorts 1.25x · IG reels 1.25x ·
-       IG posts/carousels 1x · LinkedIn 1x  (points = count × multiplier)
-     • One Post, One Platform: identical content on 2 platforms → only the
-       higher count counts — so a post is submitted once, per platform.
-     • No paid promotions/boosting — organic reach only.
-     • Analytics tracked Mon–Sat; due by 11:00 AM the following Monday.
-   Re-submitting the SAME post URL logs an UPDATE snapshot (never duplicate
-   views) — that's handled server-side by Media ID (see gas/Code.gs).
+     1  Player Details ....... full name + reporting manager
+     2  Post Links ........... paste every post URL — separated by spaces,
+                               commas, semicolons or new lines
+     3  Post Details ......... one auto-created row per link:
+                               link · format · content type ·
+                               views/impressions · screenshot
+     4  Weekly Challenge ..... optional week + link + notes
+
+   Rows in "Post Details" are system-managed: js/app.js parses the link
+   box and syncs the panel count. Praper/PAVE vs Personal tagging per post
+   feeds the 50:50 content-ratio tracking in the ledger.
    ========================================================================== */
 
 (function () {
   var MAX_BYTES = (window.PCL_CONFIG.maxFileMB || 5) * 1024 * 1024;
   var TYPES = window.PCL_CONFIG.fileTypes;
 
+  var FORMATS = [
+    { value: "ig_reel",   text: "Instagram Reel" },
+    { value: "ig_post",   text: "Instagram Post / Carousel" },
+    { value: "yt_shorts", text: "YouTube Shorts" },
+    { value: "yt_long",   text: "YouTube Long-Form" },
+    { value: "li_post",   text: "LinkedIn Post" }
+  ];
+
   window.PCL_FORM = {
     title: "Weekly Submission",
     description:
-      "One post per entry — submit again for more posts or fresh counts " +
-      "(same post = update, never double views). Fields marked " +
-      "<span class='pcl-req-star'>*</span> are required. Analytics due " +
-      "Monday 11:00 AM. Boosted posts don't count.",
+      "Paste all your post links — a screenshot goes with each. " +
+      "Fields marked <span class='pcl-req-star'>*</span> are required.",
 
-    // NOTE: single-page form — a progress widget reads as noise (v3 renders a
-    // page-button list). Flip to "top" if you split this into multiple pages;
-    // the theme already styles .sd-progress as a glowing segmented XP bar.
     showProgressBar: "off",
     focusFirstQuestionAutomatic: false,
 
-    // Screen shown after a successful submit — pixel arcade style
     completedHtml:
       "<div class='pcl-done'>" +
       "<div class='pcl-done-stars' aria-hidden='true'>\u2605\u2605\u2605</div>" +
       "<h3>LEVEL CLEARED!</h3>" +
       "<p class='pcl-done-sub'>Entry Logged &middot; Points Queued</p>" +
       "<div class='pcl-done-xp'>+100 XP</div>" +
-      "<p class='pcl-done-note'>Your entry is in — the league sees it " +
-      "instantly. Screenshot cross-checks next. See you at the next " +
-      "weekly challenge.</p></div>",
+      "<p class='pcl-done-note'>All posts logged. See you next week.</p></div>",
 
     elements: [
-      /* ---------------------------------------------------------------
-         Q1 — Player Registration (rulebook §8: roster for tracking)
-         "Parallely": full name + reporting manager share one row.
-      ---------------------------------------------------------------- */
+      /* ---- 1 · Player Details ------------------------------------ */
       {
         type: "panel",
         name: "q1_player",
-        title: "Q1. Player Registration",
-        description:
-          "Every submission carries your tag — it keeps the leaderboard " +
-          "row and your manager's line-up straight.",
+        title: "1. Player Details",
         elements: [
           {
-            type: "multipletext",
-            name: "player",
-            items: [
-              {
-                name: "fullName",
-                title: "Full name",
-                placeholder: "e.g. Jatin Gulati",
-                isRequired: true
-              },
-              {
-                name: "reportingManager",
-                title: "Reporting manager",
-                placeholder: "e.g. Ashutosh",
-                isRequired: true
-              }
-            ]
+            type: "text",
+            name: "fullName",
+            title: "Full name",
+            placeholder: "e.g. Priya",
+            isRequired: true
+          },
+          {
+            type: "text",
+            name: "reportingManager",
+            title: "Reporting manager",
+            placeholder: "e.g. Rahul",
+            isRequired: true,
+            startWithNewLine: false
           }
         ]
       },
 
-      /* ---------------------------------------------------------------
-         Q2 — Format & Multiplier (rulebook §3 platform table)
-         The only five eligible formats across the only three platforms.
-      ---------------------------------------------------------------- */
+      /* ---- 2 · Post Links (bulk paste) ---------------------------- */
       {
-        type: "dropdown",
-        name: "platformFormat",
-        title: "Q2. Format & Multiplier",
-        description:
-          "Only Instagram, YouTube and LinkedIn are eligible. Leaderboard " +
-          "points = views/impressions × your format's multiplier.",
-        isRequired: true,
-        placeholder: "Pick the format you're submitting…",
-        choices: [
-          { value: "ig_reel",   text: "Instagram Reel — views × 1.25" },
-          { value: "ig_post",   text: "Instagram Post / Carousel — impressions × 1" },
-          { value: "yt_shorts", text: "YouTube Shorts — views × 1.25" },
-          { value: "yt_long",   text: "YouTube Long-Form — views × 2" },
-          { value: "li_post",   text: "LinkedIn Post — impressions × 1" }
-        ]
-      },
-
-      /* ---------------------------------------------------------------
-         Q3 — Post URL. Validated against Q2's format at runtime
-         (see js/app.js → PCL_URL_RULES + onValidateQuestion).
-      ---------------------------------------------------------------- */
-      {
-        type: "text",
-        name: "postUrl",
-        title: "Q3. Post URL",
-        description:
-          "Public link only — private or deleted posts can't be verified " +
-          "and lose their points. Same content on two platforms? Submit " +
-          "only the stronger one (One Post, One Platform rule).",
-        inputType: "url",
-        placeholder: "https://…",
-        isRequired: true,
-        validators: [{ type: "urlvalidator" }]
-      },
-
-      /* ---------------------------------------------------------------
-         Q4 — Views / Impressions count (self-reported, verified later)
-      ---------------------------------------------------------------- */
-      {
-        type: "text",
-        name: "viewsImpressions",
-        title: "Q4. Views / Impressions Count",
-        description:
-          "The exact number on the post's own analytics screen — no " +
-          "rounding, no estimates. This is cross-checked against your " +
-          "screenshot before points lock in.",
-        inputType: "number",
-        min: 0,
-        placeholder: "e.g. 12500",
+        type: "comment",
+        name: "postUrls",
+        title: "2. Post Links",
+        description: "Separate links with spaces, commas or new lines.",
+        placeholder:
+          "https://www.instagram.com/reel/ABC123/\n" +
+          "https://www.youtube.com/shorts/XYZ789\n" +
+          "https://www.linkedin.com/posts/… , https://…",
+        rows: 4,
         isRequired: true
       },
 
-      /* ---------------------------------------------------------------
-         Q5 — Analytics screenshot (proof + OCR cross-check).
-         Stored in Praper's Google Drive; size capped at the same limit
-         the backend enforces (Google Apps Script / Drive pipeline).
-      ---------------------------------------------------------------- */
+      /* ---- 3 · Post Details (one row per link, system-managed) ---- */
       {
-        type: "file",
-        name: "analyticsScreenshot",
-        title: "Q5. Analytics Screenshot",
-        description:
-          "Screenshot the post's insights — count clearly visible, post " +
-          "date in frame when possible. PNG, JPG or WebP, up to " +
-          window.PCL_CONFIG.maxFileMB + " MB (the Drive pipeline's cap). " +
-          "Saved to Praper's Google Drive for the OCR cross-check.",
+        type: "paneldynamic",
+        name: "postDetails",
+        title: "3. Post Details",
+        description: "One entry per post.",
+        panelCount: 0,
         isRequired: true,
-        acceptedTypes: TYPES,
-        maxSize: MAX_BYTES,
-        allowMultiple: false,
-        storeDataAsText: true,
-        showPreview: true
+        panelNameTemplate: "Post {panelIndex}",
+        allowAddPanel: false,
+        allowRemovePanel: false,
+        panelRemoveButtonVisible: false,
+        panelPrevNextButtonVisible: false,
+        templateElements: [
+          {
+            type: "text",
+            name: "link",
+            title: "Link",
+            readOnly: true
+          },
+          {
+            type: "dropdown",
+            name: "format",
+            title: "Format",
+            placeholder: "Format…",
+            choices: FORMATS.slice(),
+            isRequired: true
+          },
+          {
+            type: "dropdown",
+            name: "contentType",
+            title: "Content",
+            placeholder: "Type…",
+            choices: [
+              { value: "praper",   text: "Praper / PAVE" },
+              { value: "personal", text: "Personal" }
+            ],
+            isRequired: true
+          },
+          {
+            type: "text",
+            name: "viewsImpressions",
+            title: "Views / Impressions",
+            inputType: "number",
+            min: 0,
+            placeholder: "e.g. 12500",
+            isRequired: true
+          },
+          {
+            type: "file",
+            name: "analyticsScreenshot",
+            title: "Screenshot",
+            description: "Platform analytics of this post.",
+            acceptedTypes: TYPES,
+            maxSize: MAX_BYTES,
+            allowMultiple: false,
+            storeDataAsText: true,
+            showPreview: true,
+            isRequired: true
+          }
+        ]
       },
 
-      /* ---------------------------------------------------------------
-         Q6 — Weekly Challenge (rulebook §4, optional per entry)
-      ---------------------------------------------------------------- */
+      /* ---- 4 · Weekly Challenge (optional) ------------------------- */
       {
         type: "panel",
-        name: "q6_weeklyChallenge",
-        title: "Q6. Weekly Challenge Entry",
-        description:
-          "Optional — only if this post is your shot at this week's " +
-          "challenge. Weekly analytics run Monday–Saturday; submit by " +
-          "11:00 AM Monday for the week to count.",
+        name: "q4_weeklyChallenge",
+        title: "4. Weekly Challenge",
+        description: "Optional.",
         elements: [
           {
             type: "dropdown",
             name: "challengeWeek",
-            title: "Which week's challenge?",
-            placeholder: "Not entering this week…",
+            title: "Week",
+            placeholder: "Not entering…",
             choices: [
-              { value: "", text: "Not entering this week" },
+              { value: "", text: "Not entering" },
               { value: "Week 1 — Best Original Content", text: "Week 1 · Best Original Content" },
               { value: "Week 2 — Best Storytelling Debut", text: "Week 2 · Best Storytelling Debut" },
               { value: "Week 3 — A Day in My Life", text: "Week 3 · A Day in My Life" },
@@ -198,8 +177,7 @@
           {
             type: "text",
             name: "challengeUrl",
-            title: "Challenge post URL",
-            description: "Skip if it's the same post you entered in Q3.",
+            title: "Challenge link",
             inputType: "url",
             placeholder: "https://…",
             visibleIf: "{challengeWeek} notempty",
@@ -208,37 +186,13 @@
           {
             type: "comment",
             name: "additionalNotes",
-            title: "Anything the judges should know?",
-            description:
-              "Collab partners (Week 4), one continuous take (Week 8), " +
-              "trial-reel history, trend used — anything worth a note.",
-            rows: 3,
+            title: "Notes",
+            rows: 2,
             placeholder: "Optional…",
             visibleIf: "{challengeWeek} notempty"
           }
         ]
       }
     ]
-
-    /* ===============================================================
-       CUSTOMIZABILITY CHEAT-SHEET — paste any of these into `elements`
-       (all free / MIT core):
-
-       Dropdown:      { type:"dropdown", name:"n", title:"t",
-                        choices:["A","B","C"] }
-       Single choice: { type:"radiogroup", name:"n", title:"t",
-                        choices:["Yes","No"] }
-       Multi-select:  { type:"checkbox", name:"n", title:"t",
-                        choices:["Reel","Story","Post"] }
-       Rating:        { type:"rating", name:"n", title:"t",
-                        rateMax: 10 }
-       Date:          { type:"text", name:"n", title:"t",
-                        inputType:"date" }
-       Number:        { type:"text", name:"n", title:"t",
-                        inputType:"number", min:0, max:100 }
-       Repeatable group (rows of URL+file pairs):
-                      { type:"paneldynamic", name:"n", title:"t",
-                        panelCount:1, templateElements:[ …same as Q1 panel… ] }
-    ================================================================ */
   };
 })();

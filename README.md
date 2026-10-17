@@ -19,12 +19,14 @@ inspo saved in `assets/inspo/`).
 
 ## Features
 
-- Rulebook-shaped form (Q1–Q6): player registration, format + multiplier,
-  post URL, views/impressions count, analytics screenshot, weekly challenge
-- Format-aware URL validation — the link must match the platform chosen
+- Rulebook-shaped form: player details, bulk link paste (spaces / commas /
+  new lines), one auto-created row per post (format · content type · count ·
+  screenshot), optional weekly challenge
+- 50:50 ratio ready — every post is tagged Praper / PAVE or Personal
+- Format-aware validation — each link must match the format picked in its row
 - Image/screenshot uploads with a hard MB cap, previews, type filter
 - Duplicate-proof ledger: same post URL = UPDATE snapshot, never double
-  views (`gas/Code.gs` Media ID model)
+  views; one row per post rolls up per player (`gas/Code.gs`)
 - Customizable: every question lives in `js/survey-config.js`; theme in
   `css/theme.css`; more question types documented inline (dropdown,
   rating, repeatable groups…)

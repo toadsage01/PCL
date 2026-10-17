@@ -14,15 +14,16 @@ backend + Google Sheets/Drive storage. Nothing to pay for, nothing to patch.
 │   ├─ css/theme.css        ← brand tokens → --sjs2-* vars │
 │   ├─ js/gas-endpoint.js   ← CONFIG: GAS URL, max file MB │
 │   ├─ js/survey-config.js  ← declarative form definition  │
-│   └─ js/app.js            ← bootstrap + format-aware URL │
-│                             validation + submit hook     │
+│   └─ js/app.js            ← bootstrap + bulk-link parser  │
+│                             + row sync + submit hook      │
 │                                                          │
 │  Validations (client, instant):                          │
-│   • Post URL → urlvalidator + regex matched to the       │
-│     format chosen in Q2 (IG reel/post, YT shorts/long,   │
-│     LinkedIn post — the league's only 3 platforms)       │
+│   • Post Links box → at least one parseable URL          │
+│   • Each row's link → regex matched to the row's format  │
+│     (IG reel/post, YT shorts/long, LinkedIn post — the   │
+│     league's only 3 platforms)                           │
 │   • Attachments → maxSize (bytes) + acceptedTypes        │
-│   • Count → numeric, min 0                               │
+│   • Counts → numeric, min 0                              │
 └───────────────┬──────────────────────────────────────────┘
                 │  HTTPS POST — JSON body, simple request
                 │  (text/plain content-type → no CORS preflight,
@@ -32,7 +33,7 @@ backend + Google Sheets/Drive storage. Nothing to pay for, nothing to patch.
 │  Google Apps Script Web App (gas/Code.gs)                │
 │   Execute as: Me   ·   Access: Anyone                    │
 │                                                          │
-│   doPost:                                                │
+│   doPost (per post in the submission):                   │
 │    1. parse payload {submissionId, submittedAt, data}    │
 │    2. extract Media ID from the post URL (IG shortcode,  │
 │       YT video ID, LI activity id) — the dedup key       │
@@ -40,10 +41,11 @@ backend + Google Sheets/Drive storage. Nothing to pay for, nothing to patch.
 │       duplicate views); first time → NEW                 │
 │    4. screenshot → base64-decode → Drive folder          │
 │       (5 MB server-side guard)                           │
-│    5. append one ledger row (see schema below)           │
+│    5. append one ledger row per post (schema below)      │
 │                                                          │
 │   doGet: metrics JSON                                    │
-│    → {ok, totalSubmissions, uniqueMedia, lastSubmissionAt}│
+│    → {ok, totalSubmissions, totalPosts, uniqueMedia,     │
+│       lastSubmissionAt}                                  │
 └───────────────┬──────────────────────────────────────────┘
                 ▼
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -59,32 +61,38 @@ backend + Google Sheets/Drive storage. Nothing to pay for, nothing to patch.
 |---|---|---|
 | Form page | `index.html` | Shell; loads vendored SurveyJS (offline-ready) |
 | Theme | `css/theme.css` | Brand tokens + SurveyJS `--sjs2-*` variable mapping |
-| Form definition | `js/survey-config.js` | Q1–Q6 per the Rulebook (declarative JSON) |
+| Form definition | `js/survey-config.js` | 4 sections per the Rulebook (declarative JSON) |
 | Endpoint config | `js/gas-endpoint.js` | GAS URL, `maxFileMB`, accepted file types |
-| Bootstrap | `js/app.js` | Renders survey; format-aware URL validation; CORS-safe POST; LOCAL-mode fallback |
+| Bootstrap | `js/app.js` | Renders survey; bulk-link parsing + row sync + per-row validation; CORS-safe POST; LOCAL-mode fallback |
 | Backend | `gas/Code.gs` | Media-ID dedup, ledger append, Drive upload, metrics |
 | Local hosting | `serve.sh` | One command: `./serve.sh [port]` |
 
 ## Form structure (from the official Rulebook)
 
-| # | Question | Type | Rules enforced |
+| # | Question | Type | Behaviour |
 |---|---|---|---|
-| Q1 | Player Registration — full name + reporting manager | multipletext (side-by-side), required | roster identity on every submission |
-| Q2 | Format & Multiplier | dropdown, required | only the 5 eligible formats across the only 3 platforms (rulebook §3) |
-| Q3 | Post URL | url, required | regex-matched to Q2's format at runtime |
-| Q4 | Views / Impressions Count | number, required | exact count from platform analytics |
-| Q5 | Analytics Screenshot | file, required, ≤5 MB | proof for the OCR cross-check; Drive-stored |
-| Q6 | Weekly Challenge Entry | panel: week dropdown + URL + notes | optional; all 10 rulebook weeks pre-listed |
+| 1 | Player Details | name + manager, side-by-side, required | roster identity on every submission |
+| 2 | Post Links | multiline paste box, required | accepts URLs separated by spaces, commas, semicolons or new lines |
+| 3 | Post Details | dynamic rows — one per parsed link | row: link (read-only) · format (5 rulebook formats) · content type (Praper / PAVE vs Personal) · views/impressions · screenshot (≤5 MB) |
+| 4 | Weekly Challenge | optional panel: week + link + notes | all 10 rulebook weeks pre-listed |
+
+Rows in "Post Details" are system-managed: `js/app.js` parses the link box
+(debounced) and syncs the row count 1:1. Re-pasting or editing the list keeps
+each row's format/screenshot — rows are matched by link first, then by
+position, so a typo fix doesn't wipe entered data.
 
 ## Ledger & the anti-double-count model
 
-Every submission event = one append-only row. The dedup key is the **Media
-ID** extracted from the post URL (`ig_<shortcode>`, `yt_<videoId>`,
-`li_<activityId>`). Re-submitting a post (fresh counts, days later, bulk at
-the end — any pattern) produces an `UPDATE` row with `Snapshot #` incremented:
-counts are **snapshotted, never summed**, so the same views can never be
-counted twice. Points = latest count × multiplier (fractions rounded up),
-computed as *projected* on submission and finalized by the review pipeline:
+Every POST = one append-only ledger row; a submission with N posts writes N
+rows sharing one Submission ID (plus a per-row `Content Type` — Praper / PAVE
+vs Personal — which feeds the rulebook's 50:50 ratio tracking; per-player
+totals roll up by Full Name). The dedup key is the **Media ID** extracted
+from the post URL (`ig_<shortcode>`, `yt_<videoId>`, `li_<activityId>`).
+Re-submitting a post (fresh counts, days later, bulk at the end — any
+pattern) produces an `UPDATE` row with `Snapshot #` incremented: counts are
+**snapshotted, never summed**, so the same views can never be counted twice.
+Points = latest count × multiplier (fractions rounded up), computed as
+*projected* on submission and finalized by the review pipeline:
 
 ```
 Claimed Views/Impressions → OCR Count (from screenshot)

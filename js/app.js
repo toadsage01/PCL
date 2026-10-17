@@ -37,6 +37,13 @@
   }
 
   /* ---- build the survey ---- */
+  // Task-focused upload placeholder on every screenshot box (shorter than
+  // the library default — one line instead of two).
+  try {
+    Survey.surveyLocalization.locales.en.filePlaceholder =
+      "Drag & drop here, or use SELECT FILE.";
+  } catch (e) { /* keep library default */ }
+
   var survey = new Survey.Model(window.PCL_FORM);
 
   /* Allow inline HTML in titles/descriptions — used for the styled
@@ -47,28 +54,111 @@
     });
   }
 
-  /* ---- format-aware URL validation -------------------------------------
-     Q3's link must belong to the platform picked in Q2 — the league only
-     allows Instagram / YouTube / LinkedIn, and each format has exactly
-     one canonical URL shape. Runs as-you-type and on submit. */
+  /* ---- bulk link parsing + row sync --------------------------------------
+     "Post Links" accepts URLs separated by spaces, commas, semicolons or
+     new lines. Every parsed link gets exactly one row in the "Post Details"
+     dynamic panel; rows keep their format/screenshot when the list is
+     re-pasted or edited (matched by link first, then by position). */
   var PCL_URL_RULES = {
     ig_reel:   { re: /instagram\.com\/(reel|reels)\/[\w-]+/i,
-                 hint: "an Instagram Reel link (instagram.com/reel/…)" },
+                 short: "an Instagram Reel link" },
     ig_post:   { re: /instagram\.com\/(p|reel|reels)\/[\w-]+/i,
-                 hint: "an Instagram post or carousel link (instagram.com/p/…)" },
+                 short: "an Instagram post or carousel link" },
     yt_shorts: { re: /youtube\.com\/shorts\/[\w-]+/i,
-                 hint: "a YouTube Shorts link (youtube.com/shorts/…)" },
+                 short: "a YouTube Shorts link" },
     yt_long:   { re: /youtube\.com\/(watch\?v=[\w-]+|live\/[\w-]+)|youtu\.be\/[\w-]+/i,
-                 hint: "a YouTube video link (youtube.com/watch?v=… or youtu.be/…)" },
+                 short: "a YouTube video link" },
     li_post:   { re: /linkedin\.com\/(posts|feed\/update|pulse)\//i,
-                 hint: "a LinkedIn post link (linkedin.com/posts/…)" }
+                 short: "a LinkedIn post link" }
   };
+
+  function pclParseUrls(raw) {
+    var out = [];
+    String(raw || "").split(/[\s,;]+/).forEach(function (tok) {
+      tok = tok.trim().replace(/[)\]}>,.;]+$/, "");
+      if (!tok) return;
+      if (!/^https?:\/\//i.test(tok)) {
+        if (/^(www\.|[\w-]+\.[a-z]{2,})/i.test(tok)) tok = "https://" + tok;
+        else return;
+      }
+      if (/^https?:\/\/[^\s]+\.[^\s]+/i.test(tok) && out.indexOf(tok) === -1) {
+        out.push(tok);
+      }
+    });
+    return out;
+  }
+
+  var FIELDS_TO_CARRY = ["format", "contentType",
+                         "viewsImpressions", "analyticsScreenshot"];
+
+  var pclSyncTimer = null;
+  function pclScheduleSync() {
+    clearTimeout(pclSyncTimer);
+    pclSyncTimer = setTimeout(pclSyncPostPanels, 160);
+  }
+
+  function pclSyncPostPanels() {
+    var pd = survey.getQuestionByName("postDetails");
+    if (!pd) return;
+    var urls = pclParseUrls(survey.getValue("postUrls"));
+
+    // snapshot existing rows: keyed by link, plus in order for fallback
+    var byLink = {}, byPos = [], consumed = [];
+    pd.panels.forEach(function (p) {
+      var snap = {};
+      FIELDS_TO_CARRY.forEach(function (k) {
+        snap[k] = p.getQuestionByName(k) && p.getQuestionByName(k).value;
+      });
+      var link = p.getQuestionByName("link").value;
+      byPos.push(snap);
+      if (link) byLink[link] = snap;
+    });
+    function take(snap) {
+      if (!snap || consumed.indexOf(snap) !== -1) return null;
+      consumed.push(snap);
+      return snap;
+    }
+
+    pd.panelCount = urls.length;
+    pd.panels.forEach(function (p, i) {
+      p.getQuestionByName("link").value = urls[i];
+      var snap = take(byLink[urls[i]]) || take(byPos[i]);
+      if (!snap) return;
+      FIELDS_TO_CARRY.forEach(function (k) {
+        var q = p.getQuestionByName(k);
+        var empty = q.value === undefined || q.value === null ||
+                    q.value === "" ||
+                    (Array.isArray(q.value) && !q.value.length);
+        if (empty && snap[k] !== undefined && snap[k] !== null) {
+          q.value = snap[k];
+        }
+      });
+    });
+  }
+
+  survey.onValueChanged.add(function (s, options) {
+    if (options.name === "postUrls") pclScheduleSync();
+  });
+
+  /* ---- validation ---------------------------------------------------------
+     · link box  → at least one parseable URL
+     · each row  → the link must match the format picked in that row
+     (required flags, number bounds and file caps are SurveyJS-native). */
   survey.onValidateQuestion.add(function (s, options) {
-    if (options.name !== "postUrl" || !options.value) return;
-    var rule = PCL_URL_RULES[s.getValue("platformFormat")];
-    if (rule && !rule.re.test(String(options.value))) {
-      options.error = "That doesn't look like " + rule.hint +
-        " — match the format you picked in Q2.";
+    if (options.name === "postUrls") {
+      if (pclParseUrls(options.value).length === 0) {
+        options.error = "Paste at least one post link.";
+      }
+      return;
+    }
+    if (options.name === "link" && !s.isValueEmpty(options.value)) {
+      var panel = options.question && options.question.parent;
+      var fmtQ = panel && panel.getQuestionByName
+        ? panel.getQuestionByName("format") : null;
+      var rule = PCL_URL_RULES[fmtQ && fmtQ.value];
+      if (rule && !rule.re.test(String(options.value))) {
+        options.error = "This isn't " + rule.short + ".";
+      }
     }
   });
 
@@ -163,7 +253,24 @@
     console.log("[PCL bridge] change on", input);
     var holder = input.closest("[data-name]");
     if (!holder) return;
-    var q = survey.getQuestionByName(holder.getAttribute("data-name"));
+    var qName = holder.getAttribute("data-name");
+
+    // Resolve the question instance. Inside the dynamic "Post Details"
+    // rows the survey-level name lookup only reaches the template, so we
+    // map the input's row (DOM order) to its panel instance.
+    var q = null;
+    var rowEl = input.closest(".sd-paneldynamic__panel-wrapper");
+    if (rowEl) {
+      var pd = survey.getQuestionByName("postDetails");
+      var wrappers = document.querySelectorAll(
+        "#surveyContainer .sd-paneldynamic__panel-wrapper");
+      var idx = Array.prototype.indexOf.call(wrappers, rowEl);
+      if (pd && pd.panels && pd.panels[idx]) {
+        q = pd.panels[idx].getQuestionByName(qName);
+      }
+    } else {
+      q = survey.getQuestionByName(qName);
+    }
     if (!q || q.getType() !== "file") return;
     if (q.value && q.value.length) return; // SurveyJS flow already won
 

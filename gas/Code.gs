@@ -4,7 +4,8 @@
  * ============================================================================
  * Receives submissions from the PCL form and maintains the league ledger:
  *
- *   doPost → 1. extracts the MEDIA ID from the post URL (IG shortcode /
+ *   doPost → for EVERY post in the submission (a submission carries many):
+ *            1. extracts the MEDIA ID from the post URL (IG shortcode /
  *               YouTube video ID / LinkedIn activity ID) — the dedup key
  *            2. decides NEW vs UPDATE: the same Media ID submitted again is
  *               an UPDATE snapshot of that post's count, never extra views
@@ -12,21 +13,25 @@
  *            4. appends one ledger row with claimed count, multiplier and
  *               projected points — leaving the OCR / cross-check / verified
  *               columns empty for the review pipeline to fill in
- *            5. replies {ok:true, id, entryType}
+ *            5. replies {ok:true, id, posts:<count>}
  *
- *   doGet  → metrics JSON: {ok, totalSubmissions, uniqueMedia, lastSubmissionAt}
+ *   doGet  → metrics JSON: {ok, totalSubmissions, totalPosts, uniqueMedia,
+ *            lastSubmissionAt}
  *
- * LEDGER LAYOUT ("Submissions" sheet) — one row per submission event:
+ * LEDGER LAYOUT ("Submissions" sheet) — one row PER POST; a submission
+ * with 5 posts writes 5 rows sharing one Submission ID:
  *   Identity:   Timestamp · Submission ID · Entry Type · Snapshot # ·
  *               Full Name · Reporting Manager
- *   Media:      Platform · Format · Multiplier · Post URL · Media ID ·
- *               Weekly Challenge · Challenge URL · Notes
+ *   Media:      Content Type · Platform · Format · Multiplier · Post URL ·
+ *               Media ID · Weekly Challenge · Challenge URL · Notes
  *   Claims:     Claimed Views/Impressions · Projected Points ·
  *               Screenshot File · Screenshot Link
  *   Review:     OCR Count · Cross-Check · Verified Count · Verified Points
- *   Audit:      Raw JSON
- *   (→ pipeline: Name/UID → media + claimed data → OCR'd × cross-verification
- *    → total analytics)
+ *   Audit:      Raw JSON (base64 stripped — screenshots live in Drive)
+ *   (→ pipeline: Name/UID → per-post media + claimed data → OCR'd ×
+ *    cross-verification → total analytics)
+ * Content Type (Praper / PAVE vs Personal) per post feeds the rulebook's
+ * 50:50 content-ratio tracking; per-player totals roll up by Full Name.
  *
  * Points rule (rulebook §3): Leaderboard Points = views/impressions ×
  * multiplier, fractional points rounded UP. Verified Points always wins over
@@ -57,7 +62,7 @@ var MAX_FILE_MB = 5;                  // mirrors js/gas-endpoint.js
 var HEADERS = [
   'Timestamp', 'Submission ID', 'Entry Type', 'Snapshot #',
   'Full Name', 'Reporting Manager',
-  'Platform', 'Format', 'Multiplier', 'Post URL', 'Media ID',
+  'Content Type', 'Platform', 'Format', 'Multiplier', 'Post URL', 'Media ID',
   'Weekly Challenge', 'Challenge URL', 'Notes',
   'Claimed Views/Impressions', 'Projected Points',
   'Screenshot File', 'Screenshot Link',
@@ -99,62 +104,78 @@ function doPost(e) {
     var id = payload.submissionId || Utilities.getUuid();
     var d = payload.data || {};
 
+    var posts = Array.isArray(d.postDetails) ? d.postDetails : [];
+    if (!posts.length) {
+      return json_({ ok: false, error: 'No posts in submission' });
+    }
+
     var folder = getDriveFolder_();
 
-    // Identity
-    var player = d.player || {};
-    var fullName = str_(player.fullName);
-    var manager = str_(player.reportingManager);
-
-    // Media
-    var fmt = str_(d.platformFormat);
-    var postUrl = str_(d.postUrl);
-    var mediaId = mediaId_(postUrl, fmt);
-
-    // Claimed analytics
-    var claimed = toCount_(d.viewsImpressions);
-    var mult = MULTIPLIERS.hasOwnProperty(fmt) ? MULTIPLIERS[fmt] : '';
-    var projected = (claimed !== '' && mult !== '')
-      ? Math.ceil(claimed * mult)            // rulebook: round fractions UP
-      : '';
-
-    // Screenshot → Drive
-    var shot = fileAnswer_(d.analyticsScreenshot, folder, id);
-
-    // Ledger state: is this Media ID already in the sheet? → UPDATE snapshot
-    var prior = findMedia_(mediaId);
-    var entryType = prior ? 'UPDATE' : 'NEW';
-    var snapshotNo = prior ? prior.snapshot + 1 : 1;
-
-    var row = {};
-    row['Timestamp'] = new Date();
-    row['Submission ID'] = id;
-    row['Entry Type'] = entryType;
-    row['Snapshot #'] = snapshotNo;
-    row['Full Name'] = fullName;
-    row['Reporting Manager'] = manager;
-    row['Platform'] = PLATFORM_LABELS[fmt] || '';
-    row['Format'] = FORMAT_LABELS[fmt] || fmt;
-    row['Multiplier'] = mult;
-    row['Post URL'] = postUrl;
-    row['Media ID'] = mediaId;
-    row['Weekly Challenge'] = str_(d.challengeWeek);
-    row['Challenge URL'] = str_(d.challengeUrl);
-    row['Notes'] = str_(d.additionalNotes);
-    row['Claimed Views/Impressions'] = claimed;
-    row['Projected Points'] = projected;
-    row['Screenshot File'] = shot ? shot.name : 'REJECTED — over ' + MAX_FILE_MB + ' MB cap';
-    row['Screenshot Link'] = shot ? shot.url : '';
-    row['OCR Count'] = '';               // filled by the OCR pass
-    row['Cross-Check'] = CHECK_PENDING;  // PENDING → MATCH / MISMATCH / BOOST?
-    row['Verified Count'] = '';          // filled after cross-verification
-    row['Verified Points'] = '';         // final leaderboard points
-    row['Raw JSON'] = JSON.stringify(payload);
+    // Identity (shared by every post in this submission)
+    var fullName = str_(d.fullName);
+    var manager = str_(d.reportingManager);
+    var week = str_(d.challengeWeek);
+    var challengeUrl = str_(d.challengeUrl);
+    var notes = str_(d.additionalNotes);
+    var raw = JSON.stringify(payload, function (k, v) {
+      // keep the audit trail small — screenshots live in Drive
+      return (k === 'content' && typeof v === 'string' &&
+              v.slice(0, 5) === 'data:') ? '[saved to Drive]' : v;
+    });
 
     var sheet = getSheet_();
-    sheet.appendRow(HEADERS.map(function (h) { return row[h]; }));
+    var written = 0;
 
-    return json_({ ok: true, id: id, entryType: entryType, mediaId: mediaId });
+    posts.forEach(function (p, i) {
+      var fmt = str_(p.format);
+      var postUrl = str_(p.link);
+      var mediaId = mediaId_(postUrl, fmt);
+      var claimed = toCount_(p.viewsImpressions);
+      var mult = MULTIPLIERS.hasOwnProperty(fmt) ? MULTIPLIERS[fmt] : '';
+      var projected = (claimed !== '' && mult !== '')
+        ? Math.ceil(claimed * mult)          // rulebook: round fractions UP
+        : '';
+
+      var shot = fileAnswer_(p.analyticsScreenshot, folder,
+                             id + '-p' + (i + 1));
+
+      // Ledger state: is this Media ID already in the sheet? → UPDATE
+      var prior = findMedia_(mediaId);
+      var entryType = prior ? 'UPDATE' : 'NEW';
+      var snapshotNo = prior ? prior.snapshot + 1 : 1;
+
+      var row = {};
+      row['Timestamp'] = new Date();
+      row['Submission ID'] = id;
+      row['Entry Type'] = entryType;
+      row['Snapshot #'] = snapshotNo;
+      row['Full Name'] = fullName;
+      row['Reporting Manager'] = manager;
+      row['Content Type'] = str_(p.contentType);
+      row['Platform'] = PLATFORM_LABELS[fmt] || '';
+      row['Format'] = FORMAT_LABELS[fmt] || fmt;
+      row['Multiplier'] = mult;
+      row['Post URL'] = postUrl;
+      row['Media ID'] = mediaId;
+      row['Weekly Challenge'] = week;
+      row['Challenge URL'] = challengeUrl;
+      row['Notes'] = notes;
+      row['Claimed Views/Impressions'] = claimed;
+      row['Projected Points'] = projected;
+      row['Screenshot File'] = shot ? shot.name
+        : 'REJECTED — over ' + MAX_FILE_MB + ' MB cap';
+      row['Screenshot Link'] = shot ? shot.url : '';
+      row['OCR Count'] = '';               // filled by the OCR pass
+      row['Cross-Check'] = CHECK_PENDING;  // PENDING → MATCH / MISMATCH / BOOST?
+      row['Verified Count'] = '';          // filled after cross-verification
+      row['Verified Points'] = '';         // final leaderboard points
+      row['Raw JSON'] = raw;
+
+      sheet.appendRow(HEADERS.map(function (h) { return row[h]; }));
+      written++;
+    });
+
+    return json_({ ok: true, id: id, posts: written });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
@@ -164,22 +185,24 @@ function doGet() {
   try {
     var sheet = getSheet_();
     var lastRow = sheet.getLastRow();
-    var total = Math.max(0, lastRow - 1);
-    var unique = {};
-    var last = null;
-    if (total > 0) {
-      var values = sheet.getRange(2, 1, total, HEADERS.length).getValues();
+    var totalPosts = Math.max(0, lastRow - 1);
+    var media = {}, subs = {}, last = null;
+    if (totalPosts > 0) {
+      var values = sheet.getRange(2, 1, totalPosts, HEADERS.length).getValues();
       values.forEach(function (r) {
         var mid = r[HEADERS.indexOf('Media ID')];
-        if (mid) unique[mid] = true;
+        if (mid) media[mid] = true;
+        var sid = r[HEADERS.indexOf('Submission ID')];
+        if (sid) subs[sid] = true;
       });
       var v = values[values.length - 1][0];
       last = v instanceof Date ? v.toISOString() : String(v);
     }
     return json_({
       ok: true,
-      totalSubmissions: total,
-      uniqueMedia: Object.keys(unique).length,
+      totalSubmissions: Object.keys(subs).length,
+      totalPosts: totalPosts,
+      uniqueMedia: Object.keys(media).length,
       lastSubmissionAt: last
     });
   } catch (err) {
