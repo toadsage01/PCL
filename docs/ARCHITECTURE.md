@@ -61,6 +61,16 @@ Nothing to pay for, nothing to patch.
 │       lastSubmissionAt, players:[{player, manager,       │
 │       submissions, posts, uniqueMedia, formatRatio,      │
 │       projectedPoints}], generatedAt}                    │
+│                                                          │
+│   ADMIN (key-gated via Script Properties ADMIN_KEY):     │
+│    doGet ?action=ledger&key=…&callback=… → full rows     │
+│      (newest first, Drive file ids + thumb urls) +       │
+│      totals + players — JSONP, zero CORS config          │
+│    doGet ?action=ocr&key=…&fileId=…      → Drive OCR     │
+│      suggests the count closest to the claim             │
+│    doPost {action:'adminVerify', updates:[…]}            │
+│      → writes OCR/Cross-Check/Verified cols; Verified    │
+│      Points always recomputed server-side                │
 └───────────────┬──────────────────────────────────────────┘
                 ▼
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -78,7 +88,8 @@ Nothing to pay for, nothing to patch.
 | Theme | `css/theme.css` | Pixel design system: tokens, marquee, panels, chips, rows, lightbox, error states |
 | Endpoint config | `js/gas-endpoint.js` | GAS URL, `maxFileMB`, accepted file types, Vercel switch |
 | Form engine | `js/app.js` | URL engine, chips, EDIT/VIEW rows, screenshots, lightbox, validation, POST |
-| Backend | `gas/Code.gs` | Media-ID dedup, per-post ledger rows, Drive upload, metrics + per-player roll-up |
+| Backend | `gas/Code.gs` | Media-ID dedup, per-post ledger rows, Drive upload, metrics + per-player roll-up, admin endpoints |
+| Admin console | `admin.html` + `css/admin.css` + `js/admin.js` | Key-gated Control Room: feed + filters, review modal, audit timelines, reports, CSV export |
 | Local hosting | `serve.sh` | One command: `./serve.sh [port]` |
 
 > SurveyJS was dropped in this iteration: the chips box, dual-view post
@@ -165,6 +176,51 @@ queries (velocity charts across every snapshot, OCR job state), mirror the
 sheet into SQLite/Postgres as a read replica — the append-only, column-stable
 schema above makes that a straight copy. Raw JSON is kept per row, so any
 future re-parse never loses fidelity.
+
+## Admin console (Control Room)
+
+`admin.html` + `css/admin.css` + `js/admin.js` — a static page in the same
+deploy, wearing the same pixel design system, gated by a **secret key** that
+lives in the script's Script Properties (`setAdminKey("…")` once from the
+editor; the page keeps it in `sessionStorage`, never `localStorage`).
+
+Transport choices, deliberately boring:
+
+- **Reads are JSONP** (`?action=ledger&key=…&callback=pclAdminCb12`): works
+  from any static host with zero CORS configuration, no preflight, no
+  credentials. Unique callback per request + a 60 s timeout guard.
+- **Writes are the same simple POST the form uses**
+  (`{action:'adminVerify', adminKey, updates:[{row, ocrCount, crossCheck,
+  verifiedCount}, …]}`): text/plain body → no CORS preflight; the sheet row
+  number is the write key. **Verified Points are always recomputed
+  server-side** from the row's multiplier — the client never supplies them.
+  A typed verified count promotes an untouched Cross-Check to MATCH; the
+  reviewer can still override the status explicitly.
+- **Batched staging**: console edits live in memory (`state.pending` keyed
+  by sheet row) until **SAVE CHANGES** commits them in one POST, then the
+  ledger reloads so row numbers stay fresh. Discard wipes the stage.
+
+The four review jobs map onto three tabs:
+
+| Tab | Job | Mechanics |
+|---|---|---|
+| **FEED** | submissions feed + verify counts | newest-first rows; filters: search, week, format, status, NEW/UPDATE; inline Verified Count + Cross-Check per row; thumbnail opens the **review modal** (screenshot side-by-side, SCAN → Drive OCR suggestion closest to the claim, PREV/NEXT across the filtered list, Esc/← →) |
+| **AUDIT** | boost audit | per-Media-ID snapshot timelines (S1 → S2 → … with % and hours deltas); jumps **>50% within <72h** auto-mark **WATCH**; one click stages `BOOST?` on the latest snapshot (or clears it) |
+| **REPORTS** | export & reports | season cards (submissions/posts/unique media/projected/verified points), **weekly windows** (Mon 11:00 AM IST deadline — weeks computed client-side from `SEASON_START_ISO`, warm-up posts fall into W1), per-player table (verified points lead, projected breaks ties, format mix), one-click CSV export (full ledger incl. staged values, BOM for Excel) |
+
+Semi-auto OCR: `?action=ocr` runs the screenshot through **Drive's free
+OCR** (Advanced Drive Service: image → temp Google Doc → text → regex out
+`<n> views|impressions|plays|…`), suggests the number closest to the claim
+(falls back to the largest), returns the raw snippet for the admin to
+sanity-check, then trashes the temp doc. If the advanced service is off,
+SCAN explains that and the console stays fully usable by hand.
+
+Cross-Check whitelist (`gas/Code.gs → CHECK_VALUES`): `PENDING OCR`,
+`MATCH`, `MISMATCH`, `BOOST?`.
+
+Mock/demo mode: `admin.html?mock=1` — a built-in 10-row ledger (incl. a
++212%-in-26h boost case) exercises every surface offline; any key ≥ 4 chars
+unlocks; writes apply to the in-memory mock only.
 
 ## Failure & fallback behaviour
 

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en" data-pcl-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Praper Content League — Control Room</title>
+  <link rel="icon" type="image/png" href="assets/brand/pcl-logo-web.png" />
+
+  <!-- Apply saved/system theme BEFORE first paint (no flash) -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("pcl_theme");
+        var sysDark = window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.setAttribute(
+          "data-pcl-theme", saved || (sysDark ? "dark" : "light"));
+      } catch (e) { /* keep light default */ }
+    })();
+  </script>
+
+  <!-- Shared pixel design system + admin console components -->
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body>
+  <!-- Arcade marquee: the PCL logo's native black band, both themes. -->
+  <div class="pcl-marquee">
+    <header class="pcl-header">
+      <div class="pcl-header-brand">
+        <img class="pcl-logo" src="assets/brand/pcl-logo-web.png"
+             alt="Praper Content League" />
+      </div>
+      <div class="pcl-marquee-divider" aria-hidden="true"></div>
+      <div class="pcl-header-text">
+        <p class="pcl-season">SEASON 2</p>
+        <p class="pcl-kicker">Control Room</p>
+        <p class="pcl-insert">
+          <span class="pcl-px-play" aria-hidden="true"></span>
+          ADMIN CONSOLE<span class="pcl-blink" aria-hidden="true">_</span>
+        </p>
+      </div>
+      <button id="pclThemeToggle" class="pcl-toggle" type="button"
+              aria-label="Toggle light / dark theme" title="Toggle theme">
+        <span class="pcl-px-icon pcl-px-sun" aria-hidden="true"></span>
+        <span class="pcl-px-icon pcl-px-moon" aria-hidden="true"></span>
+      </button>
+    </header>
+  </div>
+
+  <main class="pcl-main pcl-wide pcl-admin">
+    <!-- ================= GATE — visible until the key unlocks ============ -->
+    <section id="gate" class="pcl-panel pcl-gate">
+      <h2 class="pcl-panel-title">Access Terminal</h2>
+      <p class="pcl-hint">Restricted deck — this console touches the league
+        ledger. Enter the admin access key to continue.</p>
+      <div class="pcl-field" id="gateField">
+        <label class="pcl-label" for="gateKey">Access key</label>
+        <input class="pcl-input" id="gateKey" type="password"
+               placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
+               autocomplete="off" />
+        <p class="pcl-err" id="gateErr">Wrong key — access denied.</p>
+      </div>
+      <div class="pcl-gate-actions">
+        <button id="gateBtn" class="pcl-btn pcl-btn--primary">
+          <span class="pcl-px-play" aria-hidden="true"></span>UNLOCK<span class="pcl-blink" aria-hidden="true">_</span>
+        </button>
+        <span class="pcl-savestate" id="gateState" role="status" hidden></span>
+      </div>
+      <p class="pcl-gate-note">First run? Open the Apps Script editor and run
+        <code>setAdminKey("your-secret")</code> once — the key is stored in
+        Script Properties, never in this site&rsquo;s code.</p>
+    </section>
+
+    <!-- ================= CONSOLE ========================================= -->
+    <div id="console" hidden>
+      <!-- toolbar: tabs + sync actions -->
+      <div class="pcl-adminbar">
+        <div class="pcl-viewtoggle pcl-tabs" id="tabs" role="tablist">
+          <button type="button" class="pcl-vbtn is-active" data-tab="feed"
+                  role="tab">FEED</button>
+          <button type="button" class="pcl-vbtn" data-tab="audit"
+                  role="tab">AUDIT</button>
+          <button type="button" class="pcl-vbtn" data-tab="reports"
+                  role="tab">REPORTS</button>
+        </div>
+        <div class="pcl-adminbar-right">
+          <span class="pcl-sync" id="syncInfo">&hellip;</span>
+          <button type="button" class="pcl-abtn" id="refreshBtn">REFRESH</button>
+          <button type="button" class="pcl-abtn pcl-abtn--accent" id="exportBtn">EXPORT CSV</button>
+        </div>
+      </div>
+
+      <!-- ============ TAB 1 · SUBMISSIONS FEED ========================== -->
+      <section id="tabFeed" class="pcl-tab">
+        <div class="pcl-filterbar">
+          <input class="pcl-input pcl-fsearch" id="fSearch" type="search"
+                 placeholder="Search player, link or media id&hellip;"
+                 aria-label="Search the ledger" />
+          <select class="pcl-input pcl-fsel" id="fWeek" aria-label="Filter by week"></select>
+          <select class="pcl-input pcl-fsel" id="fFormat" aria-label="Filter by format"></select>
+          <select class="pcl-input pcl-fsel" id="fStatus" aria-label="Filter by status"></select>
+          <select class="pcl-input pcl-fsel" id="fType" aria-label="Filter by entry type"></select>
+        </div>
+
+        <div class="pcl-panel pcl-feedpanel">
+          <div class="pcl-feedrow pcl-feedhead" aria-hidden="true">
+            <span class="fh-shot">SHOT</span>
+            <span class="fh-who">PLAYER</span>
+            <span class="fh-post">POST</span>
+            <span class="fh-claimed">CLAIMED</span>
+            <span class="fh-ocr">OCR</span>
+            <span class="fh-verified">VERIFIED</span>
+            <span class="fh-status">STATUS</span>
+          </div>
+          <div id="feedRows"></div>
+          <p class="pcl-empty" id="feedEmpty" hidden>Nothing matches these filters.</p>
+        </div>
+      </section>
+
+      <!-- ============ TAB 2 · BOOST AUDIT =============================== -->
+      <section id="tabAudit" class="pcl-tab" hidden>
+        <div class="pcl-panel">
+          <h2 class="pcl-panel-title">Boost Audit</h2>
+          <p class="pcl-hint">Every post reported more than once, as a
+            snapshot timeline. A claimed count that jumps hard between
+            snapshots gets a WATCH mark — flag it BOOST? and the review
+            pipeline will pull it out of the leaderboard queue.</p>
+          <div id="auditList"></div>
+          <p class="pcl-empty" id="auditEmpty" hidden>No post has been
+            reported twice yet — the timeline appears with the first
+            update snapshot.</p>
+        </div>
+      </section>
+
+      <!-- ============ TAB 3 · REPORTS =================================== -->
+      <section id="tabReports" class="pcl-tab" hidden>
+        <div class="pcl-cards" id="seasonCards"></div>
+
+        <div class="pcl-panel">
+          <h2 class="pcl-panel-title">Weekly Windows</h2>
+          <p class="pcl-hint">Weeks close every Monday 11:00 AM IST. Points in
+            a window count claimed values; the leader uses verified points
+            when a review has landed, projected otherwise.</p>
+          <div class="pcl-scrollx">
+            <table class="pcl-table" id="weekTable"></table>
+          </div>
+        </div>
+
+        <div class="pcl-panel">
+          <h2 class="pcl-panel-title">Players</h2>
+          <div class="pcl-scrollx">
+            <table class="pcl-table" id="playerTable"></table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- sticky unsaved-changes bar -->
+    <div id="dirtyBar" class="pcl-dirtybar" hidden>
+      <span class="pcl-dirty-text" id="dirtyText">0 UNSAVED</span>
+      <span class="pcl-dirty-actions">
+        <button type="button" class="pcl-abtn" id="discardBtn">DISCARD</button>
+        <button type="button" class="pcl-abtn pcl-abtn--accent" id="saveBtn">SAVE CHANGES</button>
+      </span>
+    </div>
+  </main>
+
+  <footer class="pcl-footer pcl-wide">
+    Praper Content League &middot; Season 2 &middot; Control Room &middot; <span id="pclDate">2026</span>
+  </footer>
+
+  <!-- ================= REVIEW MODAL (screenshot + verification) ======== -->
+  <div class="pcl-lightbox pcl-rv" id="reviewModal" hidden role="dialog"
+       aria-modal="true" aria-label="Verify post">
+    <div class="pcl-lb-back" data-act="close"></div>
+    <div class="pcl-rv-card">
+      <button type="button" class="pcl-lb-nav pcl-lb-prev" data-act="prev">
+        <span class="pcl-px-arr pcl-px-arr--left" aria-hidden="true"></span>PREV
+      </button>
+
+      <div class="pcl-rv-body">
+        <figure class="pcl-rv-shot">
+          <img id="rvImg" class="pcl-rv-img" alt="Analytics screenshot" />
+          <figcaption class="pcl-rv-shotline">
+            <a id="rvShotLink" href="#" target="_blank" rel="noopener">OPEN FULL SCREENSHOT &#8599;</a>
+          </figcaption>
+        </figure>
+
+        <div class="pcl-rv-panel">
+          <p class="pcl-rv-num" id="rvNum">#1</p>
+          <p class="pcl-rv-player" id="rvPlayer">PLAYER</p>
+          <p class="pcl-rv-meta" id="rvMeta">FORMAT</p>
+          <a class="pcl-rv-link" id="rvLink" href="#" target="_blank" rel="noopener">POST LINK &#8599;</a>
+
+          <div class="pcl-rv-stats">
+            <div class="pcl-rv-stat">
+              <span class="pcl-rv-statlabel">CLAIMED</span>
+              <b id="rvClaimed">0</b>
+            </div>
+            <div class="pcl-rv-stat">
+              <span class="pcl-rv-statlabel">SNAPSHOT</span>
+              <b id="rvSnap">S1</b>
+            </div>
+            <div class="pcl-rv-stat">
+              <span class="pcl-rv-statlabel">WEEK</span>
+              <b id="rvWeek">&ndash;</b>
+            </div>
+          </div>
+
+          <div class="pcl-rv-field">
+            <label class="pcl-label" for="rvOcr">OCR count <button type="button"
+              class="pcl-abtn pcl-abtn--small" id="rvScanBtn">SCAN</button></label>
+            <input class="pcl-input" id="rvOcr" type="text" inputmode="numeric"
+                   placeholder="Run SCAN or type it" />
+            <p class="pcl-rv-ocrnote" id="rvOcrNote"></p>
+          </div>
+
+          <div class="pcl-rv-field">
+            <label class="pcl-label" for="rvVerified">Verified count</label>
+            <input class="pcl-input" id="rvVerified" type="text" inputmode="numeric"
+                   placeholder="What the analytics really show" />
+          </div>
+
+          <div class="pcl-rv-field">
+            <label class="pcl-label" for="rvStatus">Cross-check</label>
+            <div class="pcl-selectwrap">
+              <select class="pcl-input pcl-select" id="rvStatus">
+                <option value="PENDING OCR">PENDING OCR</option>
+                <option value="MATCH">MATCH</option>
+                <option value="MISMATCH">MISMATCH</option>
+                <option value="BOOST?">BOOST?</option>
+              </select>
+              <span class="pcl-chevron" aria-hidden="true"></span>
+            </div>
+          </div>
+
+          <p class="pcl-rv-note" id="rvNote">Edits are staged — hit SAVE
+            CHANGES in the bar below to write them to the ledger.</p>
+          <button type="button" class="pcl-btn pcl-btn--primary pcl-rv-stage" id="rvStageBtn">
+            STAGE THIS ROW
+          </button>
+        </div>
+      </div>
+
+      <button type="button" class="pcl-lb-nav pcl-lb-next" data-act="next">
+        NEXT<span class="pcl-px-arr" aria-hidden="true"></span>
+      </button>
+      <button type="button" class="pcl-lb-close" data-act="close" aria-label="Close review">
+        <span class="pcl-px-x" aria-hidden="true"></span>
+      </button>
+    </div>
+  </div>
+
+  <script src="js/gas-endpoint.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

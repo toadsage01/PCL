@@ -1,10 +1,11 @@
-# Praper Contest League — Submission Form
+# Praper Contest League — Submission Form + Control Room
 
 A free, self-hostable contest submission form for a **views-first league**:
 players paste **all** their post links at once, every link becomes a chip,
 the platform + format + multiplier is auto-detected, and each post carries
 its own **analytics screenshot**. Google Apps Script + Sheets/Drive track it
-all in a duplicate-proof ledger.
+all in a duplicate-proof ledger — and an **admin console** (`admin.html`)
+reviews, verifies and audits it.
 
 No form framework — the engine is ~600 lines of dependency-free vanilla JS
 (`js/app.js`) over a static skeleton (`index.html`), so every interaction is
@@ -42,6 +43,40 @@ the SUBMISSION TERMINAL kicker (`assets/brand/`, original inspo in
   format ratio and projected points.
 - **Image uploads** with a hard 5 MB cap, type filter, per-row thumbnails.
 - **LOCAL mode** out of the box — works with no backend at all.
+
+## Admin Console — `admin.html` (Control Room)
+
+Same pixel design system, key-gated review surface over the ledger:
+
+- **FEED** — every ledger row newest-first with filters (search, week,
+  format, status, NEW/UPDATE). Edit **Verified Count** and **Cross-Check**
+  (PENDING OCR / MATCH / MISMATCH / BOOST?) inline; edits are staged and
+  written in one batch by the sticky **SAVE CHANGES** bar.
+- **Review modal** — click any row thumbnail: the analytics screenshot sits
+  side-by-side with the claim. **SCAN** runs the free Drive OCR pass and
+  pre-fills a suggested count (you confirm). PREV/NEXT walks the filtered
+  rows; Esc / ← → keys work.
+- **AUDIT** — per-Media-ID snapshot timelines. Claimed-count jumps
+  (>50% within <72h) get an automatic **WATCH** mark; one click stages a
+  **BOOST?** flag on the latest snapshot.
+- **REPORTS** — season cards (submissions / posts / unique media /
+  projected + verified points), **weekly windows** (Mon 11:00 AM IST
+  deadlines, per-week posts/points/leader), per-player table with format
+  mix, and one-click **CSV export** of the full ledger.
+
+### Turn the console on (2 minutes)
+
+1. Re-paste the new `gas/Code.gs` into your Apps Script project and create a
+   **new deployment version**.
+2. In the editor run once: `setAdminKey("your-secret")` — the key is stored
+   in **Script Properties**, never in the repo.
+3. Open `/admin.html`, unlock with the key (kept in `sessionStorage`).
+4. Optional semi-auto OCR: in the editor **Services (+) → Drive API** add the
+   advanced service. Without it the SCAN button explains itself and you type
+   the count manually — everything else works.
+
+> Demo without a backend: open `admin.html?mock=1` — a built-in mock ledger
+> exercises every surface (any key with 4+ characters unlocks).
 
 ## Run locally
 
@@ -110,6 +145,8 @@ vercel dev             # → http://localhost:3000
 | Success screen | `#pclDone` markup in `index.html` |
 | Backend sheet/folder names, server cap | `gas/Code.gs` (top CONFIG block) |
 | Submit mode (direct vs Vercel API) | `js/gas-endpoint.js` (`submitViaApi`) |
+| Admin season dates / week count | `js/admin.js` (`SEASON_START_ISO`, `WEEKS`) |
+| Admin statuses / audit jump rule | `gas/Code.gs` (`CHECK_VALUES`) · `js/admin.js` (`renderAudit`) |
 
 ## Docs
 
