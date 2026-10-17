@@ -212,21 +212,24 @@ body::before {
   gap: 18px;
 }
 
-/* brand column: logo with the SEASON title directly below it */
+/* brand column: logo with the SEASON title centered directly below it */
 .pcl-header-brand {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
 }
 
+/* SEASON tag — sits symmetrically under the logo's midline.
+   Periwinkle blue (the marquee's native text blue) + a soft blue glow,
+   sized just above the original 11px treatment. */
 .pcl-season {
   font-family: var(--pcl-font-display);
-  font-size: 15px;
+  font-size: 13px;
   letter-spacing: 3px;
-  color: var(--pcl-primary-hi);
-  text-shadow: 2px 2px 0 #000, 0 0 14px var(--pcl-glow);
+  color: var(--pcl-marquee-text);
+  text-shadow: 2px 2px 0 #000, 0 0 14px rgba(74, 104, 255, 0.5);
   margin: 0;
   white-space: nowrap;
 }
@@ -272,7 +275,7 @@ body::before {
   gap: 8px;
 }
 
-/* pixel "insert" play glyph */
+/* pixel "insert" play glyph — points RIGHT (▶), towards the entry drop */
 .pcl-px-play {
   position: relative;
   width: 12px;
@@ -282,20 +285,21 @@ body::before {
 .pcl-px-play::before {
   content: "";
   position: absolute;
-  left: 0;
+  left: 8px;
   top: 4px;
   width: 4px;
   height: 4px;
   background: var(--pcl-primary-hi);
   box-shadow:
-    4px -4px 0 var(--pcl-primary-hi),
-    4px 0 0 var(--pcl-primary-hi),
-    4px 4px 0 var(--pcl-primary-hi),
-    8px -8px 0 var(--pcl-primary-hi),
-    8px -4px 0 var(--pcl-primary-hi),
-    8px 0 0 var(--pcl-primary-hi),
-    8px 4px 0 var(--pcl-primary-hi),
-    8px 8px 0 var(--pcl-primary-hi);
+    -8px -8px 0 var(--pcl-primary-hi),
+    -8px -4px 0 var(--pcl-primary-hi),
+    -8px 0 0 var(--pcl-primary-hi),
+    -8px 4px 0 var(--pcl-primary-hi),
+    -8px 8px 0 var(--pcl-primary-hi),
+    -4px -4px 0 var(--pcl-primary-hi),
+    -4px 0 0 var(--pcl-primary-hi),
+    -4px 4px 0 var(--pcl-primary-hi),
+    0 0 0 var(--pcl-primary-hi);
 }
 
 /* blinking "continue" cursor */
@@ -891,42 +895,8 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   padding: 10px 16px 9px;
 }
 
-/* ---- PCL form cat (submit-button guardian) ---------------------------------------
-   Lives inside the nav row, left of the Complete button, bottom-aligned with
-   it. pointer-events:none — it never blocks clicks; z-index under the
-   finger-slam stage (99999). The shoved button slides past the card padding,
-   so nav ancestors must not clip it. */
-.sd-root-modern .sd-navigation {
-  position: relative;
-}
-.sd-root-modern .sd-footer,
-.sd-root-modern .sd-action-bar {
-  position: relative;
-}
-/* the cat hangs left of the nav column — every wrapping layer must let it
-   show: v3.2.1 clips at .sv-scroll__scroller (overflow-x: hidden, sits ABOVE
-   .sd-root-modern in the tree) and .sd-root-modern (computed auto) */
-body .sv-scroll__scroller,
-.sd-root-modern.sd-theme-root,
-.sd-root-modern .sd-page,
-.sd-root-modern .sd-body,
-.sd-root-modern .sd-form,
-.sd-root-modern .sd-clear-buttons {
-  overflow: visible;
-}
-#pclCat {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  pointer-events: none;
-  z-index: 2;
-  will-change: transform;
-  filter: drop-shadow(0 3px 0 rgba(27, 18, 56, 0.25));
-}
-#pclCat canvas {
-  display: block;
-  image-rendering: pixelated;
-}
+/* ---- PCL form cat — REMOVED (season 2 directive: cat + angry pointer are
+   gone from the deployment entirely; styles, scripts and config included). */
 
 /* ---- Completed screen: LEVEL CLEARED -------------------------------------------- */
 .pcl-done {
@@ -995,11 +965,20 @@ html[data-pcl-theme="dark"] .pcl-footer {
   text-shadow: 0 0 9px rgba(160, 172, 255, 0.35);
 }
 
+/* ---- Required-star in the header sentence ----------------------------------------
+   "Fields marked * are required" — the star itself pops in PCL orange so it
+   reads as the same marker used on required question titles. */
+.pcl-req-star {
+  color: var(--pcl-primary-hi);
+  font-weight: 700;
+  text-shadow: 0 0 8px var(--pcl-glow-soft);
+}
+
 /* ---- Mobile ---------------------------------------------------------------------- */
 @media (max-width: 620px) {
   .pcl-header { gap: 12px; padding: 12px 14px; }
   .pcl-logo { width: 118px; }
-  .pcl-season { font-size: 10.5px; letter-spacing: 2px; }
+  .pcl-season { font-size: 12px; letter-spacing: 2px; }
   .pcl-marquee-divider { display: none; }
   .pcl-header-text .pcl-kicker { font-size: 10px; letter-spacing: 1.6px; }
   .pcl-header-text .pcl-insert { font-size: 9.5px; }

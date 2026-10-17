@@ -20,13 +20,5 @@ window.PCL_CONFIG = {
   maxFileMB: 5,
 
   // Accepted upload types for the analytics screenshot input.
-  fileTypes: "image/png, image/jpeg, image/webp",
-
-  // Gameplay extras — deploy the form WITH or WITHOUT them, nothing else
-  // changes. Set a flag to false and that piece never mounts: no element,
-  // no listeners, no styles applied — the plain form remains.
-  features: {
-    cat: true,        // the cat that shoves the submit button (phase 3)
-    fingerSlam: true  // the angry pointer slamming empty required fields (phase 2)
-  }
+  fileTypes: "image/png, image/jpeg, image/webp"
 };

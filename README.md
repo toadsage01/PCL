@@ -19,9 +19,12 @@ inspo saved in `assets/inspo/`).
 
 ## Features
 
-- One question, many inputs — panels + `multipletext` (see Q1/Q2)
-- URL inputs with built-in URL validator (Q1, Q4)
+- Rulebook-shaped form (Q1–Q6): player registration, format + multiplier,
+  post URL, views/impressions count, analytics screenshot, weekly challenge
+- Format-aware URL validation — the link must match the platform chosen
 - Image/screenshot uploads with a hard MB cap, previews, type filter
+- Duplicate-proof ledger: same post URL = UPDATE snapshot, never double
+  views (`gas/Code.gs` Media ID model)
 - Customizable: every question lives in `js/survey-config.js`; theme in
   `css/theme.css`; more question types documented inline (dropdown,
   rating, repeatable groups…)
@@ -88,15 +91,14 @@ vercel dev             # → http://localhost:3000
 |---|---|
 | Questions / labels / required flags | `js/survey-config.js` |
 | Attachment cap + accepted types | `js/gas-endpoint.js` (`maxFileMB`, `fileTypes`) |
-| Cat + angry-pointer extras on/off | `js/gas-endpoint.js` (`features.cat`, `features.fingerSlam` — `false` ships the plain form) |
 | Colors / dark & light palettes | `css/theme.css` (`:root` + `html[data-pcl-theme="dark"]` tokens) |
 | Hero & success art | `assets/brand/` (swap the PNGs) |
 | Backend sheet/folder names, server cap | `gas/Code.gs` (top CONFIG block) |
 | Success message | `completedHtml` in `survey-config.js` |
 | Submit mode (direct vs Vercel API) | `js/gas-endpoint.js` (`submitViaApi`) |
 
-Placeholders from the scratchpad (Q2 "File Formats", Q3 "Something",
-Q1 Input 3) are clearly marked — swap the text when the spec lands.
+The form structure now mirrors the official Rulebook (Q1–Q6); tweak copy
+and choices in `js/survey-config.js` as the league's needs evolve.
 
 ## Docs
 
