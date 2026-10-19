@@ -1,51 +1,11 @@
-I need to make a form with custom design power, 
-currently leave placeholders for the questions or answer or any sort text where I've not give specification upon,
+/ Updated scratchpad to now work towards the leaderboard
 
-Q1. Instagram reel placeholder
-Answer section
-INPUT 1, Reel URL Link
-INPUT 2, Image or Screenshot Upload of Analytics of that Reel
-INPUT 3, Text based input about something I'll Later specify
+these 3 we will done after the leaderboard
+we have already worked upon the form (few changes to be done later)
+we have the built the backend using gas and given the hosting platform vercel env variable our gas /exec url (more changes left are: such as fall back (when this designed form, leadboard,, need to store logins from user, also if possible to keep something like cache so users who are filling the form, they can get the suggestion for what they typed before (ig that is default chromium based browsers behavior) and mandatory even if i don't get access to reporting manager data list that who are all the reporting managers, so to ensure that a user doesn't mis type once vikram and next time vikrm for the same person and on backend accidentally storing them as two different reporting manager entities,   or admin dashboard is not opening because of poor network, and data backup should always be there, i.e, whatever calamity happens we need to keep the data saved, without data corruption), live excel sheet connection, defining required data or more important data columns, readbility, then ocr, then find a stable hack/trick to fetch the analytics of any content url from instagram, youtube and linkedin)
+we have done our hosting on vercel. we might change the frontend a little, for the dashboard especially to make it friendly for the review team.
 
-Q2. File Formats
-
-Q3. Something
-
-Q4. Weekly Challenge
-    Link
-
------
-STATUS 2026-10-15 — BUILT (by Manas Ranjan)
-Engine: SurveyJS Form Library (MIT, free) v3.2.1 — vendored, works offline.
-  Why: only free engine with multiple inputs under ONE question
-  (multipletext + panels), URL validation, maxSize-capped uploads,
-  full CSS-variable theming, posts anywhere (Google Apps Script).
-
-Form per scratchpad spec:
-  Q1 Instagram Reel = Input1 Reel URL + Input2 analytics screenshot
-     upload (5 MB cap, image types) + Input3 notes placeholder
-  Q2 File Formats = dual inputs under one question (multipletext)
-  Q3 Something = placeholder text
-  Q4 Weekly Challenge = validated URL link
-
-Files:
-  index.html · css/theme.css · css/vendor/ · js/{app,survey-config,gas-endpoint}.js
-  js/vendor/ · gas/Code.gs · docs/ARCHITECTURE.md · README.md · serve.sh
-
-Run local:     ./serve.sh            → http://localhost:8080
-Wire backend:  script.google.com → paste gas/Code.gs → deploy Web app
-               (Anyone) → paste /exec URL into js/gas-endpoint.js
-Go public:     GitHub Pages → Settings → Pages → main / root
-Tested:        E2E pass — validation, size cap (6 MB file rejected),
-               dual inputs, image upload, submit + completed screen.
-Mode now:      LOCAL (console + localStorage) until GAS URL is pasted.
-
-
-[2026-10-16] Theme v3 — PIXEL ARCADE direction (per user feedback):
-- No cover image. Arcade marquee header (black band, PCL logo, blinking INSERT REEL).
-- Colors: orange #ed3b00 (leaderboard bars) + royal-blue family (logo/leaderboard bg DNA).
-- Pixel fonts vendored: Press Start 2P (display), Silkscreen (titles/labels), Pixelify Sans (body).
-- All UI pixelated: square corners, 3px borders, hard offset shadows, box-shadow pixel glyphs.
-- Dark = "Midnight Arcade" (deep indigo + neon orange glow + dot grid + scanlines).
-- Light = "Sunset Cabinet" (warm cream + navy + orange, no bland white).
-- Completed screen: LEVEL CLEARED / +100 XP. Story + humor expansion to follow in later parts.
+Let's work right now on the leaderboard dashboard, need to have a dashboard,  ensure that you never write anything like walkthrough or what you would talk to me (dev) on the pages which will be public or anypages, we can talk in development UI itself or in readme or scope specified docs
+the leaderboard, i have already shared the pic for what they want from me in the leaderboard, but that is no where near suffice, as i have the creative and development liberty, I want to leave a good impression. 
+the leaderboard should have the 5 specified columns only, we will follow our theme but this one should be more complimenting towards the leaderboard screenshot, and font we will use should be even more readable,
+let's work on the dashboard now, we'll iterate towrds improvement, bug fixing,  glitch solving per next iteration.
