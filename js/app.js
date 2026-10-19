@@ -15,7 +15,13 @@
                                         VIEW = confirmation rows with a
                                         floating screenshot lightbox
                                         (PREV / NEXT + thumbnails).
-     4. Weekly Challenge .............. optional week + link + notes
+     4. Weekly Challenge .............. the ONGOING week only (season clock,
+                                        warm-up counts as W1) + INFO popup with
+                                        every week's challenge, criteria, reward
+     5. Player photo .................. mandatory; saved per player on the
+                                        backend (one photo per name — the next
+                                        visit auto-shows it when the name is
+                                        typed); reused server-side on re-submit
 
    Error model (per spec):
      · Missing required field  → red border + shadow + small "Required" text
@@ -53,7 +59,7 @@
     return document.querySelector('.pcl-field[data-field="' + name + '"]');
   }
 
-  /* ---------- theme toggle (light = sunset cabinet, dark = midnight arcade) ---------- */
+  /* ---------- theme + reading-font toggles ---------- */
   var THEME_KEY = "pcl_theme";
   var toggleBtn = $("pclThemeToggle");
   if (toggleBtn) {
@@ -63,6 +69,20 @@
           ? "light" : "dark";
       document.documentElement.setAttribute("data-pcl-theme", next);
       try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ok */ }
+    });
+  }
+  var FONT_KEY = "pcl_font";
+  var fontBtn = $("pclFontToggle");
+  if (fontBtn) {
+    fontBtn.setAttribute("aria-pressed",
+      String(document.documentElement.getAttribute("data-pcl-font") === "px"));
+    fontBtn.addEventListener("click", function () {
+      var next =
+        document.documentElement.getAttribute("data-pcl-font") === "px"
+          ? "vt" : "px";
+      document.documentElement.setAttribute("data-pcl-font", next);
+      fontBtn.setAttribute("aria-pressed", String(next === "px"));
+      try { localStorage.setItem(FONT_KEY, next); } catch (e) { /* ok */ }
     });
   }
 
@@ -82,12 +102,45 @@
      anything that opens the content when dropped into a URL bar.
      ========================================================================== */
   var FORMATS = {
-    ig_reel:   { label: "Instagram Reel", tag: "IG REEL",   mult: 1.25 },
-    ig_post:   { label: "Instagram Post", tag: "IG POST",   mult: 1 },
-    yt_shorts: { label: "YouTube Shorts", tag: "YT SHORTS", mult: 1.25 },
-    yt_long:   { label: "YouTube Video",  tag: "YT VIDEO",  mult: 2 },
-    li_post:   { label: "LinkedIn Post",  tag: "LI POST",   mult: 1 }
+    ig_reel:   { label: "Instagram Reel", word: "Reel",  mult: 1.25 },
+    ig_post:   { label: "Instagram Post", word: "Post",  mult: 1 },
+    yt_shorts: { label: "YouTube Shorts", word: "Short", mult: 1.25 },
+    yt_long:   { label: "YouTube Video",  word: "Video", mult: 2 },
+    li_post:   { label: "LinkedIn Post",  word: "Post",  mult: 1 }
   };
+
+  /* platform logos — small inline SVGs; the format word next to them takes
+     the platform's brand colour (see .pcl-fmtbrand in theme.css), so the
+     logo and the word read as one item */
+  var BRAND_LOGO = {
+    ig: '<svg class="pcl-fmtlogo" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<defs><linearGradient id="pclIgGrad" x1="0" y1="1" x2="1" y2="0">' +
+        '<stop offset="0" stop-color="#feda75"/><stop offset=".28" stop-color="#fa7e1e"/>' +
+        '<stop offset=".55" stop-color="#d62976"/><stop offset=".8" stop-color="#962fbf"/>' +
+        '<stop offset="1" stop-color="#4f5bd5"/></linearGradient></defs>' +
+        '<rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5.4" fill="none" ' +
+        'stroke="url(#pclIgGrad)" stroke-width="2.7"/>' +
+        '<circle cx="12" cy="12" r="4.5" fill="none" stroke="url(#pclIgGrad)" stroke-width="2.7"/>' +
+        '<circle cx="17.3" cy="6.7" r="1.7" fill="url(#pclIgGrad)"/></svg>',
+    yt: '<svg class="pcl-fmtlogo" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<rect x="1.5" y="4.8" width="21" height="14.4" rx="4" fill="#FF0000"/>' +
+        '<path d="M10 9l6 3-6 3z" fill="#fff"/></svg>',
+    li: '<svg class="pcl-fmtlogo" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<rect x="2" y="2" width="20" height="20" rx="3.2" fill="#0A66C2"/>' +
+        '<rect x="5.4" y="9.9" width="2.9" height="8.8" fill="#fff"/>' +
+        '<circle cx="6.85" cy="6.5" r="1.75" fill="#fff"/>' +
+        '<path d="M11.4 9.9h2.8v1.25c.5-.8 1.55-1.55 3.1-1.55 2.5 0 3.85 1.6 3.85 4.45v4.65h-2.9v-4.2c0-1.45-.6-2.35-1.75-2.35-1.25 0-2.2.9-2.2 2.55v4h-2.9z" fill="#fff"/></svg>'
+  };
+  function logoSvg(fmt) {
+    return BRAND_LOGO[String(fmt || "").split("_")[0]] || "";
+  }
+  function brandHtml(fmt, withMult) {
+    var f = FORMATS[fmt];
+    return '<span class="pcl-fmtbrand" data-fmt="' + fmt + '" title="' +
+      esc(f.label + " — rulebook multiplier " + f.mult + "×") + '">' +
+      logoSvg(fmt) + '<span class="pcl-fmtword">' + esc(f.word) + "</span>" +
+      (withMult ? " <b>×" + f.mult + "</b>" : "") + "</span>";
+  }
 
   function classifyUrl(raw) {
     var tok = String(raw || "").trim().replace(/[)\]}>,.;]+$/, "");
@@ -199,9 +252,13 @@
   function validChipHtml(p, i) {
     var f = FORMATS[p.format];
     return '<span class="pcl-chip" data-kind="post" title="' + esc(p.url) + '">' +
-      '<span class="pcl-chip-label">' + esc(f.tag) + " · " + esc(chipTail(p.mediaId)) +
+      '<span class="pcl-chip-label"><span class="pcl-chip-brand" data-fmt="' +
+      p.format + '">' + logoSvg(p.format) +
+      '<span class="pcl-fmtword">' + esc(f.word) + "</span></span> · " +
+      esc(chipTail(p.mediaId)) +
       '</span><button type="button" class="pcl-chip-x" data-act="del" data-i="' + i +
-      '" aria-label="Remove ' + esc(f.tag) + " " + esc(chipTail(p.mediaId)) + '"></button></span>';
+      '" aria-label="Remove ' + esc(f.label) + " " + esc(chipTail(p.mediaId)) +
+      '"></button></span>';
   }
   function errChipHtml(e, i) {
     return '<span class="pcl-chip is-error" data-kind="err" data-reason="' +
@@ -282,7 +339,7 @@
   });
   addLinksBtn.addEventListener("click", commitLinks);
   chipBox.addEventListener("click", function (ev) {
-    if (ev.target === chipBox || ev.target.classList.contains("pcl-px-link")) {
+    if (ev.target === chipBox || ev.target.classList.contains("pcl-chips")) {
       linkInput.focus();
     }
   });
@@ -291,9 +348,7 @@
      POST DETAILS — EDIT / VIEW rows
      ========================================================================== */
   function fmtHtml(fmt) {
-    var f = FORMATS[fmt];
-    return '<span class="pcl-fmt" title="' + esc(f.label + " — rulebook multiplier " +
-      f.mult + "×") + '">' + esc(f.tag) + " <b>x" + f.mult + "</b></span>";
+    return brandHtml(fmt, true);
   }
 
   function editRowHtml(p, i) {
@@ -436,9 +491,8 @@
     }
 
     function metaLine(p) {
-      var f = FORMATS[p.format];
       var bits = ["#" + (posts.indexOf(p) + 1),
-                  "<b>" + esc(f.label) + " x" + f.mult + "</b>"];
+                  brandHtml(p.format, true)];
       var n = Number(String(p.views).replace(/[^\d]/g, ""));
       if (n > 0) bits.push(Number(n).toLocaleString("en-US") + " views");
       bits.push('<a href="' + esc(p.url) + '" target="_blank" rel="noopener">' +
@@ -506,6 +560,328 @@
   })();
 
   /* ============================================================================
+     SEASON CLOCK + WEEKLY CHALLENGES (rulebook §4) — the form only accepts the
+     ONGOING week; the INFO button opens every week's challenge, criteria and
+     reward so candidates can prepare upcoming posts.
+     ========================================================================== */
+  var SEASON_START_ISO = "2026-10-19T11:00:00+05:30";
+  var SEASON_START = new Date(SEASON_START_ISO).getTime();
+  var WEEK_TOTAL = 10;
+  var CHALLENGES = [
+    { name: "Best Original Content",
+      crit: "Most original and creative content featuring Praper Media.",
+      pts: 6000 },
+    { name: "Best Storytelling Debut",
+      crit: "Most engaging storytelling content mentioning Praper Media.",
+      pts: 8000 },
+    { name: "A Day in My Life",
+      crit: "Give a glimpse into your daily life — routine, fun moments, work highlights.",
+      pts: 8000 },
+    { name: "Best Collaboration",
+      crit: "Create content with at least one other Praper employee.",
+      pts: 10000 },
+    { name: "Behind the Scenes at Praper",
+      crit: "Best emerging creator showcasing office culture and daily life.",
+      pts: 6000 },
+    { name: "Most Improved Creator",
+      crit: "Highest improvement in profile visits, reach, engagement and follower growth during the challenge.",
+      pts: 10000 },
+    { name: "Consistency Reward",
+      crit: "Publish at least 2 posts per week for seven consecutive weeks. Tie-break: total impressions and likes.",
+      pts: 12000 },
+    { name: "The One-Take Challenge",
+      crit: "One continuous take of minimum 30 seconds, without cuts or edits.",
+      pts: 8000 },
+    { name: "The Trend Takeover",
+      crit: "Give a popular trend or meme your own creative twist.",
+      pts: 8000 },
+    { name: "The Comment Magnet — Final Showdown",
+      crit: "Create a post that sparks meaningful conversations and invites the audience to share opinions in the comments.",
+      pts: 10000 }
+  ];
+
+  function currentWeek() {
+    var t = Date.now();
+    if (t < SEASON_START) return 1;   // warm-up posts land in Week 1
+    return Math.min(WEEK_TOTAL, Math.floor((t - SEASON_START) / 604800000) + 1);
+  }
+  function weekWindow(w) {
+    return {
+      a: new Date(SEASON_START + (w - 1) * 604800000),
+      b: new Date(SEASON_START + w * 604800000)
+    };
+  }
+  function fmtDayShort(d) {
+    var M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return d.getDate() + " " + M[d.getMonth()];
+  }
+  /* the ONLY selectable challenge = the week that is live right now */
+  function buildWeekOptions() {
+    var cur = currentWeek();
+    var c = CHALLENGES[cur - 1];
+    week.innerHTML = '<option value="">Not entering</option>' +
+      '<option value="Week ' + cur + " — " + esc(c.name) + '">Week ' + cur +
+      " · " + esc(c.name) + "</option>";
+  }
+
+  /* ---------- generic themed modal (info popup + rulebook) ---------- */
+  var Modal = (function () {
+    var root = $("pclModal");
+    var body = $("pclModalBody");
+    function open(html) {
+      body.innerHTML = html;
+      root.hidden = false;
+      document.body.style.overflow = "hidden";
+      var btn = root.querySelector(".pcl-lb-close");
+      if (btn) btn.focus();
+    }
+    function close() {
+      root.hidden = true;
+      document.body.style.overflow = "";
+    }
+    root.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-act='close']")) close();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (!root.hidden && ev.key === "Escape") close();
+    });
+    return { open: open, close: close };
+  })();
+
+  function weekCardHtml(w, live) {
+    var c = CHALLENGES[w - 1];
+    var win = weekWindow(w);
+    var tag = live ? '<span class="pcl-wk-tag">LIVE</span>'
+                   : (w < currentWeek() ? '<span class="pcl-wk-tag pcl-wk-tag--past">CLOSED</span>' : "");
+    return '<div class="pcl-wkcard' + (live ? " is-live" : "") + '">' +
+      '<div class="pcl-wk-head">' +
+        '<span class="pcl-wk-name">WEEK ' + w + " · " + esc(c.name) + "</span>" + tag +
+        '<span class="pcl-wk-date">' + fmtDayShort(win.a) + " → " + fmtDayShort(win.b) + "</span>" +
+      "</div>" +
+      '<p class="pcl-wk-crit">' + esc(c.crit) + "</p>" +
+      '<p class="pcl-wk-pts">Weekly Reward + ' + c.pts.toLocaleString("en-IN") +
+        " LeaderBoard Points</p>" +
+      "</div>";
+  }
+
+  function openWeekInfo() {
+    var cur = currentWeek();
+    var html = '<h3 class="pcl-modal-title">WEEKLY CHALLENGES</h3>' +
+      '<p class="pcl-modal-sub">Season 2 · 10 weeks · a new challenge every Monday</p>' +
+      '<p class="pcl-rb-p">Only the week that is live right now can be entered — ' +
+      "this form accepts <b>Week " + cur + "</b> until " +
+      fmtDayShort(weekWindow(cur).b) + ". Upcoming challenges are listed below so " +
+      "you can plan and shoot ahead.</p>";
+    for (var w = 1; w <= WEEK_TOTAL; w++) html += weekCardHtml(w, w === cur);
+    html += '<p class="pcl-rb-note">Analytics are tracked Monday → Saturday. Submit ' +
+      "each week's post analytics by <b>11:00 AM the following Monday</b> to be " +
+      "considered. The winning post gets featured as a collab on Praper Media's " +
+      "official pages.</p>";
+    Modal.open(html);
+  }
+
+  /* ---------- RULEBOOK (official Season 2 rulebook, themed) ---------- */
+  function openRulebook() {
+    var rows = CHALLENGES.map(function (c, i) {
+      return "<tr><td><b>W" + (i + 1) + "</b></td><td><b>" + esc(c.name) +
+        "</b></td><td>" + esc(c.crit) + '</td><td class="num">+' +
+        c.pts.toLocaleString("en-IN") + "</td></tr>";
+    }).join("");
+    Modal.open(
+      '<h3 class="pcl-modal-title">OFFICIAL RULEBOOK</h3>' +
+      '<p class="pcl-modal-sub">Praper Content League · Season 2</p>' +
+
+      '<span class="pcl-rb-h">1 · Purpose of the Contest</span>' +
+      '<p class="pcl-rb-p">Take your creativity beyond the workplace and into the ' +
+      "spotlight. The <b>Praper Content League</b> is your opportunity to express " +
+      "yourself, build your personal brand, and showcase the people, stories and " +
+      "experiences that make Praper Media special. Over the next <b>10 weeks</b>, " +
+      "challenge yourself, experiment with content, take on weekly challenges, and " +
+      "climb the leaderboard with every post.</p>" +
+
+      '<span class="pcl-rb-h">2 · Contest Duration</span>' +
+      '<table class="pcl-rb-table"><tbody>' +
+      "<tr><td><b>Start Date</b></td><td>19 October 2026 (Monday)</td></tr>" +
+      "<tr><td><b>End Date</b></td><td>28 December 2026 (Monday)</td></tr>" +
+      "<tr><td><b>Total Duration</b></td><td>10 Weeks</td></tr>" +
+      "<tr><td><b>Eligible Platforms</b></td><td>LinkedIn, Instagram and YouTube</td></tr>" +
+      "</tbody></table>" +
+
+      '<span class="pcl-rb-h">3 · Grand Prizes</span>' +
+      '<table class="pcl-rb-table"><tbody>' +
+      "<tr><td><b>1st Place</b></td><td>Rs. 40,000</td></tr>" +
+      "<tr><td><b>2nd Place</b></td><td>Rs. 25,000</td></tr>" +
+      "<tr><td><b>3rd Place</b></td><td>Rs. 15,000</td></tr>" +
+      "</tbody></table>" +
+
+      '<span class="pcl-rb-h">4 · Platform-Wise Leaderboard Points</span>' +
+      '<p class="pcl-rb-p">For every eligible post, total views or impressions are ' +
+      "multiplied by the platform multiplier to calculate leaderboard points:</p>" +
+      '<table class="pcl-rb-table"><thead><tr><th>Platform</th><th>Views / Impressions</th>' +
+      '<th>Leaderboard Points</th></tr></thead><tbody>' +
+      "<tr><td>YouTube (Long-form)</td><td>1 view</td><td>2 points</td></tr>" +
+      "<tr><td>YouTube Shorts</td><td>1 view</td><td>1.25 points</td></tr>" +
+      "<tr><td>Instagram Reels</td><td>1 view</td><td>1.25 points</td></tr>" +
+      "<tr><td>Instagram Posts / Carousels</td><td>1 impression</td><td>1 point</td></tr>" +
+      "<tr><td>LinkedIn Posts</td><td>1 impression</td><td>1 point</td></tr>" +
+      "</tbody></table>" +
+      '<p class="pcl-rb-formula">Leaderboard Points = Total Views / Impressions × Platform Multiplier</p>' +
+      '<p class="pcl-rb-note">Any fractional points are rounded UP to the next whole ' +
+      "number. All eligible points across the competition decide the final rankings " +
+      "and Grand Prize winners.</p>" +
+
+      '<span class="pcl-rb-h">5 · Weekly Challenges</span>' +
+      '<table class="pcl-rb-table"><thead><tr><th>Wk</th><th>Challenge</th>' +
+      "<th>Criteria</th><th>Reward</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+      '<p class="pcl-rb-note">Impressions and analytics are tracked Monday → Saturday ' +
+      "each week. Submit post analytics by <b>11:00 AM the following Monday</b>. The " +
+      "winning post of each weekly challenge is featured as a collaborative post with " +
+      "Praper Media's official pages.</p>" +
+
+      '<span class="pcl-rb-h">6 · Mandatory Posting — 50:50 Rule</span>' +
+      '<p class="pcl-rb-p">At least <b>50%</b> of your total posts must feature Praper ' +
+      "Media or PAVE Academy (office culture, work experiences, behind-the-scenes, team " +
+      "collabs). The rest can be personal content. The ratio is calculated over the " +
+      "<b>entire challenge</b>, not weekly, and decimals round up.</p>" +
+      '<p class="pcl-rb-p"><b>Minimum posting requirement:</b> publish at least <b>20 ' +
+      "eligible posts</b> across all platforms during the 10 weeks to qualify for the " +
+      "Grand Prizes. Identical content on multiple platforms counts once.</p>" +
+
+      '<span class="pcl-rb-h">7 · Participation Rules</span>' +
+      '<ul class="pcl-rb-ul">' +
+      "<li>Participate via LinkedIn, Instagram or YouTube — posts, carousels, Reels, Shorts or Long-Form.</li>" +
+      "<li>Collab posts earn every collaborator equal points (e.g. a 1,000-view collab Reel gives 1,250 points to EACH employee).</li>" +
+      "<li><b>No paid promotions or boosting</b> — only organic reach counts. Manipulated metrics are not permitted.</li>" +
+      "<li><b>One Post, One Platform:</b> identical content on multiple platforms counts only on the platform with the highest impressions.</li>" +
+      "<li>Every eligible entry must meaningfully mention or feature Praper Media; tag the official account wherever allowed.</li>" +
+      "<li>Content must be original, respectful and public-safe — never disclose confidential client, employee or company information.</li>" +
+      "<li>Entries must be published within the contest dates and stay accessible for verification.</li>" +
+      "<li>Submit the public post link and a screenshot/export of platform analytics by the announced deadlines.</li>" +
+      "<li>Ties are settled by a pre-announced tie-break rule before final results.</li>" +
+      "</ul>" +
+
+      '<span class="pcl-rb-h">8 · Who Can Participate</span>' +
+      '<p class="pcl-rb-p">Open to employees across all departments of Praper Media — ' +
+      "Administration, Content, HR, IT, Long-Form Video, QC &amp; YT Management, Shorts, " +
+      "Graphics, and PAVE Tutors &amp; Content. CBO and COO are welcome to participate " +
+      "and earn leaderboard points, but are <b>not eligible for weekly rewards or Grand " +
+      "Prizes</b>. Employees serving their notice period may participate under the same " +
+      "reward restriction.</p>" +
+
+      '<span class="pcl-rb-h">9 · Participation Guidelines</span>' +
+      '<ul class="pcl-rb-ul">' +
+      "<li><b>Profile submission:</b> submit your Instagram, LinkedIn and/or YouTube profile links at the start of the contest for tracking.</li>" +
+      "<li><b>Platform flexibility:</b> participate on any combination of the three platforms.</li>" +
+      "</ul>" +
+      '<p class="pcl-rb-formula">Let your creativity take the spotlight — make every post count and climb your way to the top of the leaderboard.</p>'
+    );
+  }
+
+  /* ============================================================================
+     PLAYER PHOTO — mandatory, one per player. The backend stores it as
+     "<name>__<manager>" in a Drive folder; typing a name that already has a
+     photo pulls it back up (JSONP) so nobody uploads twice.
+     ========================================================================== */
+  var photoState = { file: null, existing: null };   // file: {name,type,content}
+  var photoBtn = $("photoBtn");
+  var photoInput = $("photoInput");
+  var photoThumb = $("photoThumb");
+  var photoThumbImg = $("photoThumbImg");
+  var photoBtnLabel = $("photoBtnLabel");
+  var photoStateEl = $("photoState");
+
+  function renderPhoto() {
+    var src = photoState.file ? photoState.file.content
+              : (photoState.existing ? photoState.existing.thumb : "");
+    photoThumb.hidden = !src;
+    if (src) photoThumbImg.src = src;
+    if (photoState.file) {
+      photoBtnLabel.textContent = "CHANGE PHOTO";
+      photoStateEl.hidden = false;
+      photoStateEl.textContent = "READY ✓";
+    } else if (photoState.existing) {
+      photoBtnLabel.textContent = "REPLACE PHOTO";
+      photoStateEl.hidden = false;
+      photoStateEl.textContent = "ON FILE ✓ — REUSED";
+    } else {
+      photoBtnLabel.textContent = "+ UPLOAD PHOTO";
+      photoStateEl.hidden = true;
+      photoStateEl.textContent = "";
+    }
+  }
+
+  photoBtn.addEventListener("click", function () { photoInput.click(); });
+  photoInput.addEventListener("change", function () {
+    var file = photoInput.files && photoInput.files[0];
+    photoInput.value = "";             // allow re-picking the same file
+    if (!file) return;
+    if (ACCEPTED.length && file.type && ACCEPTED.indexOf(file.type) === -1) {
+      setFieldErr("playerPhoto", "PNG / JPG / WEBP only");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setFieldErr("playerPhoto", "Over " + MAX_MB + " MB");
+      return;
+    }
+    var fr = new FileReader();
+    fr.onload = function () {
+      photoState.file = { name: file.name, type: file.type, content: fr.result };
+      clearFieldErr("playerPhoto");
+      renderPhoto();
+    };
+    fr.onerror = function () { setFieldErr("playerPhoto", "Could not read file"); };
+    fr.readAsDataURL(file);
+  });
+
+  /* name typed → look up an existing photo (debounced; needs a backend) */
+  var nameTimer = null;
+  fullName.addEventListener("input", function () {
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(lookupPhoto, 600);
+  });
+  function lookupPhoto() {
+    var name = fullName.value.trim();
+    if (name.length < 2 || !cfg.gasWebAppUrl) return;
+    jsonpGet({ action: "playerPhoto", name: name })
+      .then(function (out) {
+        if (!out || out.ok !== true || !out.url) return;
+        photoState.existing = { url: out.url, thumb: out.thumb || out.url };
+        renderPhoto();
+        clearFieldErr("playerPhoto");
+      })
+      .catch(function () { /* no photo / offline — field stays as-is */ });
+  }
+  function jsonpGet(params) {
+    return new Promise(function (resolve, reject) {
+      var cb = "pclPhotoCb" + Date.now() + "_" + Math.floor(Math.random() * 1e5);
+      var s = document.createElement("script");
+      var done = false;
+      var timer = setTimeout(function () { finish(new Error("timeout")); }, 20000);
+      function finish(err, data) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+        if (s.parentNode) s.parentNode.removeChild(s);
+        err ? reject(err) : resolve(data);
+      }
+      window[cb] = function (data) { finish(null, data); };
+      s.onerror = function () { finish(new Error("network")); };
+      var q = Object.keys(params).map(function (k) {
+        return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
+      }).join("&");
+      s.src = cfg.gasWebAppUrl + "?" + q + "&callback=" + cb;
+      document.head.appendChild(s);
+    });
+  }
+
+  /* ---------- modal buttons + week clock ---------- */
+  $("weekInfoBtn").addEventListener("click", openWeekInfo);
+  $("pclRulebookBtn").addEventListener("click", openRulebook);
+  buildWeekOptions();   // only the ONGOING week is selectable
+
+  /* ============================================================================
      VALIDATION — red well + "Required" below; navy restores on input.
      ========================================================================== */
   function setFieldErr(name, msg) {
@@ -553,6 +929,9 @@
 
     if (!fullName.value.trim()) bad("fullName");
     if (!manager.value.trim()) bad("reportingManager");
+    if (!photoState.file && !photoState.existing) {
+      bad("playerPhoto", "Upload your photo.");
+    }
     if (!posts.length) bad("postLinks", "Paste at least one post link.");
 
     posts.forEach(function (p) {
@@ -589,6 +968,11 @@
     var data = {
       fullName: fullName.value.trim(),
       reportingManager: manager.value.trim(),
+      playerPhoto: photoState.file
+        ? [{ name: photoState.file.name, type: photoState.file.type,
+            content: photoState.file.content }]
+        : [],
+      playerPhotoReused: !photoState.file && !!photoState.existing,
       postDetails: posts.map(function (p) {
         var n = Number(String(p.views).replace(/[^\d]/g, ""));
         return {
@@ -675,7 +1059,7 @@
   form.addEventListener("submit", function (ev) {
     ev.preventDefault();
     if (linkInput.value.trim()) commitLinks();   // never lose typed links
-    ["fullName", "reportingManager", "postLinks",
+    ["fullName", "reportingManager", "playerPhoto", "postLinks",
      "challengeWeek", "challengeUrl"].forEach(clearFieldErr);
     posts.forEach(function (p) { p.errViews = false; p.errShotMsg = ""; });
 
@@ -693,7 +1077,10 @@
   window.PCL = {
     get posts() { return posts; },
     get chipErrors() { return chipErrors; },
+    get photoState() { return photoState; },
     classifyUrl: classifyUrl,
-    commitLinks: commitLinks
+    commitLinks: commitLinks,
+    currentWeek: currentWeek,
+    CHALLENGES: CHALLENGES
   };
 })();

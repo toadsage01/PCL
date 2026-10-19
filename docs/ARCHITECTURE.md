@@ -283,3 +283,41 @@ the board reads GAS directly even when submissions travel through Vercel's
 - Base64 inflates uploads by ~33%; that is why the default cap is 5 MB.
 - Public hosting: enable **GitHub Pages** (branch `main`, root) — the site
   is already a static root `index.html`, so zero changes are needed.
+
+## Round 13 — form iteration (font toggle, brand badges, photo, audit log)
+
+- **Reading-font system**: `html[data-pcl-font="vt"|"px"]` token swap on
+  `--pcl-font-body` (VT323 default, Pixelify Sans alternate), set pre-paint
+  from `localStorage.pcl_font`. Toggle buttons (`#pclFontToggle`, Aa glyph)
+  on index + admin, same storage key. VT mode steps body/inputs up to 19 px
+  because VT323 runs narrow. Silkscreen/Press Start 2P headings untouched.
+- **Brand badges** (`js/app.js BRAND_LOGO`): inline SVGs (IG gradient ring,
+  YT red play, LI blue `in`) + word in brand colour via `[data-fmt]` CSS
+  (IG word rides the gradient through `background-clip: text` with a solid
+  fallback). Replaces the old `.pcl-fmt` text badge in chips, EDIT/VIEW rows
+  and the lightbox meta line.
+- **Season clock on the form**: `currentWeek()` mirrors Code.gs
+  (`SEASON_START_ISO`, 7-day windows, warm-up → W1, cap 10).
+  `buildWeekOptions()` renders ONLY the live week (canonical ledger value
+  string "Week N — Title" preserved). `#weekInfoBtn` opens a themed modal
+  (`Modal` IIFE, shared `#pclModal` shell) listing all 10 weeks from the
+  rulebook with criteria + rewards + window dates.
+- **Rulebook modal**: `openRulebook()` renders the official rulebook
+  (sections 1–9) as themed HTML — no dev talk, public-safe copy.
+- **Player photo**: form field `data-field=playerPhoto`, mandatory unless a
+  photo is already on file. Debounced JSONP `?action=playerPhoto&name=…`
+  on name input; backend stores `<slug(name)>__<slug(manager)>.<ext>` in the
+  `PCL Player Photos` child folder, trashing the previous file first
+  (exactly one photo per player) and reusing the stored one when the
+  submission carries no new file. Ledger gains an append-only
+  **Player Photo** column (index 24 — review-column indexes COL_OCR..23
+  stay stable); `getSheet_()` tail-migrates older sheets. Photos never
+  block a submission (all failures return '').
+- **Audit catalogue**: new **AdminLog** sheet (`logAdmin_`). `adminLogin_`
+  (POST after each gate unlock, with the operator name from the gate) and
+  `adminVerify_` (per-row old→new review values) append entries;
+  `ledgerEndpoint_` ships the last 150 as `log`. Console: gate gains the
+  operator field (persisted in `sessionStorage.pcl_admin_op`), new **LOG**
+  tab renders the catalogue, mock mode carries an in-memory log.
+- **Layout fix**: ≤520 px the marquee text drops to its own full-width row
+  (logo + two toggles on the first row) — the Aa button had squeezed it.

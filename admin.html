@@ -7,7 +7,7 @@
   <title>Praper Content League — Control Room</title>
   <link rel="icon" type="image/png" href="assets/brand/pcl-logo-web.png" />
 
-  <!-- Apply saved/system theme BEFORE first paint (no flash) -->
+  <!-- Apply saved/system theme + reading font BEFORE first paint (no flash) -->
   <script>
     (function () {
       try {
@@ -16,7 +16,10 @@
           window.matchMedia("(prefers-color-scheme: dark)").matches;
         document.documentElement.setAttribute(
           "data-pcl-theme", saved || (sysDark ? "dark" : "light"));
-      } catch (e) { /* keep light default */ }
+        var font = "vt";
+        try { font = localStorage.getItem("pcl_font") || "vt"; } catch (e) { /* ok */ }
+        document.documentElement.setAttribute("data-pcl-font", font);
+      } catch (e) { /* keep defaults */ }
     })();
   </script>
 
@@ -41,6 +44,11 @@
           ADMIN CONSOLE<span class="pcl-blink" aria-hidden="true">_</span>
         </p>
       </div>
+      <button id="pclFontToggle" class="pcl-toggle pcl-toggle--font" type="button"
+              aria-label="Toggle reading font" title="Toggle reading font"
+              aria-pressed="false">
+        <span class="pcl-font-glyph" aria-hidden="true">Aa</span>
+      </button>
       <button id="pclThemeToggle" class="pcl-toggle" type="button"
               aria-label="Toggle light / dark theme" title="Toggle theme">
         <span class="pcl-px-icon pcl-px-sun" aria-hidden="true"></span>
@@ -61,6 +69,13 @@
                placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
                autocomplete="off" />
         <p class="pcl-err" id="gateErr">Wrong key — access denied.</p>
+      </div>
+      <div class="pcl-field" id="gateOpField">
+        <label class="pcl-label" for="gateOperator">Your name</label>
+        <input class="pcl-input" id="gateOperator" type="text"
+               placeholder="Who is on deck — e.g. Manas" autocomplete="off" />
+        <p class="pcl-hint">Logged in the audit catalogue with every change you
+          save, so accidental edits are always traceable.</p>
       </div>
       <div class="pcl-gate-actions">
         <button id="gateBtn" class="pcl-btn pcl-btn--primary">
@@ -84,6 +99,8 @@
                   role="tab">AUDIT</button>
           <button type="button" class="pcl-vbtn" data-tab="reports"
                   role="tab">REPORTS</button>
+          <button type="button" class="pcl-vbtn" data-tab="log"
+                  role="tab">LOG</button>
         </div>
         <div class="pcl-adminbar-right">
           <span class="pcl-sync" id="syncInfo">&hellip;</span>
@@ -131,6 +148,19 @@
           <p class="pcl-empty" id="auditEmpty" hidden>No post has been
             reported twice yet — the timeline appears with the first
             update snapshot.</p>
+        </div>
+      </section>
+
+      <!-- ============ TAB 4 · AUDIT LOG ================================== -->
+      <section id="tabLog" class="pcl-tab" hidden>
+        <div class="pcl-panel">
+          <h2 class="pcl-panel-title">Audit Catalogue</h2>
+          <p class="pcl-hint">Who entered the Control Room and exactly what they
+            changed — every gate unlock and every saved review write lands here
+            automatically with the operator's name and old → new values.</p>
+          <div class="pcl-scrollx">
+            <table class="pcl-table" id="logTable"></table>
+          </div>
         </div>
       </section>
 

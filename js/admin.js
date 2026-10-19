@@ -27,6 +27,7 @@
   var cfg = window.PCL_CONFIG || {};
   var MOCK = /(^|[?&])mock=1(&|$)/.test(location.search);
   var KEY_STORE = "pcl_admin_key";
+  var OP_STORE = "pcl_admin_op";
 
   /* ---------- tiny helpers ---------- */
   function $(id) { return document.getElementById(id); }
@@ -89,7 +90,7 @@
   };
   function fmtShort(f) { return FORMAT_SHORT[f] || String(f || "?").toUpperCase(); }
 
-  /* ---------- theme toggle (shared behaviour, same storage key) ---------- */
+  /* ---------- theme + reading-font toggles (shared behaviour/storage) ---------- */
   var toggleBtn = $("pclThemeToggle");
   if (toggleBtn) {
     toggleBtn.addEventListener("click", function () {
@@ -97,6 +98,18 @@
         ? "light" : "dark";
       document.documentElement.setAttribute("data-pcl-theme", next);
       try { localStorage.setItem("pcl_theme", next); } catch (e) { /* ok */ }
+    });
+  }
+  var fontBtn = $("pclFontToggle");
+  if (fontBtn) {
+    fontBtn.setAttribute("aria-pressed",
+      String(document.documentElement.getAttribute("data-pcl-font") === "px"));
+    fontBtn.addEventListener("click", function () {
+      var next = document.documentElement.getAttribute("data-pcl-font") === "px"
+        ? "vt" : "px";
+      document.documentElement.setAttribute("data-pcl-font", next);
+      fontBtn.setAttribute("aria-pressed", String(next === "px"));
+      try { localStorage.setItem("pcl_font", next); } catch (e) { /* ok */ }
     });
   }
   var dateEl = $("pclDate");
@@ -280,11 +293,24 @@
           totals: { totalSubmissions: 7, totalPosts: rows.length, uniqueMedia: 9,
                     lastSubmissionAt: rows[0].ts },
           players: JSON.parse(JSON.stringify(MOCK_PLAYERS)),
-          rows: rows
+          rows: rows,
+          log: mockLog
         });
       }, 220);
     });
   }
+
+  /* offline audit-catalogue fixture (mock mode only) */
+  var mockLog = [
+    { ts: "2026-10-19T09:12:00.000Z", operator: "Manas", action: "VERIFY",
+      target: "row 4 · Manas",
+      detail: "OCR: –→332234234 · CHECK: PENDING OCR→MATCH · VERIFIED: –→332234234 · VPTS: –→415292793" },
+    { ts: "2026-10-19T09:02:00.000Z", operator: "Manas", action: "LOGIN",
+      target: "Control Room", detail: "gate unlocked" },
+    { ts: "2026-10-18T15:40:00.000Z", operator: "Sehaj", action: "VERIFY",
+      target: "row 2 · Sehaj",
+      detail: "OCR: –→8798 · CHECK: PENDING OCR→MATCH · VERIFIED: –→7980 · VPTS: –→9975" }
+  ];
 
   /* ============================================================================
      DATA LAYER — JSONP reads (CORS-free) + simple POST writes (as the form)
@@ -328,12 +354,23 @@
     if (MOCK) {
       return new Promise(function (resolve) {
         setTimeout(function () {
+          if (body.action === "adminLogin") {
+            mockLog.unshift({ ts: new Date().toISOString(),
+              operator: body.operator || "unnamed", action: "LOGIN",
+              target: "Control Room", detail: "gate unlocked" });
+            resolve({ ok: true });
+            return;
+          }
           (body.updates || []).forEach(function (u) {
             mockEdits[u.row] = {
               ocrCount: u.ocrCount, crossCheck: u.crossCheck,
               verifiedCount: u.verifiedCount
             };
           });
+          mockLog.unshift({ ts: new Date().toISOString(),
+            operator: body.operator || "unnamed", action: "VERIFY",
+            target: (body.updates || []).length + " row(s)",
+            detail: "staged review write" });
           resolve({ ok: true, updated: (body.updates || []).length });
         }, 300);
       });
@@ -357,10 +394,16 @@
     players: [],
     totals: null,
     generatedAt: null,
+    log: [],             // audit catalogue (newest first)
     pending: {},          // sheet row → {ocrCount?, crossCheck?, verifiedCount?}
     filters: { q: "", week: "all", format: "all", status: "all", type: "all" },
     tab: "feed"
   };
+
+  function operatorName() {
+    var el = $("gateOperator");
+    return (el && el.value.trim()) || "unnamed";
+  }
 
   function displayOf(r) {
     var p = state.pending[r.row] || {};
@@ -422,6 +465,7 @@
         }
         unlockWith(key);
         ingest(out);
+        announceLogin(key);
         return true;
       })
       .catch(function (err) {
@@ -429,6 +473,21 @@
         if (!silent) gateError(err.message || "Could not reach the backend.");
         return false;
       });
+  }
+
+  /* audit trail: every unlock is logged with the operator's name */
+  function announceLogin(key) {
+    var op = operatorName();
+    try { sessionStorage.setItem(OP_STORE, op === "unnamed" ? "" : op); } catch (e) { /* ok */ }
+    if (MOCK) {
+      mockLog.unshift({ ts: new Date().toISOString(), operator: op,
+        action: "LOGIN", target: "Control Room",
+        detail: "gate unlocked (mock)" });
+      renderLog();
+      return;
+    }
+    gasPost({ action: "adminLogin", adminKey: key, operator: op })
+      .catch(function () { /* log write is best-effort */ });
   }
 
   function unlockWith(key) {
@@ -453,6 +512,8 @@
     state.players = out.players || [];
     state.totals = out.totals || null;
     state.generatedAt = out.generatedAt || null;
+    if (Array.isArray(out.log)) state.log = out.log;
+    else if (MOCK) state.log = mockLog;
     renderAll();
   }
 
@@ -485,6 +546,7 @@
     renderFeed();
     renderAudit();
     renderReports();
+    renderLog();
     syncDirtyBar();
     setSync();
   }
@@ -553,6 +615,10 @@
         '" title="Open review"><img src="' + esc(r.thumb) + '" alt="Analytics screenshot" loading="lazy" /></button>'
       : '<button type="button" class="pcl-thumbbox is-missing" data-act="open" data-i="' + idx +
         '" title="Open review">NO SHOT</button>';
+    var avatar = r.photoId
+      ? '<img class="pcl-avatar" src="https://drive.google.com/thumbnail?id=' +
+        encodeURIComponent(r.photoId) + '&sz=w80" alt="" loading="lazy" />'
+      : "";
     var tags = '<span class="pcl-fr-tags">' +
       (r.type === "UPDATE" ? '<span class="pcl-tag pcl-tag--upd">UPD·S' + esc(r.snap) + "</span>"
                            : '<span class="pcl-tag pcl-tag--new">NEW</span>') +
@@ -560,9 +626,9 @@
       "</span>";
     return '<div class="pcl-feedrow' + (dirty ? " is-dirty" : "") + '" data-row="' + r.row + '">' +
       '<span class="fr-shot">' + thumb + "</span>" +
-      '<span class="fr-who">' +
-        '<p class="pcl-fr-name">' + esc(r.name) + tags + "</p>" +
-        '<p class="pcl-fr-sub">' + esc(fmtTS(r.ts)) + " IST · " + esc(r.manager || "–") + "</p>" +
+      '<span class="fr-who">' + avatar +
+        '<span class="pcl-fr-whotext"><p class="pcl-fr-name">' + esc(r.name) + tags + "</p>" +
+        '<p class="pcl-fr-sub">' + esc(fmtTS(r.ts)) + " IST · " + esc(r.manager || "–") + "</p></span>" +
       "</span>" +
       '<span class="fr-post">' +
         '<a class="pcl-fr-link" href="' + esc(r.url) + '" target="_blank" rel="noopener">' +
@@ -705,7 +771,8 @@
     if (!rows.length) return;
     $("saveBtn").disabled = true;
     $("saveBtn").textContent = "SAVING…";
-    gasPost({ action: "adminVerify", adminKey: state.key, updates: rows })
+    gasPost({ action: "adminVerify", adminKey: state.key,
+              operator: operatorName(), updates: rows })
       .then(function (out) {
         if (!out || out.ok === false) {
           throw new Error((out && (out.error || (out.errors && out.errors[0] &&
@@ -1086,6 +1153,29 @@
   }
 
   /* ============================================================================
+     AUDIT CATALOGUE (LOG tab) — who entered, what changed
+     ========================================================================== */
+  function renderLog() {
+    var tbl = $("logTable");
+    if (!tbl) return;
+    var log = state.log || [];
+    var body = log.map(function (l) {
+      var cls = l.action === "LOGIN" ? "pcl-logtag--login" : "pcl-logtag--verify";
+      return "<tr>" +
+        '<td class="pcl-muted-cell" style="white-space:nowrap">' + esc(fmtTS(l.ts)) + " IST</td>" +
+        "<td><b>" + esc(l.operator || "unnamed") + "</b></td>" +
+        '<td><span class="pcl-logtag ' + cls + '">' + esc(l.action || "") + "</span></td>" +
+        "<td>" + esc(l.target || "") + "</td>" +
+        '<td class="pcl-logdetail">' + esc(l.detail || "") + "</td>" +
+        "</tr>";
+    }).join("");
+    tbl.innerHTML = "<thead><tr><th>WHEN (IST)</th><th>OPERATOR</th><th>ACTION</th>" +
+      "<th>TARGET</th><th>WHAT CHANGED</th></tr></thead><tbody>" +
+      (body || '<tr><td colspan="5" class="pcl-muted-cell">No entries yet — ' +
+        "unlocks and saved writes will appear here.</td></tr>") + "</tbody>";
+  }
+
+  /* ============================================================================
      TABS + TOOLBAR
      ========================================================================== */
   $("tabs").addEventListener("click", function (ev) {
@@ -1096,7 +1186,7 @@
     Array.prototype.forEach.call(
       $("tabs").querySelectorAll(".pcl-vbtn"),
       function (b) { b.classList.toggle("is-active", b === btn); });
-    ["feed", "audit", "reports"].forEach(function (t) {
+    ["feed", "audit", "reports", "log"].forEach(function (t) {
       $("tab" + t.charAt(0).toUpperCase() + t.slice(1)).hidden = t !== tab;
     });
   });
@@ -1125,6 +1215,10 @@
   (function boot() {
     var saved = "";
     try { saved = sessionStorage.getItem(KEY_STORE) || ""; } catch (e) { /* ok */ }
+    try {
+      var savedOp = sessionStorage.getItem(OP_STORE);
+      if (savedOp && $("gateOperator")) $("gateOperator").value = savedOp;
+    } catch (e) { /* ok */ }
     if (saved) {
       tryUnlock(saved, true).then(function (ok) {
         if (!ok) {

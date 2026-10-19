@@ -42,6 +42,27 @@ the SUBMISSION TERMINAL kicker (`assets/brand/`, original inspo in
   per player — `doGet` returns per-player post counts, unique media,
   format ratio and projected points.
 - **Image uploads** with a hard 5 MB cap, type filter, per-row thumbnails.
+- **Player photo, one per player** — mandatory upload stored in Drive as
+  `<name>__<manager>` inside a child folder; a re-submission replaces the old
+  file (exactly one photo per unique player). Typing a name that already has
+  a photo pulls it back into the form automatically (JSONP lookup), and the
+  backend reuses it when no new file is picked.
+- **Reading-font toggle** — the **Aa** button beside the theme switch flips
+  the body face between **VT323** (terminal, default) and **Pixelify Sans**
+  (rounded arcade). Titles keep the Silkscreen/Press Start 2P skeleton;
+  the choice persists per browser.
+- **Brand badges** — chips and post rows show a small platform logo
+  (Instagram / YouTube / LinkedIn SVG) with the word Reel / Post / Short /
+  Video tinted in the platform's brand colour — one readable item, not
+  an acronym.
+- **Weekly challenge, live week only** — the Week select offers just the
+  week that is live right now (season clock: opens Mon 19 Oct 2026 11:00 AM
+  IST, 7-day windows, warm-up counts as Week 1). The **i** button opens the
+  full challenge calendar — every week's name, criteria, reward points and
+  dates — so upcoming weeks can be planned.
+- **Rulebook on a button** — the marquee's **RULEBOOK ▸** opens the official
+  Season 2 rulebook (prizes, multipliers, 50:50 rule, participation rules)
+  restyled to the theme, no PDF needed.
 - **LOCAL mode** out of the box — works with no backend at all.
 
 ## Admin Console — `admin.html` (Control Room)
@@ -63,6 +84,11 @@ Same pixel design system, key-gated review surface over the ledger:
   projected + verified points), **weekly windows** (Mon 11:00 AM IST
   deadlines, per-week posts/points/leader), per-player table with format
   mix, and one-click **CSV export** of the full ledger.
+- **LOG** — the audit catalogue: who unlocked the Control Room (the gate
+  asks for the operator's name) and every saved write with old → new
+  values. Stored in an **AdminLog** sheet, so accidental or random edits
+  are always traceable. Feed rows also show the player's photo as an
+  avatar when one is on file.
 
 ### Turn the console on (2 minutes)
 

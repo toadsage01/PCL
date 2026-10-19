@@ -131,7 +131,15 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
 }
 
 /* who cell */
-.fr-who { min-width: 0; }
+.fr-who { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.pcl-fr-whotext { min-width: 0; flex: 1; }
+.pcl-avatar {
+  width: 26px; height: 26px; flex: 0 0 auto;
+  object-fit: cover;
+  border: 2px solid var(--pcl-input-border);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
+  background: var(--pcl-surface-2);
+}
 .pcl-fr-name {
   font-family: var(--pcl-font-title); font-weight: 700; font-size: 12px;
   letter-spacing: .4px; margin: 0 0 3px;
@@ -450,3 +458,17 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
   .pcl-dirtybar { width: 92vw; justify-content: space-between; padding: 8px 10px; }
   .pcl-dirty-text { font-size: 9.5px; }
 }
+
+/* ---- Audit catalogue (LOG tab) + gate operator field -------------------------- */
+#gateOpField { margin-top: 12px; }
+#gateOpField .pcl-hint { margin: 6px 2px 0; font-size: 14.5px; }
+.pcl-logtag {
+  display: inline-block;
+  font-family: var(--pcl-font-title); font-weight: 700; font-size: 9px;
+  letter-spacing: 1px; color: #fff;
+  padding: 3px 7px 2px;
+}
+.pcl-logtag--login { background: #0d9dd6; }
+.pcl-logtag--verify { background: #b97900; }
+html[data-pcl-theme="dark"] .pcl-logtag--verify { background: #a06e00; }
+.pcl-logdetail { font-size: 13px; line-height: 1.5; }

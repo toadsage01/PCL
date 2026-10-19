@@ -83,6 +83,8 @@
 var SHEET_ID = '1IMgfcg6nv_PM1Ntw3KmrIZDrldueIjteT6Mx_RteAFE';                    // '' = bound/new spreadsheet
 var SHEET_NAME = 'PCL-Data';
 var DRIVE_FOLDER_NAME = 'Praper Contest League Uploads';
+var PHOTO_FOLDER_NAME = 'PCL Player Photos';   // child of the uploads folder —
+                                               // one photo per unique player
 var MAX_FILE_MB = 5;                  // mirrors js/gas-endpoint.js
 
 /** Season clock — week windows for the public leaderboard. Week 1 opens at
@@ -95,7 +97,9 @@ var LEAGUE_WEEKS = 10;
  *  board's Designation column). Names not listed here render as '—'. */
 var PLAYER_META = {};
 
-/** Canonical ledger columns — order matters, created on first run. */
+/** Canonical ledger columns — order matters, created on first run.
+ *  APPEND-ONLY: new columns go at the END so the review-column indexes
+ *  (COL_OCR..COL_VPOINTS) stay stable for older sheets. */
 var HEADERS = [
   'Timestamp', 'Submission ID', 'Entry Type', 'Snapshot #',
   'Full Name', 'Reporting Manager',
@@ -104,7 +108,8 @@ var HEADERS = [
   'Claimed Views/Impressions', 'Projected Points',
   'Screenshot File', 'Screenshot Link',
   'OCR Count', 'Cross-Check', 'Verified Count', 'Verified Points',
-  'Raw JSON'
+  'Raw JSON',
+  'Player Photo'
 ];
 
 /** Review-pipeline values for the Cross-Check column. */
@@ -148,6 +153,7 @@ function doPost(e) {
 
     // Admin console write-back (key-gated) — everything else is a submission
     if (payload && payload.action === 'adminVerify') return adminVerify_(payload);
+    if (payload && payload.action === 'adminLogin') return adminLogin_(payload);
 
     var id = payload.submissionId || Utilities.getUuid();
     var d = payload.data || {};
@@ -173,6 +179,10 @@ function doPost(e) {
 
     var sheet = getSheet_();
     var written = 0;
+
+    // Player photo: save-or-reuse (exactly ONE photo per unique player lives
+    // in Drive, named "<name>__<manager>"). Failure never blocks the entry.
+    var photoUrl = savePlayerPhoto_(d, fullName, manager, folder);
 
     posts.forEach(function (p, i) {
       var fmt = str_(p.format);
@@ -218,6 +228,7 @@ function doPost(e) {
       row['Verified Count'] = '';          // filled after cross-verification
       row['Verified Points'] = '';         // final leaderboard points
       row['Raw JSON'] = raw;
+      row['Player Photo'] = photoUrl;
 
       sheet.appendRow(HEADERS.map(function (h) { return row[h]; }));
       written++;
@@ -234,6 +245,7 @@ function doGet(e) {
   try {
     if (p.action === 'ledger') return ledgerEndpoint_(p);
     if (p.action === 'ocr')    return ocrEndpoint_(p);
+    if (p.action === 'playerPhoto') return playerPhotoEndpoint_(p);
     return statsEndpoint_(p);
   } catch (err) {
     return reply_(p, { ok: false, error: String(err) });
@@ -257,7 +269,8 @@ function statsEndpoint_(p) {
   });
 }
 
-/** Admin: every ledger row (newest first) + totals + players, key-gated. */
+/** Admin: every ledger row (newest first) + totals + players, key-gated.
+ *  Also carries the audit catalogue (AdminLog, newest first). */
 function ledgerEndpoint_(p) {
   var err = checkAdmin_(p.key);
   if (err) return reply_(p, { ok: false, error: err });
@@ -272,7 +285,8 @@ function ledgerEndpoint_(p) {
       lastSubmissionAt: s.lastSubmissionAt
     },
     players: s.players,
-    rows: s.rows
+    rows: s.rows,
+    log: recentLog_(150)
   });
 }
 
@@ -350,6 +364,7 @@ function collect_() {
       var ts = r[c['Timestamp']];
       var shotUrl = str_(r[c['Screenshot Link']]);
       var fileId = driveFileId_(shotUrl);
+      var photoUrl = c['Player Photo'] !== undefined ? str_(r[c['Player Photo']]) : '';
       rows.push({
         row: i + 2,                            // sheet row → write-back target
         ts: ts instanceof Date ? ts.toISOString() : str_(ts),
@@ -372,6 +387,8 @@ function collect_() {
         fileId: fileId,
         thumb: fileId ? ('https://drive.google.com/thumbnail?id=' +
                          fileId + '&sz=w400') : '',
+        photo: photoUrl,
+        photoId: photoUrl ? driveFileId_(photoUrl) : '',
         ocr: r[c['OCR Count']],
         check: str_(r[c['Cross-Check']]) || CHECK_PENDING,
         verified: r[c['Verified Count']],
@@ -546,9 +563,11 @@ function checkAdmin_(key) {
   return '';
 }
 
-// Admin write-back: {action:'adminVerify', adminKey, updates:[
+// Admin write-back: {action:'adminVerify', adminKey, operator, updates:[
 //   {row:<sheet row>, ocrCount:…, crossCheck:…, verifiedCount:…}, … ]}
 // Verified Points are always recomputed here — the console never sends them.
+// Every write is catalogued in the AdminLog sheet (operator + old→new values)
+// so accidental/random edits in the Control Room are always traceable.
 function adminVerify_(payload) {
   var err = checkAdmin_(payload.adminKey);
   if (err) return json_({ ok: false, error: err });
@@ -561,6 +580,7 @@ function adminVerify_(payload) {
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
   var updated = 0, errors = [];
+  var nameCol = HEADERS.indexOf('Full Name') + 1;
 
   updates.forEach(function (u) {
     var row = Math.floor(Number(u.row));
@@ -584,14 +604,171 @@ function adminVerify_(payload) {
     if (vcount !== '' && String(u.crossCheck || '').trim() === '') check = 'MATCH';
     var vpoints = (vcount !== '') ? Math.ceil(vcount * mult) : '';
 
+    // capture the old review values BEFORE writing (for the audit log)
+    var oldVals = sheet.getRange(row, COL_OCR, 1, 4).getDisplayValues()[0];
+    var pname = sheet.getRange(row, nameCol, 1, 1).getDisplayValue();
+
     sheet.getRange(row, COL_OCR, 1, 4)
          .setValues([[ocr, check, vcount, vpoints]]);
     updated++;
+
+    logAdmin_(payload.operator, 'VERIFY', 'row ' + row + ' · ' + pname,
+      'OCR: ' + oldVals[0] + '→' + (ocr === '' ? '—' : ocr) +
+      ' · CHECK: ' + oldVals[1] + '→' + check +
+      ' · VERIFIED: ' + oldVals[2] + '→' + (vcount === '' ? '—' : vcount) +
+      ' · VPTS: ' + oldVals[3] + '→' + (vpoints === '' ? '—' : vpoints));
   });
 
   return json_({ ok: errors.length === 0, updated: updated,
                  errors: errors, error: errors.length
                    ? errors[0].error : undefined });
+}
+
+/** Admin LOGIN trail — the console calls this right after a successful gate
+ *  unlock, so the catalogue shows who entered the Control Room and when. */
+function adminLogin_(payload) {
+  var err = checkAdmin_(payload.adminKey);
+  if (err) return json_({ ok: false, error: err });
+  logAdmin_(payload.operator, 'LOGIN', 'Control Room', 'gate unlocked');
+  return json_({ ok: true });
+}
+
+/** ---------- AUDIT LOG ("AdminLog" sheet) ---------- */
+
+var LOG_SHEET_NAME = 'AdminLog';
+var LOG_HEADERS = ['Timestamp', 'Operator', 'Action', 'Target', 'Detail'];
+
+function getLogSheet_() {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(LOG_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(LOG_SHEET_NAME);
+    sheet.appendRow(LOG_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function logAdmin_(operator, action, target, detail) {
+  try {
+    getLogSheet_().appendRow([new Date(), str_(operator) || 'unnamed',
+                              action, target, detail]);
+  } catch (ignore) { /* the ledger write must never fail because of the log */ }
+}
+
+function recentLog_(n) {
+  try {
+    var sh = getLogSheet_();
+    var last = sh.getLastRow();
+    if (last < 2) return [];
+    var from = Math.max(2, last - n + 1);
+    var vals = sh.getRange(from, 1, last - from + 1, LOG_HEADERS.length).getValues();
+    var out = [];
+    for (var i = vals.length - 1; i >= 0; i--) {
+      var v = vals[i];
+      out.push({
+        ts: v[0] instanceof Date ? v[0].toISOString() : String(v[0]),
+        operator: str_(v[1]),
+        action: str_(v[2]),
+        target: str_(v[3]),
+        detail: str_(v[4])
+      });
+    }
+    return out;
+  } catch (ignore) { return []; }
+}
+
+/** ---------- PLAYER PHOTO (one per unique player) ---------- */
+
+// Stored as "<slug(name)>__<slug(manager)>.<ext>" inside a child folder of the
+// uploads folder. A re-submission with a new photo TRASHES the old file first,
+// so exactly one photo per player exists. No new upload → the existing photo
+// is reused and its URL lands in the ledger's Player Photo column.
+function savePlayerPhoto_(data, fullName, manager, uploadsFolder) {
+  try {
+    var folder = getPhotoFolder_(uploadsFolder);
+    var slug = slugify_(fullName);
+    if (!slug) return '';
+    var files = data.playerPhoto;
+    if (Array.isArray(files) && files.length && files[0] &&
+        typeof files[0].content === 'string' && files[0].content) {
+      var file = files[0];
+      var base64 = file.content.split(',')[1] || '';
+      var bytes = Utilities.base64Decode(base64);
+      if (bytes.length > MAX_FILE_MB * 1024 * 1024) return '';
+      trashPhotos_(folder, slug);
+      var extMatch = String(file.name || '').match(/\.(\w+)$/);
+      var ext = extMatch ? extMatch[1].toLowerCase() : 'png';
+      var blob = Utilities.newBlob(bytes, file.type || 'image/png',
+                                   slug + '__' + slugify_(manager) + '.' + ext);
+      var stored = folder.createFile(blob);
+      try {
+        stored.setSharing(DriveApp.Access.ANYONE_WITH_LINK,
+                          DriveApp.Permission.VIEW);
+      } catch (ignore) { /* domain policies — owner link still works */ }
+      return stored.getUrl();
+    }
+    // no new upload → reuse the photo already on file for this player
+    var found = findPhotoByPrefix_(folder, slug);
+    return found ? found.getUrl() : '';
+  } catch (ignore) { return ''; }   // photo problems never block a submission
+}
+
+function getPhotoFolder_(uploadsFolder) {
+  var parent = uploadsFolder || DriveApp.getRootFolder();
+  var it = parent.getFoldersByName(PHOTO_FOLDER_NAME);
+  return it.hasNext() ? it.next() : parent.createFolder(PHOTO_FOLDER_NAME);
+}
+
+function findPhotoByPrefix_(folder, nameSlug) {
+  var prefix = nameSlug + '__';
+  var it = folder.getFiles();
+  while (it.hasNext()) {
+    var f = it.next();
+    if (String(f.getName()).indexOf(prefix) === 0) return f;
+  }
+  return null;
+}
+
+function trashPhotos_(folder, nameSlug) {
+  var prefix = nameSlug + '__';
+  var it = folder.getFiles();
+  while (it.hasNext()) {
+    var f = it.next();
+    if (String(f.getName()).indexOf(prefix) === 0) {
+      try { f.setTrash(true); } catch (ignore) { /* best effort */ }
+    }
+  }
+}
+
+function slugify_(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
+           .replace(/^-+|-+$/g, '');
+}
+
+/** Public lookup: the form types a name → JSONP returns the photo on file
+ *  (if any) so the player sees it instead of re-uploading. No key needed —
+ *  the leaderboard is public anyway. */
+function playerPhotoEndpoint_(p) {
+  var nameSlug = slugify_(p.name);
+  if (!nameSlug) {
+    return reply_(p, { ok: false, error: 'Type your full name first.' });
+  }
+  try {
+    var folder = getPhotoFolder_(getDriveFolder_());
+    var f = findPhotoByPrefix_(folder, nameSlug);
+    if (!f) return reply_(p, { ok: false, error: 'no photo on file' });
+    var id = f.getId();
+    return reply_(p, {
+      ok: true,
+      name: f.getName(),
+      url: f.getUrl(),
+      fileId: id,
+      thumb: 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400'
+    });
+  } catch (err) {
+    return reply_(p, { ok: false, error: String(err) });
+  }
 }
 
 /** ---------- OCR (free, via Drive) ---------- */
@@ -686,6 +863,13 @@ function getSheet_() {
     sheet = ss.insertSheet(SHEET_NAME);
     sheet.appendRow(HEADERS);
     sheet.setFrozenRows(1);
+    return sheet;
+  }
+  // migration: sheets created before a HEADERS change get the new tail columns
+  if (sheet.getLastColumn() < HEADERS.length) {
+    sheet.getRange(1, sheet.getLastColumn() + 1, 1,
+                   HEADERS.length - sheet.getLastColumn())
+         .setValues([HEADERS.slice(sheet.getLastColumn())]);
   }
   return sheet;
 }

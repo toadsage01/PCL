@@ -6,7 +6,7 @@
   <title>Praper Content League — Submission Terminal</title>
   <link rel="icon" type="image/png" href="assets/brand/pcl-logo-web.png" />
 
-  <!-- Apply saved/system theme BEFORE first paint (no flash) -->
+  <!-- Apply saved/system theme + reading font BEFORE first paint (no flash) -->
   <script>
     (function () {
       try {
@@ -15,7 +15,10 @@
           window.matchMedia("(prefers-color-scheme: dark)").matches;
         document.documentElement.setAttribute(
           "data-pcl-theme", saved || (sysDark ? "dark" : "light"));
-      } catch (e) { /* keep light default */ }
+        var font = "vt";
+        try { font = localStorage.getItem("pcl_font") || "vt"; } catch (e) { /* ok */ }
+        document.documentElement.setAttribute("data-pcl-font", font);
+      } catch (e) { /* keep defaults */ }
     })();
   </script>
 
@@ -39,8 +42,17 @@
           <span class="pcl-px-play" aria-hidden="true"></span>
           DROP YOUR ENTRY<span class="pcl-blink" aria-hidden="true">_</span>
         </p>
-        <a class="pcl-board-link" href="leaderboard.html">VIEW LEADERBOARD &#9656;</a>
+        <span class="pcl-board-links">
+          <a class="pcl-board-link" href="leaderboard.html">VIEW LEADERBOARD &#9656;</a>
+          <button type="button" class="pcl-board-link pcl-board-link--btn"
+                  id="pclRulebookBtn">RULEBOOK &#9656;</button>
+        </span>
       </div>
+      <button id="pclFontToggle" class="pcl-toggle pcl-toggle--font" type="button"
+              aria-label="Toggle reading font" title="Toggle reading font"
+              aria-pressed="false">
+        <span class="pcl-font-glyph" aria-hidden="true">Aa</span>
+      </button>
       <button id="pclThemeToggle" class="pcl-toggle" type="button"
               aria-label="Toggle light / dark theme" title="Toggle theme">
         <span class="pcl-px-icon pcl-px-sun" aria-hidden="true"></span>
@@ -70,6 +82,23 @@
             <p class="pcl-err">Required</p>
           </div>
         </div>
+        <div class="pcl-field pcl-photofield" data-field="playerPhoto">
+          <label class="pcl-label">Player photo <span class="pcl-req-star">*</span></label>
+          <p class="pcl-hint">One clear photo of you — it tells the review team who
+            is behind the entry. Submitted one before? It appears by itself when
+            you type your name.</p>
+          <div class="pcl-photowell">
+            <span class="pcl-photothumb" id="photoThumb" hidden>
+              <img id="photoThumbImg" alt="Player photo" />
+            </span>
+            <button type="button" class="pcl-shotbtn pcl-photobtn" id="photoBtn">
+              <span class="pcl-px-photo" aria-hidden="true"></span><span
+                id="photoBtnLabel">+ UPLOAD PHOTO</span>
+            </button>
+            <span class="pcl-photostate" id="photoState" hidden></span>
+          </div>
+          <p class="pcl-err" id="photoErr">Upload your photo.</p>
+        </div>
       </section>
 
       <!-- 2 · POST LINKS — paste many, they become chips -->
@@ -78,7 +107,6 @@
         <p class="pcl-hint">Paste every post link — spaces, commas or new lines between them. Enter or ADD commits them.</p>
         <div class="pcl-field" data-field="postLinks">
           <div class="pcl-chipbox" id="chipBox">
-            <span class="pcl-px-link" aria-hidden="true"></span>
             <span class="pcl-chips" id="chipList"></span>
             <input id="linkInput" class="pcl-chipinput" type="text"
                    placeholder="Paste links here…"
@@ -108,21 +136,16 @@
         <h2 class="pcl-panel-title">4 &middot; Weekly Challenge <span class="pcl-opt">OPTIONAL</span></h2>
         <div class="pcl-field" data-field="challengeWeek">
           <label class="pcl-label" for="challengeWeek">Week</label>
-          <div class="pcl-selectwrap">
-            <select class="pcl-input pcl-select" id="challengeWeek">
-              <option value="">Not entering</option>
-              <option value="Week 1 — Best Original Content">Week 1 · Best Original Content</option>
-              <option value="Week 2 — Best Storytelling Debut">Week 2 · Best Storytelling Debut</option>
-              <option value="Week 3 — A Day in My Life">Week 3 · A Day in My Life</option>
-              <option value="Week 4 — Best Collaboration">Week 4 · Best Collaboration</option>
-              <option value="Week 5 — Behind the Scenes at Praper">Week 5 · Behind the Scenes at Praper</option>
-              <option value="Week 6 — Most Improved Creator">Week 6 · Most Improved Creator</option>
-              <option value="Week 7 — Consistency Reward">Week 7 · Consistency Reward</option>
-              <option value="Week 8 — The One-Take Challenge">Week 8 · The One-Take Challenge</option>
-              <option value="Week 9 — The Trend Takeover">Week 9 · The Trend Takeover</option>
-              <option value="Week 10 — The Comment Magnet">Week 10 · The Comment Magnet — Final Showdown</option>
-            </select>
-            <span class="pcl-chevron" aria-hidden="true"></span>
+          <div class="pcl-weekrow">
+            <div class="pcl-selectwrap">
+              <select class="pcl-input pcl-select" id="challengeWeek">
+                <option value="">Not entering</option>
+              </select>
+              <span class="pcl-chevron" aria-hidden="true"></span>
+            </div>
+            <button type="button" class="pcl-infobtn" id="weekInfoBtn"
+                    aria-label="About the weekly challenges"
+                    title="About the weekly challenges">i</button>
           </div>
           <p class="pcl-err">Required</p>
         </div>
@@ -185,6 +208,20 @@
 
   <!-- shared screenshot picker (per-post buttons target it) -->
   <input type="file" id="shotInput" hidden />
+  <!-- player photo picker -->
+  <input type="file" id="photoInput" hidden />
+
+  <!-- generic themed modal (weekly challenge info + rulebook) -->
+  <div class="pcl-modal" id="pclModal" hidden role="dialog" aria-modal="true"
+       aria-label="Information">
+    <div class="pcl-lb-back" data-act="close"></div>
+    <div class="pcl-modal-card">
+      <button type="button" class="pcl-lb-close" data-act="close" aria-label="Close">
+        <span class="pcl-px-x" aria-hidden="true"></span>
+      </button>
+      <div class="pcl-modal-body" id="pclModalBody"></div>
+    </div>
+  </div>
 
   <script src="js/gas-endpoint.js"></script>
   <script src="js/app.js"></script>

@@ -51,6 +51,13 @@
   font-display: swap;
   src: url("../fonts/silkscreen-700.woff2") format("woff2");
 }
+@font-face {
+  font-family: "VT323";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/VT323-Regular.ttf") format("truetype");
+}
 
 /* ---- Brand tokens: LIGHT — "SUNSET CABINET" -------------------------------- */
 :root,
@@ -148,6 +155,33 @@ html[data-pcl-theme="dark"] {
 
   color-scheme: dark;
 }
+
+/* ---- Reading-font toggle (html[data-pcl-font]) ------------------------------
+   "vt"  = VT323 terminal face (default — tall CRT glyphs, easy on the eye)
+   "px"  = Pixelify Sans rounded arcade face (the previous reading font)
+   Titles/labels (Silkscreen) and display headings (Press Start 2P) are the
+   identity skeleton and stay the same in both modes. Set BEFORE first paint
+   by the inline head script (localStorage "pcl_font"). */
+html[data-pcl-font="vt"] {
+  --pcl-font-body: "VT323", "Pixelify Sans", "Segoe UI", system-ui, monospace;
+}
+html[data-pcl-font="px"] {
+  --pcl-font-body: "Pixelify Sans", "Segoe UI", system-ui, sans-serif;
+}
+/* VT323 is narrow — reading surfaces step up one size to keep the rhythm */
+html[data-pcl-font="vt"] body { font-size: 19px; }
+html[data-pcl-font="vt"] .pcl-form-note,
+html[data-pcl-font="vt"] .pcl-hint { font-size: 18.5px; }
+html[data-pcl-font="vt"] .pcl-empty { font-size: 19px; }
+html[data-pcl-font="vt"] .pcl-input { font-size: 19px; }
+html[data-pcl-font="vt"] .pcl-chipinput { font-size: 19px; }
+html[data-pcl-font="vt"] .pcl-views { font-size: 18px; }
+html[data-pcl-font="vt"] .pcl-post-link,
+html[data-pcl-font="vt"] .pcl-vlink,
+html[data-pcl-font="vt"] .pcl-lb-line { font-size: 18px; }
+html[data-pcl-font="vt"] .pcl-done-note { font-size: 19px; }
+html[data-pcl-font="vt"] .pcl-modal-body { font-size: 18.5px; }
+html[data-pcl-font="vt"] .pcl-modal-body .pcl-rb-p { font-size: 18.5px; }
 
 /* ---- Page shell ------------------------------------------------------------- */
 * { box-sizing: border-box; }
@@ -611,27 +645,6 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   border-color: var(--pcl-error);
   box-shadow: 4px 4px 0 var(--pcl-error-soft), 0 0 12px var(--pcl-error-soft);
 }
-
-/* pixel chain-link glyph at the box start — says "links go here" */
-.pcl-px-link {
-  position: relative;
-  width: 14px;
-  height: 12px;
-  flex: 0 0 auto;
-  opacity: 0.85;
-}
-.pcl-px-link::before,
-.pcl-px-link::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  width: 8px;
-  height: 8px;
-  border: 3px solid var(--pcl-primary-hi);
-}
-.pcl-px-link::before { left: 0; border-right: none; }
-.pcl-px-link::after { left: 6px; border-left: none; }
-.pcl-chipbox:focus-within .pcl-px-link { opacity: 1; }
 
 .pcl-chips {
   display: contents;   /* chips participate in the box's own wrap flow */
@@ -1367,4 +1380,379 @@ html[data-pcl-theme="dark"] .pcl-input::placeholder {
 .pcl-board-link:hover {
   color: #ffffff;
   border-bottom-color: var(--pcl-primary-hi, #ff5a1f);
+}
+
+/* both marquee links on one line (leaderboard + rulebook) */
+.pcl-board-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+  margin-top: 9px;
+}
+.pcl-board-links .pcl-board-link { margin-top: 0; }
+button.pcl-board-link {
+  font: inherit;
+  letter-spacing: inherit;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 1px;
+  cursor: pointer;
+}
+
+/* ---- Reading-font toggle button (sits beside the theme toggle) -------------- */
+.pcl-toggle--font { margin-right: 0; }
+.pcl-header .pcl-toggle--font { margin-left: -6px; }
+.pcl-font-glyph {
+  font-family: "Silkscreen", monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--pcl-gold);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
+  line-height: 1;
+  transform: translateY(-1px);
+}
+.pcl-toggle--font[aria-pressed="true"] .pcl-font-glyph {
+  color: var(--pcl-marquee-accent, #35d6ff);
+}
+
+/* ---- Player photo field ------------------------------------------------------ */
+.pcl-photofield { margin-top: 14px; }
+.pcl-photowell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.pcl-photobtn { width: auto; min-width: 210px; }
+.pcl-field.is-error .pcl-photobtn {
+  border-color: var(--pcl-error);
+  color: var(--pcl-error);
+  box-shadow: 3px 3px 0 var(--pcl-error-soft);
+}
+.pcl-photothumb {
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  background: var(--pcl-input-bg);
+  flex: 0 0 auto;
+}
+.pcl-photothumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pcl-photostate {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--pcl-cyan);
+}
+html[data-pcl-theme="light"] .pcl-photostate { color: #0b7fa8; }
+
+/* ---- Weekly challenge row: select + info button ------------------------------ */
+.pcl-weekrow {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.pcl-weekrow .pcl-selectwrap { flex: 1 1 auto; min-width: 0; }
+.pcl-infobtn {
+  flex: 0 0 auto;
+  width: 44px;
+  font-family: var(--pcl-font-display);
+  font-size: 13px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, var(--pcl-secondary), #1a2f9e);
+  border: 3px solid #14235f;
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  cursor: pointer;
+  transition: transform 0.06s steps(2), box-shadow 0.06s steps(2);
+}
+html[data-pcl-theme="dark"] .pcl-infobtn {
+  border-color: #33409f;
+}
+.pcl-infobtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--pcl-hard), 0 0 12px rgba(77, 116, 255, 0.45);
+}
+.pcl-infobtn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--pcl-hard);
+}
+.pcl-infobtn:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+
+/* ---- Platform brand badges: logo + word as one readable item -----------------
+   The word takes the platform's brand colour (IG gradient / YT red / LI blue). */
+.pcl-fmtbrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  padding: 3px 7px 2px;
+  border: 2px solid var(--pcl-line-soft);
+  background: var(--pcl-surface-2);
+}
+.pcl-fmtbrand b { color: var(--pcl-primary-hi); font-weight: 700; }
+.pcl-fmtlogo {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  display: block;
+}
+[data-fmt="ig_reel"] .pcl-fmtword,
+[data-fmt="ig_post"] .pcl-fmtword {
+  color: #d62976;
+}
+[data-fmt="yt_shorts"] .pcl-fmtword,
+[data-fmt="yt_long"] .pcl-fmtword {
+  color: #e60000;
+}
+[data-fmt="li_post"] .pcl-fmtword {
+  color: #0a66c2;
+}
+html[data-pcl-theme="dark"] [data-fmt="ig_reel"] .pcl-fmtword,
+html[data-pcl-theme="dark"] [data-fmt="ig_post"] .pcl-fmtword { color: #ff5c9d; }
+html[data-pcl-theme="dark"] [data-fmt="yt_shorts"] .pcl-fmtword,
+html[data-pcl-theme="dark"] [data-fmt="yt_long"] .pcl-fmtword { color: #ff4d4d; }
+html[data-pcl-theme="dark"] [data-fmt="li_post"] .pcl-fmtword { color: #4a9fe8; }
+/* IG word rides the actual Instagram gradient where background-clip works */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  [data-fmt="ig_reel"] .pcl-fmtword,
+  [data-fmt="ig_post"] .pcl-fmtword {
+    background: linear-gradient(45deg, #fa7e1e, #d62976, #962fbf);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: #d62976; /* fallback if clipping fails silently */
+  }
+  html[data-pcl-theme="dark"] [data-fmt="ig_reel"] .pcl-fmtword,
+  html[data-pcl-theme="dark"] [data-fmt="ig_post"] .pcl-fmtword {
+    background: linear-gradient(45deg, #ffd08a, #ff5c9d, #b18cff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: #ff5c9d;
+  }
+}
+/* chip variant: logo + word inside the navy link chip */
+.pcl-chip-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pcl-chip-brand .pcl-fmtlogo { width: 12px; height: 12px; }
+.pcl-chip-brand .pcl-fmtword {
+  font-size: 10.5px;
+}
+
+/* ---- Generic themed modal (weekly challenge info + rulebook) ------------------ */
+.pcl-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.pcl-modal[hidden] { display: none; }
+.pcl-modal-card {
+  position: relative;
+  width: min(760px, 96vw);
+  max-height: 88vh;
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-panel-border);
+  box-shadow: 8px 8px 0 var(--pcl-hard), 0 0 34px rgba(237, 59, 0, 0.25);
+  padding: 20px 22px;
+  overflow-y: auto;
+}
+.pcl-modal-body { min-width: 0; }
+.pcl-modal-title {
+  font-family: var(--pcl-font-display);
+  font-size: 14px;
+  line-height: 1.7;
+  letter-spacing: 1px;
+  color: var(--pcl-primary-hi);
+  text-shadow: 2px 2px 0 var(--pcl-hard), 0 0 14px var(--pcl-glow);
+  margin: 0 0 4px;
+}
+.pcl-modal-sub {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--pcl-muted);
+  margin: 0 0 14px;
+}
+.pcl-rb-h {
+  display: inline-block;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(90deg, var(--pcl-primary), var(--pcl-primary-hi));
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  padding: 5px 11px 4px;
+  margin: 20px 0 10px;
+}
+.pcl-rb-p {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--pcl-text);
+  margin: 0 0 10px;
+}
+.pcl-rb-ul {
+  margin: 0 0 10px;
+  padding-left: 22px;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--pcl-text);
+}
+.pcl-rb-ul li { margin-bottom: 6px; }
+.pcl-rb-note {
+  font-size: 16.5px;
+  color: var(--pcl-muted);
+  border-left: 4px solid var(--pcl-primary);
+  padding: 4px 0 4px 12px;
+  margin: 0 0 12px;
+}
+.pcl-rb-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 14px;
+  font-size: 15.5px;
+}
+.pcl-rb-table th {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--pcl-secondary);
+  padding: 8px 10px;
+  text-align: left;
+  border: 2px solid var(--pcl-panel-border);
+}
+.pcl-rb-table td {
+  border: 2px solid var(--pcl-line);
+  padding: 8px 10px;
+  vertical-align: top;
+  color: var(--pcl-text);
+  background: var(--pcl-surface-2);
+}
+.pcl-rb-table tr:nth-child(even) td { background: var(--pcl-surface-3); }
+.pcl-rb-table .num { text-align: right; white-space: nowrap; }
+.pcl-rb-formula {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  color: var(--pcl-primary-hi);
+  background: var(--pcl-surface-3);
+  border: 2px dashed var(--pcl-line);
+  padding: 9px 12px;
+  margin: 0 0 12px;
+  text-align: center;
+}
+/* week cards inside the info modal */
+.pcl-wkcard {
+  border: 2px solid var(--pcl-line);
+  background: var(--pcl-surface-2);
+  box-shadow: 3px 3px 0 var(--pcl-inset);
+  padding: 12px 14px;
+  margin: 0 0 12px;
+}
+.pcl-wkcard.is-live {
+  border-color: var(--pcl-primary);
+  box-shadow: 3px 3px 0 var(--pcl-hard), 0 0 14px var(--pcl-glow-soft);
+  background: var(--pcl-surface-3);
+}
+.pcl-wk-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin: 0 0 6px;
+}
+.pcl-wk-name {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.6px;
+  color: var(--pcl-text);
+}
+.pcl-wk-tag {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  color: #fff;
+  background: var(--pcl-primary);
+  padding: 3px 7px 2px;
+  animation: pclBlink 1.4s steps(1) infinite;
+}
+.pcl-wk-tag--past { background: var(--pcl-muted); animation: none; }
+.pcl-wk-date {
+  font-family: var(--pcl-font-title);
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--pcl-muted);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.pcl-wk-crit { font-size: 16.5px; line-height: 1.55; color: var(--pcl-text); margin: 0 0 6px; }
+.pcl-wk-pts {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.8px;
+  color: var(--pcl-gold);
+  text-transform: uppercase;
+  margin: 0;
+}
+html[data-pcl-theme="light"] .pcl-wk-pts { color: #a06e00; }
+
+/* ---- Mobile additions ---------------------------------------------------------- */
+@media (max-width: 620px) {
+  .pcl-toggle--font { width: 42px; height: 42px; }
+  .pcl-font-glyph { font-size: 11px; }
+  .pcl-board-links { gap: 3px 12px; }
+  .pcl-board-link { font-size: 9.5px; }
+  .pcl-weekrow { gap: 8px; }
+  .pcl-infobtn { width: 42px; }
+  .pcl-photobtn { width: 100%; }
+  .pcl-modal-card { padding: 16px 14px; }
+  .pcl-rb-table { font-size: 14px; }
+  .pcl-rb-table th { font-size: 9.5px; padding: 6px 7px; }
+  .pcl-rb-table td { padding: 6px 7px; }
+  .pcl-wk-date { margin-left: 0; flex-basis: 100%; }
+}
+
+/* very narrow cabinets: marquee text gets its own full-width row below the
+   logo + both toggle buttons (the Aa font toggle squeezed it too hard) */
+@media (max-width: 520px) {
+  .pcl-header { flex-wrap: wrap; row-gap: 10px; }
+  .pcl-header-brand { flex: 1 1 auto; }
+  .pcl-toggle--font { order: 1; margin-right: 2px; }
+  .pcl-toggle { order: 2; margin-right: 0; }
+  .pcl-header-text { order: 3; flex: 1 1 100%; }
 }
