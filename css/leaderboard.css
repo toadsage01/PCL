@@ -5,8 +5,9 @@
    theme.css (zero token changes) and composes the public standings in the
    league sheet's look: royal-blue stage, orange score bars, white cell
    dividers, five columns — RANK · NAME · DESIGNATION · TOTAL IMPRESSIONS ·
-   TOTAL POINTS. Data type is VT323 (vendored): a terminal-pixel face that
-   stays readable at small sizes, unlike the display faces.
+   TOTAL POINTS. Data type follows the shared reading-font toggle:
+   SF Pro / system sans by default, VT323 (vendored terminal-pixel face)
+   when the player taps Aa — cell sizes are tuned for both.
    ========================================================================== */
 
 /* ---- Data face (vendored) ------------------------------------------------ */
@@ -19,7 +20,7 @@
 }
 
 .pcl-board {
-  --board-font: "VT323", "Pixelify Sans", "Segoe UI", system-ui, sans-serif;
+  --board-font: var(--pcl-font-body);
   width: min(980px, calc(100% - 32px));
   margin: 26px auto 40px;
 }
@@ -187,13 +188,14 @@
 
 .pcl-cell {
   font-family: var(--board-font);
-  font-size: 24px;
-  line-height: 1.15;
+  font-size: 19px;
+  line-height: 1.2;
   padding: 12px 14px 10px;
   display: flex;
   align-items: center;
   min-width: 0;
 }
+html[data-pcl-font="vt"] .pcl-cell { font-size: 24px; line-height: 1.15; }
 .pcl-cell + .pcl-cell { border-left: 3px solid rgba(255, 255, 255, 0.45); }
 
 .pcl-cell--rank,
@@ -208,9 +210,10 @@
 
 /* rank badge */
 .pcl-rank {
-  font-size: 22px;
+  font-size: 18px;
   letter-spacing: 1px;
 }
+html[data-pcl-font="vt"] .pcl-rank { font-size: 22px; }
 .pcl-rankchip {
   display: inline-block;
   min-width: 44px;
@@ -234,11 +237,14 @@
 
 /* name + designation */
 .pcl-cell--name, .pcl-cell--desig {
-  font-size: 25px;
+  font-size: 20px;
   overflow-wrap: anywhere;
 }
+html[data-pcl-font="vt"] .pcl-cell--name,
+html[data-pcl-font="vt"] .pcl-cell--desig { font-size: 25px; }
 .pcl-cell--desig { color: rgba(255, 255, 255, 0.88); }
-.pcl-desig-blank { opacity: 0.55; font-size: 22px; }
+.pcl-desig-blank { opacity: 0.55; font-size: 18px; }
+html[data-pcl-font="vt"] .pcl-desig-blank { font-size: 22px; }
 
 /* subtle champion glow on the whole top bar */
 .pcl-row.is-r1 { box-shadow: 4px 4px 0 var(--pcl-hard), 4px 4px 0 3px var(--pcl-glow); }
@@ -262,9 +268,10 @@
 .pcl-state-sub {
   margin: 14px 0 18px;
   font-family: var(--pcl-font-body);
-  font-size: 16px;
+  font-size: 15.5px;
   color: var(--pcl-muted);
 }
+html[data-pcl-font="vt"] .pcl-state-sub { font-size: 18.5px; }
 .pcl-state--err { border-color: var(--pcl-error-soft); }
 .pcl-state--err .pcl-state-big { color: var(--pcl-error); }
 

@@ -321,3 +321,65 @@ the board reads GAS directly even when submissions travel through Vercel's
   tab renders the catalogue, mock mode carries an in-memory log.
 - **Layout fix**: ≤520 px the marquee text drops to its own full-width row
   (logo + two toggles on the first row) — the Aa button had squeezed it.
+
+## Round 14 — SF Pro default, link ownership + collabs, cropper, self-healing submit
+
+- **Reading font → SF Pro default**: `html[data-pcl-font="sf"]` (new
+  default, `-apple-system / SF Pro Text / Segoe UI / Roboto` stack) with
+  `vt` as the single alternate — the Aa button now means "pixel font
+  (VT323)", stored value migrates (`px` → `vt`). Pre-paint snippet updated
+  on index + admin + **leaderboard** (which also gained the Aa button);
+  leaderboard board cells size per mode (19 px SF / 24 px VT). VT's 19 px
+  compensations unchanged; Silkscreen / Press Start 2P headings untouched.
+- **Official URL formats** (`classifyUrl` + `mediaId_` mirrored): IG adds
+  `/tv/` (legacy IGTV → reel) and `instagr.am`; YT adds `/v/` and
+  `youtube-nocookie`; LI adds **`lnkd.in`** (LinkedIn's own shortener —
+  LinkedIn Help "Short URLs in shared posts") with `li_<token>` media ids.
+  Third-party shorteners still rejected by the host allowlist.
+- **Hash display**: post rows / VIEW rows / lightbox links render
+  `#<first-8-of-media-id>` (full URL moved to `title` + the link target) —
+  the brand badge already names the platform + format.
+- **Link ownership + collab 50:50** (Code.gs): HEADERS gains append-only
+  `Collab With` + `Collab Status` ('' | PENDING | CONFIRMED). `doPost`
+  became validate-then-write: one `ledgerIndex_()` read pass builds
+  media/URL-key → rows + Submission-ID set. Rules: same player + same key
+  → UPDATE (snapshot = prior max + 1); different player → reject unless
+  the partner tagged this player OR this player tags the partner
+  (name-compared via `normName_`); a confirmed pair flips the partner's
+  prior rows to CONFIRMED and fills their `Collab With`. `adminVerify_`
+  computes `ceil(verified × mult / 2)` on CONFIRMED rows (log notes
+  "COLLAB ½"); the `collect_` roll-up credits every CONFIRMED row of a
+  media to its own player at half points (already-split verified cells
+  never halve twice) — collab pairs share one Media ID, so the
+  latest-snapshot rule alone would erase the partner. Idempotency: a
+  repeated `submissionId` answers `{ok:true, duplicate:true}` with no
+  append, making transport retries safe.
+- **Photo cropper** (`Crop` IIFE + `#pclCrop`): FileReader → square
+  viewport (640 canvas, cover-fit, pointer-drag pan, slider/buttons/wheel/
+  pinch zoom, pan clamped so the frame never shows background) → **CROP &
+  USE** re-renders to a 512×512 JPEG q0.85 data-URL (~100 KB) into
+  `photoState.file`. This is also the fix for oversized payloads: photos
+  no longer ride the wire as multi-MB originals. The photo field became a
+  single compact line (round thumb · label + one-sentence hint · UPLOAD
+  button) with a rewritten, shorter description; name + manager fields
+  untouched.
+- **Self-healing submit** (`postJson` + transport chain): `/api/submit`
+  (12 s abort guard) → on network-only failure a direct **simple POST**
+  (no Content-Type header → no preflight, GAS answers CORS-readable) to
+  `gasWebAppUrl` (30 s). Response bodies are parsed even on HTTP 4xx/5xx
+  so `ok:false` reasons reach the player: `saveState` shows `⚠ <reason>`
+  for server rejections and the generic "SAVE FAILED — CHECK CONNECTION"
+  only for true network failures on both transports.
+- **Console**: collab badges (`COLLAB · ½` solid blue / `COLLAB?` gold)
+  next to player names (name row became flex-wrap so tags never clip),
+  partner shown as `⇄ <name>` in the sub line, review-modal meta carries
+  the collab state, CSV gains Collab Status/With columns, mock ledger
+  includes a confirmed pair (Rohit ⇄ Priya) with the halved verified
+  points for demo truthfulness.
+- **Tests**: `scripts/test_do_post_collab.js` (GAS env stub: sheet +
+  DriveApp + PropertiesService + ContentService) covers ownership,
+  collab confirm both directions, rejection texts, idempotency, lnkd.in
+  ids and the verify split; `scripts/test_leaderboard_rollup.js` copied
+  the new roll-up block verbatim + 5 collab cases (16 assertions);
+  fixture_form.js gained the /exec fallback target + dup/route-down
+  simulators for the browser E2E.

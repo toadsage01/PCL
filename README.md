@@ -36,11 +36,37 @@ the SUBMISSION TERMINAL kicker (`assets/brand/`, original inspo in
   "Required" below, navy restored on input. Link errors appear at commit
   time, never after the final submit. (Amber state reserved for a future
   link-liveness / privacy check.)
+- **Official link formats only** — every pasteable shape of the three
+  league platforms passes: Instagram `instagram.com` + `instagr.am` legacy
+  domain (`/p/`, `/reel/`, `/reels/`, `/tv/`), YouTube `youtube.com`
+  (+ `m.` / `music.` subdomains) + `youtu.be` + `youtube-nocookie.com`
+  (`watch?v=`, `/shorts/`, `/live/`, `/embed/`, `/v/`), LinkedIn
+  `linkedin.com` (`/posts/`, `/feed/update/`, `/pulse/`, any activity id)
+  plus **`lnkd.in` — LinkedIn's own shortener**. Third-party shorteners
+  (bit.ly, tinyurl, …) stay rejected.
+- **Link ownership + 50:50 collabs** — a submitted link belongs to the
+  player who posted it first: the same player re-submitting it saves an
+  UPDATE snapshot, but ANOTHER player's identical link is rejected unless
+  it is a confirmed collab. Tag a post as **COLLAB** in Post Details and
+  name the partner; when the partner submits the same link (either side
+  can tag first), the backend confirms the pair, marks both ledger rows
+  CONFIRMED and their points split 50:50 at verification and on the
+  leaderboard roll-up. Unconfirmed collab tags stay PENDING (full points).
+- **Photo cropper** — the player photo opens a square cropper: drag to
+  position, zoom (slider / buttons / wheel / pinch), **CROP & USE** exports
+  a 512×512 JPEG (~100 KB) so the submit payload stays light and fast.
+- **Self-healing submit** — `/api/submit` first (12 s guard), then a direct
+  simple POST to the GAS `/exec` URL; backend rejections (duplicate link,
+  unconfirmed collab, missing env var) surface as their real message —
+  never a phantom "SAVE FAILED — CHECK CONNECTION" on a healthy line.
+  Retried submissions are recognised by `submissionId` and never append
+  twice.
 - **Duplicate-proof ledger** — Media ID extracted per URL (`ig_<shortcode>`,
   `yt_<videoId>`, `li_<activityId>`); the same post re-submitted is an
   UPDATE snapshot, never double-counted views. One row per post rolls up
   per player — `doGet` returns per-player post counts, unique media,
-  format ratio and projected points.
+  format ratio and projected points. A link on file under another player
+  is rejected at submission time (except the confirmed-collab flow above).
 - **Image uploads** with a hard 5 MB cap, type filter, per-row thumbnails.
 - **Player photo, one per player** — mandatory upload stored in Drive as
   `<name>__<manager>` inside a child folder; a re-submission replaces the old
@@ -48,9 +74,10 @@ the SUBMISSION TERMINAL kicker (`assets/brand/`, original inspo in
   a photo pulls it back into the form automatically (JSONP lookup), and the
   backend reuses it when no new file is picked.
 - **Reading-font toggle** — the **Aa** button beside the theme switch flips
-  the body face between **VT323** (terminal, default) and **Pixelify Sans**
-  (rounded arcade). Titles keep the Silkscreen/Press Start 2P skeleton;
-  the choice persists per browser.
+  the body face between **SF Pro / system sans** (the default on the form,
+  leaderboard and Control Room) and **VT323**, the original terminal-pixel
+  reading font. Titles keep the Silkscreen/Press Start 2P skeleton; the
+  choice persists per browser.
 - **Brand badges** — chips and post rows show a small platform logo
   (Instagram / YouTube / LinkedIn SVG) with the word Reel / Post / Short /
   Video tinted in the platform's brand colour — one readable item, not

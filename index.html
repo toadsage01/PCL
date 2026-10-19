@@ -15,8 +15,14 @@
           window.matchMedia("(prefers-color-scheme: dark)").matches;
         document.documentElement.setAttribute(
           "data-pcl-theme", saved || (sysDark ? "dark" : "light"));
-        var font = "vt";
-        try { font = localStorage.getItem("pcl_font") || "vt"; } catch (e) { /* ok */ }
+        // "sf" = SF Pro / system sans (default) · "vt" = VT323 pixel terminal
+        // (the original arcade face). Legacy stored value "px" was the old
+        // pixel alternate — it maps onto "vt" so nobody loses their pick.
+        var font = "sf";
+        try {
+          font = localStorage.getItem("pcl_font") || "sf";
+          if (font !== "sf" && font !== "vt") font = "vt";
+        } catch (e) { /* ok */ }
         document.documentElement.setAttribute("data-pcl-font", font);
       } catch (e) { /* keep defaults */ }
     })();
@@ -83,17 +89,19 @@
           </div>
         </div>
         <div class="pcl-field pcl-photofield" data-field="playerPhoto">
-          <label class="pcl-label">Player photo <span class="pcl-req-star">*</span></label>
-          <p class="pcl-hint">One clear photo of you — it tells the review team who
-            is behind the entry. Submitted one before? It appears by itself when
-            you type your name.</p>
-          <div class="pcl-photowell">
+          <div class="pcl-photoline">
             <span class="pcl-photothumb" id="photoThumb" hidden>
               <img id="photoThumbImg" alt="Player photo" />
             </span>
+            <span class="pcl-photoline-text">
+              <label class="pcl-label" for="photoBtn">Player photo <span class="pcl-req-star">*</span></label>
+              <span class="pcl-hint">Tap to add a square photo for the leaderboard —
+                you crop it right here. On file already? It appears by itself
+                when you type your name.</span>
+            </span>
             <button type="button" class="pcl-shotbtn pcl-photobtn" id="photoBtn">
               <span class="pcl-px-photo" aria-hidden="true"></span><span
-                id="photoBtnLabel">+ UPLOAD PHOTO</span>
+                id="photoBtnLabel">+ UPLOAD</span>
             </button>
             <span class="pcl-photostate" id="photoState" hidden></span>
           </div>
@@ -220,6 +228,36 @@
         <span class="pcl-px-x" aria-hidden="true"></span>
       </button>
       <div class="pcl-modal-body" id="pclModalBody"></div>
+    </div>
+  </div>
+
+  <!-- photo cropper — square frame, drag to position, zoom to fit -->
+  <div class="pcl-modal pcl-crop" id="pclCrop" hidden role="dialog" aria-modal="true"
+       aria-label="Crop your photo">
+    <div class="pcl-lb-back" data-act="cancel"></div>
+    <div class="pcl-crop-card">
+      <button type="button" class="pcl-lb-close" data-act="cancel" aria-label="Close">
+        <span class="pcl-px-x" aria-hidden="true"></span>
+      </button>
+      <h3 class="pcl-modal-title">CROP YOUR PHOTO</h3>
+      <p class="pcl-modal-sub">Drag to position · zoom to frame your face</p>
+      <div class="pcl-crop-stage" id="cropStage">
+        <canvas id="cropCanvas" width="640" height="640"></canvas>
+      </div>
+      <div class="pcl-crop-tools">
+        <button type="button" class="pcl-abtn" data-act="zoomout"
+                aria-label="Zoom out">&minus;</button>
+        <input type="range" id="cropZoom" class="pcl-crop-zoom" min="100" max="400"
+               value="100" aria-label="Zoom" />
+        <button type="button" class="pcl-abtn" data-act="zoomin"
+                aria-label="Zoom in">+</button>
+      </div>
+      <div class="pcl-crop-actions">
+        <button type="button" class="pcl-abtn" data-act="cancel">CANCEL</button>
+        <button type="button" class="pcl-btn pcl-btn--primary" data-act="apply">
+          <span class="pcl-px-play" aria-hidden="true"></span>CROP &amp; USE
+        </button>
+      </div>
     </div>
   </div>
 

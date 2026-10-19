@@ -157,16 +157,21 @@ html[data-pcl-theme="dark"] {
 }
 
 /* ---- Reading-font toggle (html[data-pcl-font]) ------------------------------
-   "vt"  = VT323 terminal face (default — tall CRT glyphs, easy on the eye)
-   "px"  = Pixelify Sans rounded arcade face (the previous reading font)
+   "sf"  = SF Pro / system sans — the DEFAULT everywhere (form, leaderboard,
+           Control Room): -apple-system renders SF Pro on Apple devices and
+           hands off to Segoe UI / Roboto elsewhere. Zero download, always crisp.
+   "vt"  = VT323 terminal face — the original arcade reading font, one Aa tap
+           away. Tall CRT glyphs run one size up to keep the rhythm.
    Titles/labels (Silkscreen) and display headings (Press Start 2P) are the
    identity skeleton and stay the same in both modes. Set BEFORE first paint
    by the inline head script (localStorage "pcl_font"). */
+:root,
+html[data-pcl-font="sf"] {
+  --pcl-font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
 html[data-pcl-font="vt"] {
   --pcl-font-body: "VT323", "Pixelify Sans", "Segoe UI", system-ui, monospace;
-}
-html[data-pcl-font="px"] {
-  --pcl-font-body: "Pixelify Sans", "Segoe UI", system-ui, sans-serif;
 }
 /* VT323 is narrow — reading surfaces step up one size to keep the rhythm */
 html[data-pcl-font="vt"] body { font-size: 19px; }
@@ -1338,13 +1343,15 @@ html[data-pcl-theme="dark"] .pcl-input::placeholder {
     grid-template-columns: 22px minmax(0, 1fr) 118px;
     grid-template-areas:
       "num main shot"
-      "num views views";
+      "num views views"
+      "collab collab collab";
     gap: 8px 10px;
   }
   .pcl-post-num { grid-area: num; padding-top: 10px; }
   .pcl-post-main { grid-area: main; }
   .pcl-cell--views { grid-area: views; }
   .pcl-cell--shot { grid-area: shot; }
+  .pcl-collabrow { grid-area: collab; }
 
   .pcl-btn--primary { width: 100%; justify-content: center; }
 
@@ -1418,28 +1425,38 @@ button.pcl-board-link {
   color: var(--pcl-marquee-accent, #35d6ff);
 }
 
-/* ---- Player photo field ------------------------------------------------------ */
+/* ---- Player photo field — one compact line: thumb · text · button ---------- */
 .pcl-photofield { margin-top: 14px; }
-.pcl-photowell {
+.pcl-photoline {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
 }
-.pcl-photobtn { width: auto; min-width: 210px; }
+.pcl-photoline-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.pcl-photoline-text .pcl-label { margin-bottom: 0; }
+.pcl-photoline-text .pcl-hint { margin: 0; }
+.pcl-photobtn { width: auto; min-width: 160px; flex: 0 0 auto; }
 .pcl-field.is-error .pcl-photobtn {
   border-color: var(--pcl-error);
   color: var(--pcl-error);
   box-shadow: 3px 3px 0 var(--pcl-error-soft);
 }
 .pcl-photothumb {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   overflow: hidden;
   border: 3px solid var(--pcl-input-border);
   box-shadow: 3px 3px 0 var(--pcl-hard);
   background: var(--pcl-input-bg);
   flex: 0 0 auto;
+  border-radius: 50%;
 }
 .pcl-photothumb img {
   display: block;
@@ -1454,8 +1471,97 @@ button.pcl-board-link {
   letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--pcl-cyan);
+  flex: 1 0 100%;
 }
 html[data-pcl-theme="light"] .pcl-photostate { color: #0b7fa8; }
+
+/* ---- Photo cropper — square stage, drag/zoom, JPEG out ---------------------- */
+.pcl-crop-card {
+  position: relative;
+  width: min(92vw, 400px);
+  max-height: 92vh;
+  overflow: auto;
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-panel-border);
+  box-shadow: 8px 8px 0 var(--pcl-hard);
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pcl-crop-stage {
+  width: min(78vw, 328px);
+  height: min(78vw, 328px);
+  margin: 0 auto;
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: inset 0 0 0 2px var(--pcl-surface), 4px 4px 0 var(--pcl-hard);
+  background: repeating-conic-gradient(
+    var(--pcl-surface-2) 0% 25%, var(--pcl-surface-3) 0% 50%) 0 0 / 24px 24px;
+  overflow: hidden;
+  touch-action: none;      /* pointer events own every gesture */
+  cursor: grab;
+}
+.pcl-crop-stage.is-dragging { cursor: grabbing; }
+.pcl-crop-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pcl-crop-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pcl-crop-zoom {
+  flex: 1 1 auto;
+  height: 22px;
+  accent-color: var(--pcl-primary);
+  cursor: pointer;
+}
+.pcl-crop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ---- Collab tag inside a post row ------------------------------------------- */
+.pcl-collabrow {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 2px;
+}
+.pcl-collab-toggle {
+  flex: 0 0 auto;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  color: var(--pcl-muted);
+  background: var(--pcl-surface-2);
+  border: 2px dashed var(--pcl-line);
+  padding: 4px 9px 3px;
+  cursor: pointer;
+  transition: transform 0.06s steps(2);
+}
+.pcl-collab-toggle:hover { transform: translate(-1px, -1px); color: var(--pcl-text); }
+.pcl-collab-toggle.is-on {
+  color: #fff;
+  background: linear-gradient(180deg, var(--pcl-secondary), #1a2f9e);
+  border: 2px solid #14235f;
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+}
+.pcl-collab-toggle:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+.pcl-collab-input { max-width: 260px; flex: 1 1 200px; }
+.pcl-collab-hint {
+  flex: 1 0 100%;
+  font-size: 12px;
+  color: var(--pcl-muted);
+  margin: 0;
+}
+.pcl-collabrow .pcl-err { margin: 0; }
 
 /* ---- Weekly challenge row: select + info button ------------------------------ */
 .pcl-weekrow {

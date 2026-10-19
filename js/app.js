@@ -11,17 +11,28 @@
                                         hover. The format is AUTO-DETECTED
                                         from the link (rulebook §3 multiplier).
      3. Post Details .................. one compact row per chip.
-                                        EDIT = columnar (views + screenshot),
-                                        VIEW = confirmation rows with a
-                                        floating screenshot lightbox
-                                        (PREV / NEXT + thumbnails).
+                                        EDIT = columnar (views + screenshot +
+                                        optional COLLAB tag), VIEW =
+                                        confirmation rows with a floating
+                                        screenshot lightbox (PREV / NEXT +
+                                        thumbnails). Links render as #HASH
+                                        (the media id, first 8 chars) — the
+                                        brand badge already says the platform.
      4. Weekly Challenge .............. the ONGOING week only (season clock,
                                         warm-up counts as W1) + INFO popup with
                                         every week's challenge, criteria, reward
-     5. Player photo .................. mandatory; saved per player on the
+     5. Player photo .................. mandatory; uploaded through a square
+                                        CROPPER (drag to position, zoom to
+                                        frame, 512px JPEG out — small payload,
+                                        fast submit). Saved per player on the
                                         backend (one photo per name — the next
                                         visit auto-shows it when the name is
                                         typed); reused server-side on re-submit
+
+   Collab posts (rulebook §7): tag a post as COLLAB and name the partner.
+   The backend only allows the same link twice when it can confirm the collab
+   (the partner tagged this player, or this player tags the partner) — once
+   confirmed, the post's points split 50:50 between the two players.
 
    Error model (per spec):
      · Missing required field  → red border + shadow + small "Required" text
@@ -31,10 +42,15 @@
        reason on hover. `.is-status` (amber) is reserved for the future
        link-liveness check (private / followers-only posts).
 
-   Submission strategy (CORS-safe, unchanged):
-     - Google Apps Script cannot answer CORS preflights → simple fetch POST
-       (no explicit Content-Type) carrying JSON; GAS parses e.postData.
-     - submitViaApi → same-origin POST /api/submit (Vercel function).
+   Submission strategy (CORS-safe, self-healing):
+     - submitViaApi → same-origin POST /api/submit (Vercel function) first.
+       Its JSON answer is read EVEN ON HTTP 4xx/5xx so real reasons
+       (missing env var, duplicate link, collab not confirmed…) surface
+       instead of a fake "check connection".
+     - If the route is unreachable (network / deploy hiccup) → direct simple
+       POST to the GAS /exec URL (no Content-Type header → no preflight;
+       Apps Script answers with CORS-enabled JSON). Idempotent: the backend
+       recognises a retried submissionId and never appends twice.
      - No backend configured → LOCAL mode: console + localStorage
        (key: pcl_submissions).
    ========================================================================== */
@@ -75,13 +91,15 @@
   var fontBtn = $("pclFontToggle");
   if (fontBtn) {
     fontBtn.setAttribute("aria-pressed",
-      String(document.documentElement.getAttribute("data-pcl-font") === "px"));
+      String(document.documentElement.getAttribute("data-pcl-font") === "vt"));
+    fontBtn.setAttribute("title", "Toggle pixel font (VT323)");
+    fontBtn.setAttribute("aria-label", "Toggle pixel font (VT323)");
     fontBtn.addEventListener("click", function () {
       var next =
-        document.documentElement.getAttribute("data-pcl-font") === "px"
-          ? "vt" : "px";
+        document.documentElement.getAttribute("data-pcl-font") === "vt"
+          ? "sf" : "vt";
       document.documentElement.setAttribute("data-pcl-font", next);
-      fontBtn.setAttribute("aria-pressed", String(next === "px"));
+      fontBtn.setAttribute("aria-pressed", String(next === "vt"));
       try { localStorage.setItem(FONT_KEY, next); } catch (e) { /* ok */ }
     });
   }
@@ -100,6 +118,16 @@
      URL ENGINE — format auto-detection (rulebook §3)
      Accepts every pasteable shape: https://…, www.…, bare instagram.com/… —
      anything that opens the content when dropped into a URL bar.
+     ONLY the three league platforms' OFFICIAL hosts pass:
+       · Instagram  instagram.com + instagr.am (Meta's legacy short domain)
+         /p/ = post · /reel/ + /reels/ = reel · /tv/ = legacy IGTV → reel
+       · YouTube    youtube.com (+ m./music. subdomains), youtu.be (official
+         shortener), youtube-nocookie.com — /watch?v= · /shorts/ · /live/ ·
+         /embed/ · /v/ · youtu.be/<id>
+       · LinkedIn   linkedin.com — /posts/ · /feed/update/ · /pulse/ · any
+         activity-id link — plus lnkd.in (LinkedIn's OWN official shortener,
+         per LinkedIn Help "Short URLs in shared posts")
+     Third-party shorteners (bit.ly, tinyurl, cutt.ly …) stay rejected.
      ========================================================================== */
   var FORMATS = {
     ig_reel:   { label: "Instagram Reel", word: "Reel",  mult: 1.25 },
@@ -162,14 +190,14 @@
     var path = u.pathname || "";
 
     if (/(^|\.)instagram\.com$/.test(host) || host === "instagr.am") {
-      var im = path.match(/\/(reel|reels|p)\/([A-Za-z0-9_-]+)/i);
+      var im = path.match(/\/(reel|reels|tv|p)\/([A-Za-z0-9_-]+)/i);
       if (!im) {
         return { ok: false,
           reason: "Instagram — only Reel or Post links count in the league." };
       }
       return {
         ok: true, url: tok,
-        format: /^reel/i.test(im[1]) ? "ig_reel" : "ig_post",
+        format: /^(reel|reels|tv)$/i.test(im[1]) ? "ig_reel" : "ig_post",
         mediaId: "ig_" + im[2]
       };
     }
@@ -179,7 +207,7 @@
       var sm = path.match(/\/shorts\/([A-Za-z0-9_-]+)/i);
       if (sm) return { ok: true, url: tok, format: "yt_shorts", mediaId: "yt_" + sm[1] };
       var vid = u.searchParams.get("v");
-      var lm = !vid ? path.match(/\/(?:live|embed)\/([A-Za-z0-9_-]+)/i) : null;
+      var lm = !vid ? path.match(/\/(?:live|embed|v)\/([A-Za-z0-9_-]+)/i) : null;
       var bm = !vid && !lm && host === "youtu.be" ? path.match(/^\/([A-Za-z0-9_-]+)/) : null;
       var id = vid || (lm && lm[1]) || (bm && bm[1]);
       if (id) return { ok: true, url: tok, format: "yt_long", mediaId: "yt_" + id };
@@ -187,12 +215,17 @@
         reason: "YouTube — only video or Shorts links count in the league." };
     }
 
-    if (/(^|\.)linkedin\.com$/.test(host)) {
+    if (/(^|\.)linkedin\.com$/.test(host) || host === "lnkd.in") {
       var pm = path.match(/\/(?:posts|feed\/update|pulse)\/([^\/?#]+)/i) ||
                path.match(/activity[-:]?(\d{10,})/i);
-      if (!pm) {
+      if (!pm && host !== "lnkd.in") {
         return { ok: false,
           reason: "LinkedIn — only post links count in the league." };
+      }
+      if (!pm) pm = path.match(/^\/([A-Za-z0-9_-]+)/);   // lnkd.in/<token>
+      if (!pm) {
+        return { ok: false,
+          reason: "LinkedIn — that lnkd.in link looks truncated." };
       }
       var am = tok.match(/activity[-:](\d{10,})/i);
       return { ok: true, url: tok, format: "li_post",
@@ -216,11 +249,20 @@
     if (tail.length > 14) tail = tail.slice(0, 14) + "…";
     return tail;
   }
+  /* the tiny identity shown where a full URL would be redundant — the brand
+     badge next to it already names the platform + format (user spec: show
+     the hash, first few characters, just enough to be unique) */
+  function postHash(p) {
+    var tail = String(p && p.mediaId || "").split("_").slice(1).join("_");
+    if (!tail) return linkDisplay(p && p.url || "");
+    return tail.length > 8 ? tail.slice(0, 8) + "…" : tail;
+  }
 
   /* ============================================================================
      STATE
      ========================================================================== */
-  var posts = [];        // { id(=mediaId), url, format, mediaId, views, shot, errViews, errShotMsg }
+  var posts = [];        // { id(=mediaId), url, format, mediaId, views, shot,
+                         //   errViews, errShotMsg, collab, collabWith, errCollab }
   var chipErrors = [];   // { token, reason }
   var viewMode = "edit"; // "edit" | "view"
   var pendingShotFor = null;
@@ -302,7 +344,8 @@
       inBatch[c.mediaId] = true;
       posts.push({
         id: c.mediaId, url: c.url, format: c.format, mediaId: c.mediaId,
-        views: "", shot: null, errViews: false, errShotMsg: ""
+        views: "", shot: null, errViews: false, errShotMsg: "",
+        collab: false, collabWith: "", errCollab: false
       });
       added++;
     });
@@ -368,11 +411,28 @@
     var cellShot = '<div class="pcl-cell pcl-cell--shot' +
       (p.errShotMsg ? " is-error" : "") + '">' + btn +
       '<p class="pcl-err">' + esc(p.errShotMsg || "Required") + "</p></div>";
+    var collab = '<div class="pcl-collabrow">' +
+      '<button type="button" class="pcl-collab-toggle' + (p.collab ? " is-on" : "") +
+      '" data-act="collab" data-id="' + esc(p.id) +
+      '" aria-pressed="' + (p.collab ? "true" : "false") +
+      '" title="Collab post — points split 50:50 once the partner submits the same link">' +
+      "COLLAB</button>" +
+      (p.collab
+        ? '<input class="pcl-input pcl-collab-input' + (p.errCollab ? " is-error" : "") +
+          '" data-act="collabname" data-id="' + esc(p.id) +
+          '" type="text" placeholder="Partner\u2019s full name" value="' +
+          esc(p.collabWith) + '" aria-label="Partner\u2019s full name — post ' + n + '" />' +
+          '<span class="pcl-hint pcl-collab-hint">Same link uploaded by the partner ' +
+          "splits this post\u2019s points 50:50.</span>" +
+          (p.errCollab ? '<p class="pcl-err">Required</p>' : "")
+        : "") +
+      "</div>";
     return '<div class="pcl-post" data-id="' + esc(p.id) + '">' +
       '<span class="pcl-post-num">' + n + "</span>" +
       '<div class="pcl-post-main"><a class="pcl-post-link" href="' + esc(p.url) +
-      '" target="_blank" rel="noopener">' + esc(linkDisplay(p.url)) + "</a>" +
-      fmtHtml(p.format) + "</div>" + cellViews + cellShot + "</div>";
+      '" target="_blank" rel="noopener" title="' + esc(p.url) + '">#' +
+      esc(postHash(p)) + "</a>" +
+      fmtHtml(p.format) + "</div>" + cellViews + cellShot + collab + "</div>";
   }
 
   function viewRowHtml(p, i) {
@@ -382,10 +442,14 @@
         esc(p.id) + '" title="Open screenshot"><span class="pcl-px-photo" aria-hidden="true"></span>PHOTO</button>'
       : '<button type="button" class="pcl-vshot is-missing" data-act="shot" data-id="' +
         esc(p.id) + '" title="Attach analytics screenshot"><span class="pcl-px-photo" aria-hidden="true"></span>ADD SHOT</button>';
+    var collabTag = p.collab
+      ? '<span class="pcl-collab-toggle is-on" aria-hidden="true">COLLAB' +
+        (p.collabWith ? " · " + esc(p.collabWith) : "") + "</span>"
+      : "";
     return '<div class="pcl-vrow" data-id="' + esc(p.id) + '">' +
       '<span class="pcl-vnum">' + n + "</span>" +
-      '<a class="pcl-vlink" href="' + esc(p.url) + '" target="_blank" rel="noopener">' +
-      esc(linkDisplay(p.url)) + "</a>" + fmtHtml(p.format) + btn + "</div>";
+      '<a class="pcl-vlink" href="' + esc(p.url) + '" target="_blank" rel="noopener" title="' +
+      esc(p.url) + '">#' + esc(postHash(p)) + "</a>" + fmtHtml(p.format) + collabTag + btn + "</div>";
   }
 
   function renderRows() {
@@ -409,28 +473,49 @@
   /* views typed → state + navy restore (no re-render, keep the caret) */
   postRows.addEventListener("input", function (ev) {
     var input = ev.target.closest(".pcl-views");
-    if (!input) return;
-    var p = postById(input.getAttribute("data-id"));
-    if (!p) return;
-    p.views = input.value.replace(/[^\d,.\s]/g, "").slice(0, 18);
-    if (p.views !== input.value) input.value = p.views;
-    if (p.errViews) {
-      p.errViews = false;
-      var cell = input.closest(".pcl-cell");
-      if (cell) cell.classList.remove("is-error");
+    if (input) {
+      var p = postById(input.getAttribute("data-id"));
+      if (!p) return;
+      p.views = input.value.replace(/[^\d,.\s]/g, "").slice(0, 18);
+      if (p.views !== input.value) input.value = p.views;
+      if (p.errViews) {
+        p.errViews = false;
+        var cell = input.closest(".pcl-cell");
+        if (cell) cell.classList.remove("is-error");
+      }
+      return;
+    }
+    var cinp = ev.target.closest(".pcl-collab-input");
+    if (cinp) {
+      var cp = postById(cinp.getAttribute("data-id"));
+      if (!cp) return;
+      cp.collabWith = cinp.value.replace(/^\s+/, "").slice(0, 60);
+      if (cp.errCollab) {
+        cp.errCollab = false;
+        cinp.classList.remove("is-error");
+        var ce = cinp.parentNode.querySelector(".pcl-err");
+        if (ce) ce.remove();
+      }
     }
   });
 
-  /* screenshot buttons */
+  /* screenshot + collab buttons */
   postRows.addEventListener("click", function (ev) {
     var btn = ev.target.closest("[data-act]");
     if (!btn) return;
+    var act = btn.getAttribute("data-act");
     var id = btn.getAttribute("data-id");
-    if (btn.getAttribute("data-act") === "photo") {
+    if (act === "photo") {
       Lightbox.openFor(id);
-    } else if (btn.getAttribute("data-act") === "shot") {
+    } else if (act === "shot") {
       pendingShotFor = id;
       shotInput.click();
+    } else if (act === "collab") {
+      var p = postById(id);
+      if (!p) return;
+      p.collab = !p.collab;
+      p.errCollab = false;
+      renderRows();
     }
   });
 
@@ -495,8 +580,8 @@
                   brandHtml(p.format, true)];
       var n = Number(String(p.views).replace(/[^\d]/g, ""));
       if (n > 0) bits.push(Number(n).toLocaleString("en-US") + " views");
-      bits.push('<a href="' + esc(p.url) + '" target="_blank" rel="noopener">' +
-                esc(linkDisplay(p.url)) + "</a>");
+      bits.push('<a href="' + esc(p.url) + '" target="_blank" rel="noopener" title="' +
+                esc(p.url) + '">#' + esc(postHash(p)) + "</a>");
       return bits.join(" · ");
     }
 
@@ -751,7 +836,9 @@
       '<span class="pcl-rb-h">7 · Participation Rules</span>' +
       '<ul class="pcl-rb-ul">' +
       "<li>Participate via LinkedIn, Instagram or YouTube — posts, carousels, Reels, Shorts or Long-Form.</li>" +
-      "<li>Collab posts earn every collaborator equal points (e.g. a 1,000-view collab Reel gives 1,250 points to EACH employee).</li>" +
+      "<li>Collab posts: tag the post as a collab and name your partner. When " +
+      "both of you submit the same link and the backend confirms the pair, the " +
+      "post\u2019s points are <b>split 50:50</b> between the collaborators.</li>" +
       "<li><b>No paid promotions or boosting</b> — only organic reach counts. Manipulated metrics are not permitted.</li>" +
       "<li><b>One Post, One Platform:</b> identical content on multiple platforms counts only on the platform with the highest impressions.</li>" +
       "<li>Every eligible entry must meaningfully mention or feature Praper Media; tag the official account wherever allowed.</li>" +
@@ -826,13 +913,164 @@
     }
     var fr = new FileReader();
     fr.onload = function () {
-      photoState.file = { name: file.name, type: file.type, content: fr.result };
-      clearFieldErr("playerPhoto");
-      renderPhoto();
+      // straight into the cropper — the user frames the shot, we export a
+      // small square JPEG (512px, q0.85) so the submit payload stays light
+      Crop.open(String(fr.result), file.name);
     };
     fr.onerror = function () { setFieldErr("playerPhoto", "Could not read file"); };
     fr.readAsDataURL(file);
   });
+
+  /* ============================================================================
+     PHOTO CROPPER — square viewport, drag to pan, slider / buttons / wheel /
+     pinch to zoom, exports a 512×512 JPEG (~100 KB, not multi-MB originals —
+     this is what keeps submissions from timing out on the wire).
+     ============================================================================ */
+  var Crop = (function () {
+    var root = $("pclCrop");
+    var stage = $("cropStage");
+    var canvas = $("cropCanvas");
+    var slider = $("cropZoom");
+    var ctx = canvas.getContext("2d");
+    var C = canvas.width;               // 640 internal, CSS-scaled square
+    var img = null;
+    var zoom = 1;                       // 1 = cover-fit, slider 100..400 → ÷100
+    var ox = 0, oy = 0;                 // pan offset (css px at internal scale)
+    var dragging = false, lx = 0, ly = 0;
+    var points = new Map();             // pointerId → {x,y} for pinch
+    var pinchDist = 0;
+    var fileBase = "photo";
+    var lastFocus = null;
+
+    function coverScale() {
+      return Math.max(C / img.naturalWidth, C / img.naturalHeight);
+    }
+    function drawSize() {
+      var s = coverScale() * zoom;
+      return { w: img.naturalWidth * s, h: img.naturalHeight * s };
+    }
+    function clampPan() {
+      var d = drawSize();
+      var mx = Math.max(0, (d.w - C) / 2);
+      var my = Math.max(0, (d.h - C) / 2);
+      ox = Math.max(-mx, Math.min(mx, ox));
+      oy = Math.max(-my, Math.min(my, oy));
+    }
+    function draw() {
+      if (!img) return;
+      clampPan();
+      var d = drawSize();
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, C, C);
+      ctx.drawImage(img, (C - d.w) / 2 + ox, (C - d.h) / 2 + oy, d.w, d.h);
+    }
+    function setZoom(z) {
+      zoom = Math.max(1, Math.min(4, z));
+      slider.value = String(Math.round(zoom * 100));
+      draw();
+    }
+    function open(dataUrl, fileName) {
+      fileBase = String(fileName || "photo").replace(/\.[^.]+$/, "") || "photo";
+      var im = new Image();
+      im.onload = function () {
+        img = im;
+        zoom = 1; ox = 0; oy = 0;
+        slider.value = "100";
+        draw();
+        lastFocus = document.activeElement;
+        root.hidden = false;
+        document.body.style.overflow = "hidden";
+      };
+      im.onerror = function () { setFieldErr("playerPhoto", "Could not read image"); };
+      im.src = dataUrl;
+    }
+    function close() {
+      root.hidden = true;
+      document.body.style.overflow = "";
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+    function apply() {
+      if (!img) return;
+      var d = drawSize();
+      var k = 512 / C;                  // export canvas = 512px square
+      var out = document.createElement("canvas");
+      out.width = 512; out.height = 512;
+      var octx = out.getContext("2d");
+      octx.fillStyle = "#ffffff";
+      octx.fillRect(0, 0, 512, 512);
+      octx.drawImage(img, ((C - d.w) / 2 + ox) * k, ((C - d.h) / 2 + oy) * k,
+                     d.w * k, d.h * k);
+      photoState.file = {
+        name: fileBase.slice(0, 40) + "-square.jpg",
+        type: "image/jpeg",
+        content: out.toDataURL("image/jpeg", 0.85)
+      };
+      clearFieldErr("playerPhoto");
+      close();
+      renderPhoto();
+    }
+
+    root.addEventListener("click", function (ev) {
+      var t = ev.target.closest("[data-act]");
+      if (!t) return;
+      var act = t.getAttribute("data-act");
+      if (act === "cancel") close();
+      else if (act === "apply") apply();
+      else if (act === "zoomin") setZoom(zoom + 0.25);
+      else if (act === "zoomout") setZoom(zoom - 0.25);
+    });
+    slider.addEventListener("input", function () {
+      setZoom(Number(slider.value) / 100);
+    });
+    stage.addEventListener("wheel", function (ev) {
+      ev.preventDefault();
+      setZoom(zoom * (ev.deltaY < 0 ? 1.08 : 0.93));
+    }, { passive: false });
+    stage.addEventListener("pointerdown", function (ev) {
+      points.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (points.size === 1) {
+        dragging = true; lx = ev.clientX; ly = ev.clientY;
+        stage.classList.add("is-dragging");
+      } else if (points.size === 2) {
+        dragging = false;
+        var ps = Array.from(points.values());
+        pinchDist = Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y);
+      }
+      if (stage.setPointerCapture) { try { stage.setPointerCapture(ev.pointerId); } catch (e) { /* ok */ } }
+    });
+    stage.addEventListener("pointermove", function (ev) {
+      if (!points.has(ev.pointerId)) return;
+      points.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (points.size === 2) {
+        var ps = Array.from(points.values());
+        var d = Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y);
+        if (pinchDist > 0) setZoom(zoom * (d / pinchDist));
+        pinchDist = d;
+        return;
+      }
+      if (!dragging) return;
+      var scale = C / stage.getBoundingClientRect().width;
+      ox += (ev.clientX - lx) * scale;
+      oy += (ev.clientY - ly) * scale;
+      lx = ev.clientX; ly = ev.clientY;
+      draw();
+    });
+    function release(ev) {
+      points.delete(ev.pointerId);
+      if (points.size < 2) pinchDist = 0;
+      if (points.size === 0) {
+        dragging = false;
+        stage.classList.remove("is-dragging");
+      }
+    }
+    stage.addEventListener("pointerup", release);
+    stage.addEventListener("pointercancel", release);
+    document.addEventListener("keydown", function (ev) {
+      if (!root.hidden && ev.key === "Escape") close();
+    });
+
+    return { open: open, close: close };
+  })();
 
   /* name typed → look up an existing photo (debounced; needs a backend) */
   var nameTimer = null;
@@ -938,7 +1176,10 @@
       var viewsNum = Number(String(p.views).replace(/[^\d]/g, ""));
       p.errViews = !(viewsNum > 0);
       if (!p.shot && !p.errShotMsg) p.errShotMsg = "Required";
-      if (!firstPostId && (p.errViews || p.errShotMsg)) firstPostId = p.id;
+      p.errCollab = !!p.collab && !p.collabWith.trim();
+      if (!firstPostId && (p.errViews || p.errShotMsg || p.errCollab)) {
+        firstPostId = p.id;
+      }
     });
 
     if (challengeUrl.value.trim() && !week.value) bad("challengeWeek");
@@ -949,7 +1190,9 @@
 
     /* if anything post-level failed, make sure the editable view is on
        screen before marking rows (setMode/renderRows re-render) */
-    var postBad = posts.some(function (p) { return p.errViews || p.errShotMsg; });
+    var postBad = posts.some(function (p) {
+      return p.errViews || p.errShotMsg || p.errCollab;
+    });
     if (postBad && viewMode !== "edit") setMode("edit");
     else renderRows();
 
@@ -981,7 +1224,8 @@
           viewsImpressions: n > 0 ? n : "",
           analyticsScreenshot: p.shot
             ? [{ name: p.shot.name, type: p.shot.type, content: p.shot.content }]
-            : []
+            : [],
+          collabWith: p.collab ? p.collabWith.trim() : ""
         };
       }),
       challengeWeek: week.value,
@@ -996,41 +1240,69 @@
     };
   }
 
+  /* POST JSON with a timeout; the response body is parsed EVEN on HTTP 4xx/5xx
+     so backend rejection reasons reach the player instead of a generic error.
+     simple: true → no Content-Type header (GAS /exec is CORS-readable only
+     for simple requests — the classic Apps Script workaround). */
+  function postJson(url, payload, opts) {
+    var o = opts || {};
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      if (ctrl) ctrl.abort();
+    }, o.timeoutMs || 30000);
+    var init = { method: "POST", body: JSON.stringify(payload) };
+    if (!o.simple && init.headers === undefined) init.headers = {};
+    if (!o.simple) init.headers["Content-Type"] = "application/json";
+    if (ctrl) init.signal = ctrl.signal;
+    return fetch(url, init).then(function (res) {
+      clearTimeout(timer);
+      return res.text().then(function (txt) {
+        var out = null;
+        try { out = txt ? JSON.parse(txt) : null; } catch (e) { /* non-JSON */ }
+        if (out && out.ok === false) {
+          var err = new Error(String(out.error || "The server rejected this entry."));
+          err.server = true;
+          throw err;
+        }
+        return out || { ok: true };
+      });
+    }, function (e) {
+      clearTimeout(timer);
+      throw e;
+    });
+  }
+
   function sendPayload(payload) {
     submitBtn.disabled = true;
     saveState.hidden = false;
     saveState.classList.remove("is-fail");
     saveState.textContent = "SAVING…";
 
-    var done;
+    /* transport chain:
+       1. /api/submit (Vercel) when configured — same-origin, URL stays secret.
+          12s timeout: a healthy GAS round-trip (photo + screenshots included)
+          lands well inside it; a hanging route falls through fast.
+       2. direct simple POST to the GAS /exec URL — survives a missing env
+          var, a sleeping function or a deploy hiccup, so a healthy Wi-Fi
+          connection never shows a phantom "check connection"
+       A server REJECTION (duplicate link, unconfirmed collab…) stops the
+       chain and shows its real message; only true network failures fall
+       through to the next transport. The backend keys on submissionId, so
+       a retry after a lost response can never append the entry twice. */
+    var chain;
     if (cfg.submitViaApi) {
-      done = fetch("/api/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      }).then(function (res) {
-        if (!res.ok) throw new Error("API route responded HTTP " + res.status);
-        return res.json().catch(function () { return { ok: true }; });
-      }).then(function (out) {
-        if (out && out.ok === false) {
-          throw new Error(out.error || "API route rejected the submission");
-        }
-      });
+      chain = postJson("/api/submit", payload, { timeoutMs: 12000 })
+        .catch(function (err) {
+          if (err && err.server) throw err;         // real reason — show it
+          if (!cfg.gasWebAppUrl) throw err;         // nothing to fall back to
+          return postJson(cfg.gasWebAppUrl, payload,
+                          { simple: true, timeoutMs: 30000 });
+        });
     } else if (cfg.gasWebAppUrl) {
-      done = fetch(cfg.gasWebAppUrl, {
-        method: "POST",
-        // no explicit Content-Type → simple request → no CORS preflight
-        body: JSON.stringify(payload)
-      }).then(function (res) {
-        if (!res.ok) throw new Error("GAS responded HTTP " + res.status);
-        return res.json().catch(function () { return { ok: true }; });
-      }).then(function (out) {
-        if (out && out.ok === false) {
-          throw new Error(out.error || "GAS rejected the submission");
-        }
-      });
+      chain = postJson(cfg.gasWebAppUrl, payload,
+                       { simple: true, timeoutMs: 30000 });
     } else {
-      done = new Promise(function (resolve) {
+      chain = new Promise(function (resolve) {
         setTimeout(function () {
           try {
             var hist = JSON.parse(localStorage.getItem("pcl_submissions") || "[]");
@@ -1043,14 +1315,16 @@
       });
     }
 
-    done.then(function () {
+    chain.then(function () {
       form.hidden = true;
       doneScreen.hidden = false;
       window.scrollTo({ top: 0, behavior: "smooth" });
     }).catch(function (err) {
       console.error("[PCL] submission failed:", err);
       saveState.classList.add("is-fail");
-      saveState.textContent = "SAVE FAILED — CHECK CONNECTION";
+      saveState.textContent = (err && err.server)
+        ? "⚠ " + String(err.message).slice(0, 120)
+        : "SAVE FAILED — CHECK CONNECTION";
     }).finally(function () {
       submitBtn.disabled = false;
     });
@@ -1061,7 +1335,9 @@
     if (linkInput.value.trim()) commitLinks();   // never lose typed links
     ["fullName", "reportingManager", "playerPhoto", "postLinks",
      "challengeWeek", "challengeUrl"].forEach(clearFieldErr);
-    posts.forEach(function (p) { p.errViews = false; p.errShotMsg = ""; });
+    posts.forEach(function (p) {
+      p.errViews = false; p.errShotMsg = ""; p.errCollab = false;
+    });
 
     var firstBad = validate();
     if (firstBad) {
@@ -1081,6 +1357,8 @@
     classifyUrl: classifyUrl,
     commitLinks: commitLinks,
     currentWeek: currentWeek,
-    CHALLENGES: CHALLENGES
+    CHALLENGES: CHALLENGES,
+    postHash: postHash,
+    Crop: Crop
   };
 })();

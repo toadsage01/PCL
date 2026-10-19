@@ -16,6 +16,13 @@
           window.matchMedia("(prefers-color-scheme: dark)").matches;
         document.documentElement.setAttribute(
           "data-pcl-theme", saved || (sysDark ? "dark" : "light"));
+        // "sf" = SF Pro / system sans (default) · "vt" = VT323 pixel terminal
+        var font = "sf";
+        try {
+          font = localStorage.getItem("pcl_font") || "sf";
+          if (font !== "sf" && font !== "vt") font = "vt";
+        } catch (e) { /* ok */ }
+        document.documentElement.setAttribute("data-pcl-font", font);
       } catch (e) { /* keep light default */ }
     })();
   </script>
@@ -40,6 +47,11 @@
           HIGH SCORES LIVE<span class="pcl-blink" aria-hidden="true">_</span>
         </p>
       </div>
+      <button id="pclFontToggle" class="pcl-toggle pcl-toggle--font" type="button"
+              aria-label="Toggle pixel font (VT323)" title="Toggle pixel font (VT323)"
+              aria-pressed="false">
+        <span class="pcl-font-glyph" aria-hidden="true">Aa</span>
+      </button>
       <button id="pclThemeToggle" class="pcl-toggle" type="button"
               aria-label="Toggle light / dark theme" title="Toggle theme">
         <span class="pcl-px-icon pcl-px-sun" aria-hidden="true"></span>

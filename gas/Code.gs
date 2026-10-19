@@ -9,11 +9,16 @@
  *               YouTube video ID / LinkedIn activity ID) — the dedup key
  *            2. decides NEW vs UPDATE: the same Media ID submitted again is
  *               an UPDATE snapshot of that post's count, never extra views
- *            3. saves the analytics screenshot (base64) to Drive
- *            4. appends one ledger row with claimed count, multiplier and
+ *            3. enforces LINK OWNERSHIP: a link already on file under
+ *               ANOTHER player is rejected unless the collab pair checks
+ *               out (either side tagged the other) — confirmed pairs get
+ *               'Collab Status' = CONFIRMED and their points split 50:50
+ *            4. saves the analytics screenshot (base64) to Drive
+ *            5. appends one ledger row with claimed count, multiplier and
  *               projected points — leaving the OCR / cross-check / verified
  *               columns empty for the review pipeline to fill in
- *            5. replies {ok:true, id, posts:<count>}
+ *            6. replies {ok:true, id, posts:<count>}; a retried submissionId
+ *               is recognised and answered WITHOUT appending twice
  *
  *   doGet  → metrics JSON: {ok, totalSubmissions, totalPosts, uniqueMedia,
  *            lastSubmissionAt, players:[…], weeks:{…}}
@@ -109,8 +114,18 @@ var HEADERS = [
   'Screenshot File', 'Screenshot Link',
   'OCR Count', 'Cross-Check', 'Verified Count', 'Verified Points',
   'Raw JSON',
-  'Player Photo'
+  'Player Photo',
+  'Collab With', 'Collab Status'
 ];
+
+/** Collab-post lifecycle (rulebook §7, 50:50 split):
+ *  ''        plain post — the link belongs to this player
+ *  PENDING   the player tagged a partner; the partner's same-link entry has
+ *            not landed yet (unconfirmed collabs still earn full points)
+ *  CONFIRMED the partner's matching entry landed and the pair was verified
+ *            — BOTH players' rows get 50% of the post's points. */
+var COLLAB_PENDING = 'PENDING';
+var COLLAB_CONFIRMED = 'CONFIRMED';
 
 /** Review-pipeline values for the Cross-Check column. */
 var CHECK_PENDING = 'PENDING OCR';
@@ -171,20 +186,32 @@ function doPost(e) {
     var week = str_(d.challengeWeek);
     var challengeUrl = str_(d.challengeUrl);
     var notes = str_(d.additionalNotes);
+    var who = normName_(fullName);
+
+    var sheet = getSheet_();
+
+    // One read pass over the ledger → everything the checks need:
+    // media/URL ownership, snapshot counters and the retried-submission guard
+    var index = ledgerIndex_(sheet);
+
+    // Idempotency: a retry after a lost response must never append twice
+    if (index.subIds[id]) {
+      return json_({ ok: true, id: id, posts: 0, duplicate: true });
+    }
+
     var raw = JSON.stringify(payload, function (k, v) {
       // keep the audit trail small — screenshots live in Drive
       return (k === 'content' && typeof v === 'string' &&
               v.slice(0, 5) === 'data:') ? '[saved to Drive]' : v;
     });
 
-    var sheet = getSheet_();
-    var written = 0;
-
-    // Player photo: save-or-reuse (exactly ONE photo per unique player lives
-    // in Drive, named "<name>__<manager>"). Failure never blocks the entry.
-    var photoUrl = savePlayerPhoto_(d, fullName, manager, folder);
-
-    posts.forEach(function (p, i) {
+    // ---- VALIDATION PASS: every post must clear BEFORE anything is written
+    //      (a submission is all-or-nothing, so a rejection mid-way can never
+    //      leave half a submission in the ledger)
+    var batch = [];
+    var seenInBatch = {};
+    for (var i = 0; i < posts.length; i++) {
+      var p = posts[i];
       var fmt = str_(p.format);
       var postUrl = str_(p.link);
       var mediaId = mediaId_(postUrl, fmt);
@@ -193,14 +220,78 @@ function doPost(e) {
       var projected = (claimed !== '' && mult !== '')
         ? Math.ceil(claimed * mult)          // rulebook: round fractions UP
         : '';
+      var key = mediaId || urlKey_(postUrl);
 
-      var shot = fileAnswer_(p.analyticsScreenshot, folder,
+      if (key && seenInBatch[key]) {
+        return json_({ ok: false, error:
+          'The same link appears twice in this submission — each post can ' +
+          'only be entered once.' });
+      }
+      if (key) seenInBatch[key] = true;
+
+      // Ledger state for this link: own rows → UPDATE; other players' rows →
+      // collab check (a link belongs to the player who posted it first)
+      var priorOwn = [], priorOthers = [];
+      if (key) {
+        (index.byKey[key] || []).forEach(function (r) {
+          if (normName_(r.name) === who) priorOwn.push(r);
+          else priorOthers.push(r);
+        });
+      }
+
+      var partner = '';
+      var status = '';
+      if (priorOthers.length) {
+        // confirm the collab: the partner tagged THIS player, or THIS player
+        // tags the partner by their exact registered name
+        var matched = null;
+        priorOthers.forEach(function (r) {
+          if (!matched && normName_(r.collabWith) === who) matched = r;
+        });
+        var pn = normName_(str_(p.collabWith));
+        if (!matched && pn) {
+          priorOthers.forEach(function (r) {
+            if (!matched && normName_(r.name) === pn) matched = r;
+          });
+        }
+        if (!matched) {
+          return json_({ ok: false, error:
+            'This link was already submitted by another player. If it is a ' +
+            'collab post, tag it as COLLAB and enter the partner\u2019s full ' +
+            'name exactly as they registered.' });
+        }
+        partner = matched.name;               // the ledger's canonical name
+        status = COLLAB_CONFIRMED;
+      } else {
+        partner = str_(p.collabWith).trim();
+        status = partner ? COLLAB_PENDING : '';
+      }
+
+      batch.push({
+        p: p, fmt: fmt, postUrl: postUrl, mediaId: mediaId,
+        claimed: claimed, mult: mult, projected: projected,
+        priorOwn: priorOwn, priorOthers: priorOthers,
+        partner: partner, status: status
+      });
+    }
+
+    // ---- WRITE PASS
+    var written = 0;
+
+    // Player photo: save-or-reuse (exactly ONE photo per unique player lives
+    // in Drive, named "<name>__<manager>"). Failure never blocks the entry.
+    var photoUrl = savePlayerPhoto_(d, fullName, manager, folder);
+
+    var colWith = HEADERS.indexOf('Collab With') + 1;
+    var colStatus = HEADERS.indexOf('Collab Status') + 1;
+
+    batch.forEach(function (b, i) {
+      var shot = fileAnswer_(b.p.analyticsScreenshot, folder,
                              id + '-p' + (i + 1));
 
-      // Ledger state: is this Media ID already in the sheet? → UPDATE
-      var prior = findMedia_(mediaId);
-      var entryType = prior ? 'UPDATE' : 'NEW';
-      var snapshotNo = prior ? prior.snapshot + 1 : 1;
+      var entryType = b.priorOwn.length ? 'UPDATE' : 'NEW';
+      var snapshotNo = b.priorOwn.length
+        ? b.priorOwn[b.priorOwn.length - 1].snapshot + 1 : 1;
 
       var row = {};
       row['Timestamp'] = new Date();
@@ -210,16 +301,16 @@ function doPost(e) {
       row['Full Name'] = fullName;
       row['Reporting Manager'] = manager;
       row['Content Type'] = '';           // deprecated — column kept for layout
-      row['Platform'] = PLATFORM_LABELS[fmt] || '';
-      row['Format'] = FORMAT_LABELS[fmt] || fmt;
-      row['Multiplier'] = mult;
-      row['Post URL'] = postUrl;
-      row['Media ID'] = mediaId;
+      row['Platform'] = PLATFORM_LABELS[b.fmt] || '';
+      row['Format'] = FORMAT_LABELS[b.fmt] || b.fmt;
+      row['Multiplier'] = b.mult;
+      row['Post URL'] = b.postUrl;
+      row['Media ID'] = b.mediaId;
       row['Weekly Challenge'] = week;
       row['Challenge URL'] = challengeUrl;
       row['Notes'] = notes;
-      row['Claimed Views/Impressions'] = claimed;
-      row['Projected Points'] = projected;
+      row['Claimed Views/Impressions'] = b.claimed;
+      row['Projected Points'] = b.projected;
       row['Screenshot File'] = shot ? shot.name
         : 'REJECTED — over ' + MAX_FILE_MB + ' MB cap';
       row['Screenshot Link'] = shot ? shot.url : '';
@@ -229,9 +320,24 @@ function doPost(e) {
       row['Verified Points'] = '';         // final leaderboard points
       row['Raw JSON'] = raw;
       row['Player Photo'] = photoUrl;
+      row['Collab With'] = b.partner;
+      row['Collab Status'] = b.status;
 
       sheet.appendRow(HEADERS.map(function (h) { return row[h]; }));
       written++;
+
+      // A confirmed pair also flips the PARTNER's prior rows to CONFIRMED
+      // (their Collab With is filled in when blank) so both sides split.
+      if (b.status === COLLAB_CONFIRMED) {
+        var partnerWho = normName_(b.partner);
+        b.priorOthers.forEach(function (r) {
+          if (normName_(r.name) !== partnerWho) return;
+          sheet.getRange(r.row, colStatus).setValue(COLLAB_CONFIRMED);
+          if (!r.collabWith) {
+            sheet.getRange(r.row, colWith).setValue(fullName);
+          }
+        });
+      }
     });
 
     return json_({ ok: true, id: id, posts: written });
@@ -392,7 +498,10 @@ function collect_() {
         ocr: r[c['OCR Count']],
         check: str_(r[c['Cross-Check']]) || CHECK_PENDING,
         verified: r[c['Verified Count']],
-        verifiedPoints: r[c['Verified Points']]
+        verifiedPoints: r[c['Verified Points']],
+        collabWith: c['Collab With'] !== undefined ? str_(r[c['Collab With']]) : '',
+        collabStatus: c['Collab Status'] !== undefined
+          ? str_(r[c['Collab Status']]) : ''
       });
     });
     var v = values[values.length - 1][0];
@@ -404,7 +513,9 @@ function collect_() {
   // newest snapshot is current: it wins the impressions/points, credited
   // to its player, and the media is bucketed in the week of its FIRST
   // snapshot (when the post entered the league). Verified cells win over
-  // claimed/projected once the review pipeline fills them in.
+  // claimed/projected once the review pipeline fills them in. Confirmed
+  // collab pairs split 50:50 — the review pipeline writes already-split
+  // verified points, so only the projected/claimed fallback paths halve.
   var latestByMedia = {}, firstByMedia = {};
   rows.forEach(function (r) {
     var k = r.mediaId || 'row:' + r.row;
@@ -422,31 +533,58 @@ function collect_() {
   Object.keys(latestByMedia).forEach(function (k) {
     var r = latestByMedia[k];
     if (!players[r.name]) return;      // defensive — name keyed the roll-up
-    var views = numOrBlank_(r.verified);
-    if (views === '') views = toCount_(r.claimed);
-    if (views === '') views = 0;
-    var pts = numOrBlank_(r.verifiedPoints);
-    if (pts === '') pts = numOrBlank_(r.projected);
-    if (pts === '' && views > 0 && r.mult !== '' && !isNaN(Number(r.mult))) {
-      pts = Math.ceil(views * Number(r.mult));
+    var collabSplit = r.collabStatus === 'CONFIRMED';
+
+    // Confirmed collab pairs share one Media ID, so the latest-snapshot rule
+    // alone would erase the partner's half. Every CONFIRMED row of this
+    // media credits its own player — the post's points split 50:50.
+    var partners = [];
+    if (collabSplit) {
+      rows.forEach(function (x) {
+        if ((x.mediaId || 'row:' + x.row) === k &&
+            x.collabStatus === 'CONFIRMED' &&
+            players[x.name] &&
+            normName_(x.name) !== normName_(r.name)) {
+          partners.push(x);
+        }
+      });
     }
-    if (pts === '') pts = 0;
-    var d = dedup[r.name] || (dedup[r.name] = { imp: 0, pts: 0, proj: 0, ver: 0 });
-    d.imp += views;
-    d.pts += pts;
-    var proj = numOrBlank_(r.projected);
-    if (proj !== '') d.proj += proj;
-    var ver = numOrBlank_(r.verifiedPoints);
-    if (ver !== '') d.ver += ver;
-    var w = weekOfMs_(new Date(firstByMedia[k].ts).getTime());
-    var bucket = wk[w] || (wk[w] = {});
-    var wp = bucket[r.name] ||
-      (bucket[r.name] = { player: r.name,
-                          designation: PLAYER_META[r.name] || '',
-                          posts: 0, impressions: 0, points: 0 });
-    wp.posts++;
-    wp.impressions += views;
-    wp.points += pts;
+
+    function credit(row, isSplit) {
+      var views = numOrBlank_(row.verified);
+      if (views === '') views = toCount_(row.claimed);
+      if (views === '') views = 0;
+      var pts = numOrBlank_(row.verifiedPoints);
+      var ptsFromVerified = pts !== '';
+      if (pts === '') pts = numOrBlank_(row.projected);
+      if (pts === '' && views > 0 && row.mult !== '' && !isNaN(Number(row.mult))) {
+        pts = Math.ceil(views * Number(row.mult));
+      }
+      if (pts === '') pts = 0;
+      if (!ptsFromVerified && pts > 0 && isSplit) {
+        pts = Math.ceil(Number(pts) / 2);
+      }
+      var d = dedup[row.name] ||
+        (dedup[row.name] = { imp: 0, pts: 0, proj: 0, ver: 0 });
+      d.imp += views;
+      d.pts += pts;
+      var proj = numOrBlank_(row.projected);
+      if (proj !== '') d.proj += isSplit ? Math.ceil(proj / 2) : proj;
+      var ver = numOrBlank_(row.verifiedPoints);
+      if (ver !== '') d.ver += ver;
+      var w = weekOfMs_(new Date(firstByMedia[k].ts).getTime());
+      var bucket = wk[w] || (wk[w] = {});
+      var wp = bucket[row.name] ||
+        (bucket[row.name] = { player: row.name,
+                              designation: PLAYER_META[row.name] || '',
+                              posts: 0, impressions: 0, points: 0 });
+      wp.posts++;
+      wp.impressions += views;
+      wp.points += pts;
+    }
+
+    credit(r, collabSplit);
+    partners.forEach(function (x) { credit(x, true); });
   });
   var playerList = Object.keys(players).map(function (k) {
     var pl = players[k];
@@ -493,48 +631,78 @@ function collect_() {
   };
 }
 
-/** ---------- MEDIA ID (the dedup key) ---------- */
+/** ---------- MEDIA ID (the dedup key) + LINK OWNERSHIP ---------- */
 
 // One stable ID per physical post, pulled from its canonical URL:
-//   IG reel/post → shortcode      YT → video ID      LI → activity ID
-// Unknown shapes return '' → every submission counts as NEW (safe default).
+//   IG reel/post/IGTV → shortcode      YT → video ID      LI → activity ID
+// Mirrors the form's classifyUrl: instagram.com + instagr.am, youtube.com
+// (+ m./music./nocookie) + youtu.be, linkedin.com + lnkd.in (LinkedIn's own
+// shortener). Unknown shapes return '' → the normalized URL becomes the
+// ownership key instead (safe default).
 function mediaId_(url, fmt) {
   url = String(url || '');
   var m;
   if (fmt.indexOf('ig_') === 0) {
-    m = url.match(/instagram\.com\/(?:p|reel|reels)\/([\w-]+)/i);
+    m = url.match(/(?:instagram\.com|instagr\.am)\/(?:p|reel|reels|tv)\/([\w-]+)/i);
     if (m) return 'ig_' + m[1];
   } else if (fmt === 'yt_shorts') {
-    m = url.match(/youtube\.com\/shorts\/([\w-]+)/i);
+    m = url.match(/youtube(?:-nocookie)?\.com\/shorts\/([\w-]+)/i);
     if (m) return 'yt_' + m[1];
   } else if (fmt === 'yt_long') {
     m = url.match(/[?&]v=([\w-]+)/i) || url.match(/youtu\.be\/([\w-]+)/i) ||
-        url.match(/youtube\.com\/live\/([\w-]+)/i);
+        url.match(/youtube(?:-nocookie)?\.com\/(?:live|embed|v)\/([\w-]+)/i);
     if (m) return 'yt_' + m[1];
   } else if (fmt === 'li_post') {
     m = url.match(/linkedin\.com\/posts\/([^\/?#]+)/i) ||
-        url.match(/activity[-:]?(\d{10,})/i);
+        url.match(/activity[-:]?(\d{10,})/i) ||
+        url.match(/linkedin\.com\/pulse\/([^\/?#]+)/i) ||
+        url.match(/lnkd\.in\/([\w-]+)/i) ||
+        url.match(/urn:li:(?:activity|ugcPost|share):(\w+)/i);
     if (m) return 'li_' + m[1];
   }
   return '';
 }
 
-// Latest ledger state for a Media ID (null when new).
-function findMedia_(mediaId) {
-  if (!mediaId) return null;
-  var sheet = getSheet_();
+/** Comparison form of a player's name — whitespace/case tolerant so
+ *  "priya   sharma" matches "Priya Sharma" in collab + ownership checks. */
+function normName_(s) {
+  return str_(s).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Fallback ownership key when no Media ID could be extracted: the URL
+ *  stripped of protocol, www, query string and trailing slashes. */
+function urlKey_(url) {
+  var s = str_(url).trim();
+  if (!s) return '';
+  s = s.replace(/^https?:\/\//i, '').replace(/^www\./i, '').toLowerCase();
+  return s.split(/[?#]/)[0].replace(/\/+$/, '');
+}
+
+/** One read pass over the ledger for the submission checks:
+ *  subIds — every Submission ID seen (retried-submission guard);
+ *  byKey  — Media ID / URL → [{row, name, snapshot, collabWith, status}]. */
+function ledgerIndex_(sheet) {
+  var out = { byKey: {}, subIds: {} };
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return null;
-  var colMid = HEADERS.indexOf('Media ID') + 1;
-  var colSnap = HEADERS.indexOf('Snapshot #') + 1;
+  if (lastRow < 2) return out;
   var vals = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
-  var found = null;
+  var c = {};
+  HEADERS.forEach(function (h, i) { c[h] = i; });
   vals.forEach(function (r, i) {
-    if (String(r[colMid - 1]) === mediaId) {
-      found = { row: i + 2, snapshot: Number(r[colSnap - 1]) || 1 };
-    }
+    var sid = str_(r[c['Submission ID']]);
+    if (sid) out.subIds[sid] = true;
+    var mid = str_(r[c['Media ID']]);
+    var key = mid || urlKey_(r[c['Post URL']]);
+    if (!key) return;
+    (out.byKey[key] = out.byKey[key] || []).push({
+      row: i + 2,
+      name: str_(r[c['Full Name']]),
+      snapshot: Number(r[c['Snapshot #']]) || 1,
+      collabWith: c['Collab With'] !== undefined ? str_(r[c['Collab With']]) : '',
+      status: c['Collab Status'] !== undefined ? str_(r[c['Collab Status']]) : ''
+    });
   });
-  return found;
+  return out;
 }
 
 /** ---------- ADMIN CONSOLE ---------- */
@@ -602,7 +770,13 @@ function adminVerify_(payload) {
     // A typed verified count promotes the row to MATCH (reviewer decision
     // can still override it by sending a different crossCheck).
     if (vcount !== '' && String(u.crossCheck || '').trim() === '') check = 'MATCH';
-    var vpoints = (vcount !== '') ? Math.ceil(vcount * mult) : '';
+
+    // Confirmed collab pairs split the post's points 50:50 — both players'
+    // rows carry Collab Status = CONFIRMED, each keeps half the total.
+    var collabStatus = str_(sheet.getRange(row, HEADERS.indexOf('Collab Status') + 1, 1, 1)
+                              .getDisplayValue()).toUpperCase().trim();
+    var split = collabStatus === COLLAB_CONFIRMED ? 2 : 1;
+    var vpoints = (vcount !== '') ? Math.ceil(vcount * mult / split) : '';
 
     // capture the old review values BEFORE writing (for the audit log)
     var oldVals = sheet.getRange(row, COL_OCR, 1, 4).getDisplayValues()[0];
@@ -616,7 +790,8 @@ function adminVerify_(payload) {
       'OCR: ' + oldVals[0] + '→' + (ocr === '' ? '—' : ocr) +
       ' · CHECK: ' + oldVals[1] + '→' + check +
       ' · VERIFIED: ' + oldVals[2] + '→' + (vcount === '' ? '—' : vcount) +
-      ' · VPTS: ' + oldVals[3] + '→' + (vpoints === '' ? '—' : vpoints));
+      ' · VPTS: ' + oldVals[3] + '→' + (vpoints === '' ? '—' : vpoints) +
+      (split === 2 ? ' · COLLAB ½' : ''));
   });
 
   return json_({ ok: errors.length === 0, updated: updated,

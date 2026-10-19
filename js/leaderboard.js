@@ -44,6 +44,20 @@
   }
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
 
+  /* ---------- reading-font toggle (SF Pro default ⇄ VT323 pixel) ---------- */
+  var fontBtn = $("pclFontToggle");
+  if (fontBtn) {
+    fontBtn.setAttribute("aria-pressed",
+      String(document.documentElement.getAttribute("data-pcl-font") === "vt"));
+    fontBtn.addEventListener("click", function () {
+      var next = document.documentElement.getAttribute("data-pcl-font") === "vt"
+        ? "sf" : "vt";
+      document.documentElement.setAttribute("data-pcl-font", next);
+      fontBtn.setAttribute("aria-pressed", String(next === "vt"));
+      try { localStorage.setItem("pcl_font", next); } catch (e) { /* ok */ }
+    });
+  }
+
   /* ---------- theme toggle (same behaviour as the form page) ---------- */
   var toggleBtn = $("pclThemeToggle");
   if (toggleBtn) {

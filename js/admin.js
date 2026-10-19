@@ -76,6 +76,20 @@
   function normCheck(v) {
     return String(v || "").toUpperCase().trim() || "PENDING OCR";
   }
+  /* collab badge: CONFIRMED pairs split verified points 50:50 server-side,
+     PENDING means the player tagged a partner whose same-link entry has not
+     landed (or does not match) yet — reviewer gets to see it at a glance */
+  function collabBadgeHtml(r) {
+    if (r.collabStatus === "CONFIRMED") {
+      return '<span class="pcl-tag pcl-tag--collab" title="Confirmed collab with ' +
+        esc(r.collabWith || "partner") + " — verified points split 50:50\">COLLAB · ½</span>";
+    }
+    if (r.collabStatus === "PENDING") {
+      return '<span class="pcl-tag pcl-tag--collabpend" title="Tagged as collab with ' +
+        esc(r.collabWith || "?") + " — waiting for the partner\u2019s matching entry\">COLLAB?</span>";
+    }
+    return "";
+  }
   function digitsOf(v) {
     var s = String(v == null ? "" : v).replace(/[^\d]/g, "");
     return s === "" ? "" : Number(s);
@@ -103,12 +117,14 @@
   var fontBtn = $("pclFontToggle");
   if (fontBtn) {
     fontBtn.setAttribute("aria-pressed",
-      String(document.documentElement.getAttribute("data-pcl-font") === "px"));
+      String(document.documentElement.getAttribute("data-pcl-font") === "vt"));
+    fontBtn.setAttribute("title", "Toggle pixel font (VT323)");
+    fontBtn.setAttribute("aria-label", "Toggle pixel font (VT323)");
     fontBtn.addEventListener("click", function () {
-      var next = document.documentElement.getAttribute("data-pcl-font") === "px"
-        ? "vt" : "px";
+      var next = document.documentElement.getAttribute("data-pcl-font") === "vt"
+        ? "sf" : "vt";
       document.documentElement.setAttribute("data-pcl-font", next);
-      fontBtn.setAttribute("aria-pressed", String(next === "px"));
+      fontBtn.setAttribute("aria-pressed", String(next === "vt"));
       try { localStorage.setItem("pcl_font", next); } catch (e) { /* ok */ }
     });
   }
@@ -194,47 +210,53 @@
             format: "Instagram Reel", mult: 1.25, url: "https://instagram.com/reel/Cx1mock01/",
             mediaId: "ig_Cx1mock01", week: "Week 2 — Best Storytelling Debut",
             claimed: 18400, projected: 23000, check: "PENDING OCR", ocr: "", verified: "" }),
-      row({ row: 3,  ts: new Date(t - 5 * H).toISOString(), id: "pcl-mock-a2", type: "NEW",
+      row({ row: 4,  ts: new Date(t - 5 * H).toISOString(), id: "pcl-mock-a2", type: "NEW",
+            snap: 1, name: "Rohit Kharal", manager: "Sneha", platform: "Instagram",
+            format: "Instagram Reel", mult: 1.25, url: "https://instagram.com/reel/Cx1mock01/",
+            mediaId: "ig_Cx1mock01", week: "",
+            collabWith: "Priya Sharma", collabStatus: "CONFIRMED",
+            claimed: 18400, projected: 23000, check: "MATCH", ocr: 18412, verified: 18412 }),
+      row({ row: 5,  ts: new Date(t - 5 * H).toISOString(), id: "pcl-mock-a2", type: "NEW",
             snap: 1, name: "Priya Sharma", manager: "Rahul", platform: "YouTube",
             format: "YouTube Long-Form", mult: 2, url: "https://youtube.com/watch?v=mockYT01",
             mediaId: "yt_mockYT01", week: "", claimed: 9600, projected: 19200,
             check: "MATCH", ocr: 9612, verified: 9612 }),
-      row({ row: 4,  ts: new Date(t - 8 * H).toISOString(), id: "pcl-mock-b7", type: "UPDATE",
+      row({ row: 6,  ts: new Date(t - 8 * H).toISOString(), id: "pcl-mock-b7", type: "UPDATE",
             snap: 3, name: "Arjun Verma", manager: "Sneha", platform: "Instagram",
             format: "Instagram Reel", mult: 1.25, url: "https://instagram.com/reel/Cx2mock02/",
             mediaId: "ig_Cx2mock02", week: "", claimed: 61200, projected: 76500,
             check: "PENDING OCR", ocr: "", verified: "" }),
-      row({ row: 5,  ts: new Date(t - 34 * H).toISOString(), id: "pcl-mock-b7", type: "UPDATE",
+      row({ row: 7,  ts: new Date(t - 34 * H).toISOString(), id: "pcl-mock-b7", type: "UPDATE",
             snap: 2, name: "Arjun Verma", manager: "Sneha", platform: "Instagram",
             format: "Instagram Reel", mult: 1.25, url: "https://instagram.com/reel/Cx2mock02/",
             mediaId: "ig_Cx2mock02", week: "", claimed: 19600, projected: 24500,
             check: "PENDING OCR", ocr: "", verified: "" }),
-      row({ row: 6,  ts: new Date(t - 60 * H).toISOString(), id: "pcl-mock-b7", type: "NEW",
+      row({ row: 8,  ts: new Date(t - 60 * H).toISOString(), id: "pcl-mock-b7", type: "NEW",
             snap: 1, name: "Arjun Verma", manager: "Sneha", platform: "Instagram",
             format: "Instagram Reel", mult: 1.25, url: "https://instagram.com/reel/Cx2mock02/",
             mediaId: "ig_Cx2mock02", week: "", claimed: 18400, projected: 23000,
             check: "PENDING OCR", ocr: "", verified: "" }),
-      row({ row: 7,  ts: new Date(t - 9 * H).toISOString(), id: "pcl-mock-c4", type: "NEW",
+      row({ row: 9,  ts: new Date(t - 9 * H).toISOString(), id: "pcl-mock-c4", type: "NEW",
             snap: 1, name: "Sneha Rao", manager: "Rahul", platform: "LinkedIn",
             format: "LinkedIn Post", mult: 1, url: "https://linkedin.com/posts/mock-li-99",
             mediaId: "li_mock-li-99", week: "Week 2 — Best Storytelling Debut",
             claimed: 4300, projected: 4300, check: "MISMATCH", ocr: 3120, verified: 3120 }),
-      row({ row: 8,  ts: new Date(t - 12 * H).toISOString(), id: "pcl-mock-d1", type: "NEW",
+      row({ row: 10,  ts: new Date(t - 12 * H).toISOString(), id: "pcl-mock-d1", type: "NEW",
             snap: 1, name: "Dev Patel", manager: "Sneha", platform: "YouTube",
             format: "YouTube Shorts", mult: 1.25, url: "https://youtube.com/shorts/mockS01",
             mediaId: "yt_mockS01", week: "", claimed: 12750, projected: 15938,
             check: "PENDING OCR", ocr: "", verified: "" }),
-      row({ row: 9,  ts: new Date(t - 26 * H).toISOString(), id: "pcl-mock-e9", type: "NEW",
+      row({ row: 11,  ts: new Date(t - 26 * H).toISOString(), id: "pcl-mock-e9", type: "NEW",
             snap: 1, name: "Ishita Nair", manager: "Rahul", platform: "Instagram",
             format: "Instagram Post / Carousel", mult: 1, url: "https://instagram.com/p/Cx3mock03/",
             mediaId: "ig_Cx3mock03", week: "", claimed: 8100, projected: 8100,
             check: "BOOST?", ocr: "", verified: "" }),
-      row({ row: 10, ts: new Date(t - 30 * H).toISOString(), id: "pcl-mock-f2", type: "NEW",
+      row({ row: 12, ts: new Date(t - 30 * H).toISOString(), id: "pcl-mock-f2", type: "NEW",
             snap: 1, name: "Arjun Verma", manager: "Sneha", platform: "YouTube",
             format: "YouTube Shorts", mult: 1.25, url: "https://youtube.com/shorts/mockS02",
             mediaId: "yt_mockS02", week: "Week 1 — Best Original Content",
             claimed: 22100, projected: 27625, check: "PENDING OCR", ocr: "", verified: "" }),
-      row({ row: 11, ts: new Date(t - 50 * H).toISOString(), id: "pcl-mock-g5", type: "NEW",
+      row({ row: 13, ts: new Date(t - 50 * H).toISOString(), id: "pcl-mock-g5", type: "NEW",
             snap: 1, name: "Priya Sharma", manager: "Rahul", platform: "Instagram",
             format: "Instagram Reel", mult: 1.25, url: "https://instagram.com/reel/Cx4mock04/",
             mediaId: "ig_Cx4mock04", week: "", claimed: 5400, projected: 6750,
@@ -246,8 +268,12 @@
       r.shotUrl = "https://drive.google.com/file/d/1MockFileId" + i + "xxxxxxxxxx/view";
       r.fileId = "1MockFileId" + i + "xxxxxxxxxx";
       r.thumb = mockSvg(i + 3);
-      r.verifiedPoints = r.verified !== "" ? Math.ceil(Number(r.verified) * Number(r.mult)) : "";
       r.projected = Math.ceil(Number(r.claimed) * Number(r.mult));
+      // collab-confirmed rows split their verified points 50:50 (server rule)
+      r.verifiedPoints = r.verified !== ""
+        ? Math.ceil(Number(r.verified) * Number(r.mult) /
+                    (r.collabStatus === "CONFIRMED" ? 2 : 1))
+        : "";
     });
     return base;
   }
@@ -255,6 +281,8 @@
   var MOCK_PLAYERS = [
     { player: "Priya Sharma", manager: "Rahul", submissions: 2, posts: 3, uniqueMedia: 3,
       formatRatio: { "Instagram Reel": 2, "YouTube Long-Form": 1 }, projectedPoints: 48950, verifiedPoints: 9612 },
+    { player: "Rohit Kharal", manager: "Sneha", submissions: 1, posts: 1, uniqueMedia: 1,
+      formatRatio: { "Instagram Reel": 1 }, projectedPoints: 23000, verifiedPoints: 11508 },
     { player: "Arjun Verma", manager: "Sneha", submissions: 2, posts: 4, uniqueMedia: 3,
       formatRatio: { "Instagram Reel": 3, "YouTube Shorts": 1 }, projectedPoints: 151625, verifiedPoints: 0 },
     { player: "Sneha Rao", manager: "Rahul", submissions: 1, posts: 1, uniqueMedia: 1,
@@ -285,12 +313,13 @@
           if (e.verifiedCount !== undefined) {
             r.verified = e.verifiedCount;
             r.verifiedPoints = e.verifiedCount !== ""
-              ? Math.ceil(Number(e.verifiedCount) * Number(r.mult)) : "";
+              ? Math.ceil(Number(e.verifiedCount) * Number(r.mult) /
+                          (r.collabStatus === "CONFIRMED" ? 2 : 1)) : "";
           }
         });
         resolve({
           ok: true, generatedAt: new Date().toISOString(),
-          totals: { totalSubmissions: 7, totalPosts: rows.length, uniqueMedia: 9,
+          totals: { totalSubmissions: 8, totalPosts: rows.length, uniqueMedia: 9,
                     lastSubmissionAt: rows[0].ts },
           players: JSON.parse(JSON.stringify(MOCK_PLAYERS)),
           rows: rows,
@@ -622,13 +651,16 @@
     var tags = '<span class="pcl-fr-tags">' +
       (r.type === "UPDATE" ? '<span class="pcl-tag pcl-tag--upd">UPD·S' + esc(r.snap) + "</span>"
                            : '<span class="pcl-tag pcl-tag--new">NEW</span>') +
+      collabBadgeHtml(r) +
       (dirty ? '<span class="pcl-tag pcl-tag--dirty">STAGED</span>' : "") +
       "</span>";
     return '<div class="pcl-feedrow' + (dirty ? " is-dirty" : "") + '" data-row="' + r.row + '">' +
       '<span class="fr-shot">' + thumb + "</span>" +
       '<span class="fr-who">' + avatar +
-        '<span class="pcl-fr-whotext"><p class="pcl-fr-name">' + esc(r.name) + tags + "</p>" +
-        '<p class="pcl-fr-sub">' + esc(fmtTS(r.ts)) + " IST · " + esc(r.manager || "–") + "</p></span>" +
+        '<span class="pcl-fr-whotext"><p class="pcl-fr-name"><span class="pcl-fr-nametext">' +
+        esc(r.name) + "</span>" + tags + "</p>" +
+        '<p class="pcl-fr-sub">' + esc(fmtTS(r.ts)) + " IST · " + esc(r.manager || "–") +
+        (r.collabWith ? ' · <b>⇄ ' + esc(r.collabWith) + "</b>" : "") + "</p></span>" +
       "</span>" +
       '<span class="fr-post">' +
         '<a class="pcl-fr-link" href="' + esc(r.url) + '" target="_blank" rel="noopener">' +
@@ -678,6 +710,7 @@
       var html = r.type === "UPDATE"
         ? '<span class="pcl-tag pcl-tag--upd">UPD·S' + esc(r.snap) + "</span>"
         : '<span class="pcl-tag pcl-tag--new">NEW</span>';
+      html += collabBadgeHtml(r);
       if (dirty) html += '<span class="pcl-tag pcl-tag--dirty">STAGED</span>';
       tags.innerHTML = html;
     }
@@ -845,6 +878,9 @@
     $("rvPlayer").textContent = r.name + " · " + (r.manager || "–");
     $("rvMeta").textContent = fmtShort(r.format) + " " + multOf(r.mult) +
       " · " + (r.type === "UPDATE" ? "UPDATE SNAPSHOT S" + r.snap : "FIRST REPORT") +
+      (r.collabStatus === "CONFIRMED"
+        ? " · COLLAB ½ with " + (r.collabWith || "partner")
+        : (r.collabStatus === "PENDING" ? " · COLLAB? with " + (r.collabWith || "?") : "")) +
       " · " + fmtTS(r.ts) + " IST";
     var l = $("rvLink");
     l.href = r.url;
@@ -1114,6 +1150,8 @@
     ["Multiplier", function (r) { return r.mult; }],
     ["Post URL", function (r) { return r.url; }],
     ["Media ID", function (r) { return r.mediaId; }],
+    ["Collab Status", function (r) { return r.collabStatus || ""; }],
+    ["Collab With", function (r) { return r.collabWith || ""; }],
     ["Week (computed)", function (r) { return r.weekNum ? "W" + r.weekNum : ""; }],
     ["Weekly Challenge", function (r) { return r.week; }],
     ["Claimed", function (r) { return r.claimed; }],

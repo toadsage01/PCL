@@ -143,13 +143,17 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
 .pcl-fr-name {
   font-family: var(--pcl-font-title); font-weight: 700; font-size: 12px;
   letter-spacing: .4px; margin: 0 0 3px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px;
+}
+.pcl-fr-nametext {
+  min-width: 0; flex: 0 1 auto;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pcl-fr-sub {
   font-size: 12.5px; color: var(--pcl-muted); margin: 0; line-height: 1.45;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.pcl-fr-tags { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: 1px; }
+.pcl-fr-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .pcl-tag {
   font-family: var(--pcl-font-title); font-size: 7.5px; letter-spacing: 1px;
   padding: 2px 4px 1px; border: 2px solid var(--pcl-line);
@@ -157,6 +161,11 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
 }
 .pcl-tag--new { color: var(--pcl-secondary); border-color: var(--pcl-secondary); }
 .pcl-tag--upd { color: var(--pcl-cyan); border-color: var(--pcl-cyan); }
+.pcl-tag--collab {
+  color: #fff; background: var(--pcl-secondary);
+  border-color: #1a2f9e;
+}
+.pcl-tag--collabpend { color: var(--pcl-gold); border-color: var(--pcl-gold); }
 .pcl-tag--dirty {
   color: #fff; background: var(--pcl-primary);
   border-color: var(--pcl-primary-deep);
