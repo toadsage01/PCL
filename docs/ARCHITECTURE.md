@@ -88,8 +88,10 @@ Nothing to pay for, nothing to patch.
 | Theme | `css/theme.css` | Pixel design system: tokens, marquee, panels, chips, rows, lightbox, error states |
 | Endpoint config | `js/gas-endpoint.js` | GAS URL, `maxFileMB`, accepted file types, Vercel switch |
 | Form engine | `js/app.js` | URL engine, chips, EDIT/VIEW rows, screenshots, lightbox, validation, POST |
-| Backend | `gas/Code.gs` | Media-ID dedup, per-post ledger rows, Drive upload, metrics + per-player roll-up, admin endpoints |
+| Backend | `gas/Code.gs` | Media-ID dedup, per-post ledger rows, Drive upload, metrics + per-player roll-up, season-clock week roll-up, admin endpoints |
+| Leaderboard | `leaderboard.html` + `css/leaderboard.css` + `js/leaderboard.js` | Public high-score board: 5 columns, week chips, ticker, JSONP over the public stats endpoint, mock mode |
 | Admin console | `admin.html` + `css/admin.css` + `js/admin.js` | Key-gated Control Room: feed + filters, review modal, audit timelines, reports, CSV export |
+| Data face | `fonts/VT323-Regular.ttf` | Vendored terminal-pixel font — the board's data cells stay readable where display faces don't |
 | Local hosting | `serve.sh` | One command: `./serve.sh [port]` |
 
 > SurveyJS was dropped in this iteration: the chips box, dual-view post
@@ -145,8 +147,21 @@ layouts keep their column order; new rows leave it blank.
 
 **Per-player roll-up (`doGet → players[]`)**: the league can see, per
 candidate, submissions count, total posts, unique media, the format ratio
-(`{"Instagram Reel": 3, "YouTube Video": 1, …}`) and projected points —
-without double-counting, because unique media is keyed by Media ID.
+(`{"Instagram Reel": 3, "YouTube Video": 1, …}`) and points — without
+double-counting, because unique media is keyed by Media ID.
+
+**Leaderboard roll-up (`doGet → weeks` + `players[].impressions/points`)**:
+UPDATE rows repeat the FULL count (they are snapshots, never deltas), so any
+naive sum over rows double-counts. The roll-up therefore keeps, per Media
+ID, only the **latest snapshot**: its effective views (verified count if
+filled, else claimed) and points (verified points if filled, else
+projected) are credited to that snapshot's player, and the media is
+bucketed into the week of its **first** snapshot — when the post entered
+the league. `players[].projectedPoints` / `verifiedPoints` switched from
+row sums to these deduped sums (a quiet correctness fix for the admin
+REPORTS tab too). The season clock (`SEASON_START_ISO`, 7-day windows,
+warm-up → Week 1, cap 10) lives in `Code.gs`, mirroring the console's
+client-side week engine.
 
 Boost / gaming detection hooks built into this layout:
 - **Snapshot timeline**: weekly snapshots per Media ID give views/day
@@ -221,6 +236,33 @@ Cross-Check whitelist (`gas/Code.gs → CHECK_VALUES`): `PENDING OCR`,
 Mock/demo mode: `admin.html?mock=1` — a built-in 10-row ledger (incl. a
 +212%-in-26h boost case) exercises every surface offline; any key ≥ 4 chars
 unlocks; writes apply to the in-memory mock only.
+
+## Leaderboard (public board)
+
+`leaderboard.html` + `css/leaderboard.css` + `js/leaderboard.js` — the
+public face of the league, styled after the official PCL leaderboard sheet
+(royal-blue stage, orange score bars, white cell dividers) inside the pixel
+design system. Exactly five columns — RANK · NAME · DESIGNATION · TOTAL
+IMPRESSIONS · TOTAL POINTS — fed by the SAME public stats endpoint the
+form page already uses, over JSONP (zero CORS config, no env var involved:
+the board reads GAS directly even when submissions travel through Vercel's
+`/api/submit`).
+
+- **Week chips** render from the `weeks` block (`current` drives the LIVE
+  pulse and which weeks stay locked). No `weeks` block (an older deployed
+  `Code.gs`) → ALL-SEASON only, silently.
+- **Old-shape tolerance**: if `players[]` lacks `impressions`/`points`
+  (pre-roll-up deployment), points fall back to
+  `verifiedPoints || projectedPoints`; impressions show an em dash until
+  the new backend is deployed.
+- **Designations** come from `PLAYER_META` (Full Name → title) in
+  `Code.gs`; unlisted names render an em dash.
+- **Weak-network behaviour**: no auto-polling — a manual REFRESH with a
+  LAST SYNC stamp, a SIGNAL LOST state with RETRY, and a 60 s JSONP guard.
+- **`?mock=1`**: full offline board (players, designations, two weeks of
+  data) for demos and browser tests.
+- Public-page hygiene: no dev talk anywhere on the page — operational
+  notes live here and in the README only.
 
 ## Failure & fallback behaviour
 

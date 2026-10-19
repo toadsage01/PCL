@@ -78,6 +78,35 @@ Same pixel design system, key-gated review surface over the ledger:
 > Demo without a backend: open `admin.html?mock=1` — a built-in mock ledger
 > exercises every surface (any key with 4+ characters unlocks).
 
+## Leaderboard — `leaderboard.html` (public)
+
+The league's public high-score board, styled after the official PCL
+leaderboard sheet (royal-blue stage, orange score bars, white dividers) in
+the pixel design system, with a data face (VT323) chosen for readability.
+Exactly five columns: **RANK · NAME · DESIGNATION · TOTAL IMPRESSIONS ·
+TOTAL POINTS**.
+
+- **Week chips** — ALL-SEASON + Week 1..10 once the backend reports season
+  weeks; the live week pulses, future weeks are locked. A pre-weeks backend
+  simply shows the ALL-SEASON board (no error).
+- **Dedup math** — impressions/points are computed server-side: per Media ID
+  only the newest snapshot counts (UPDATE rows repeat the full count), a
+  post sits in the week of its first snapshot, and verified cells win over
+  claimed/projected once the review fills them in. This also fixed
+  `players[].projectedPoints`, which previously summed every snapshot row.
+- **Resilience** — manual REFRESH + LAST SYNC stamp (weak-network friendly),
+  SIGNAL LOST retry state, `?mock=1` offline demo board.
+- **Designations** — fill `PLAYER_META` in `gas/Code.gs`
+  (`'Full Name': 'Designation'`); unlisted names show an em dash.
+
+### Turn the weekly tabs on (1 minute)
+
+Re-paste `gas/Code.gs` into the Apps Script project and create a **new
+deployment version** — the board picks up the `weeks` roll-up and
+designations automatically. No frontend config, no other changes; the
+season clock lives in `SEASON_START_ISO` / `LEAGUE_WEEKS` at the top of
+`Code.gs`.
+
 ## Run locally
 
 ```bash

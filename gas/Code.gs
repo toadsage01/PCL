@@ -16,11 +16,14 @@
  *            5. replies {ok:true, id, posts:<count>}
  *
  *   doGet  → metrics JSON: {ok, totalSubmissions, totalPosts, uniqueMedia,
- *            lastSubmissionAt, players:[…]}
+ *            lastSubmissionAt, players:[…], weeks:{…}}
  *            `players` aggregates the ledger per candidate — submissions,
  *            post count, unique media, format ratio and projected points
  *            — so the league can see who uploaded how much and in what
  *            mix without ever double-counting (Media ID dedup holds).
+ *            `weeks` carries the public leaderboard roll-up: per week,
+ *            per player {posts, impressions, points} deduped the same
+ *            way (latest snapshot per Media ID, first-snapshot week).
  *
  *   ADMIN CONSOLE (admin.html) — gated by a secret key stored in the
  *   script's Script Properties (set it once: run setAdminKey("secret")):
@@ -81,6 +84,16 @@ var SHEET_ID = '1IMgfcg6nv_PM1Ntw3KmrIZDrldueIjteT6Mx_RteAFE';                  
 var SHEET_NAME = 'PCL-Data';
 var DRIVE_FOLDER_NAME = 'Praper Contest League Uploads';
 var MAX_FILE_MB = 5;                  // mirrors js/gas-endpoint.js
+
+/** Season clock — week windows for the public leaderboard. Week 1 opens at
+ *  SEASON_START_ISO (IST); every window is 7 days; posts submitted before
+ *  the start (warm-up) count as Week 1; the counter caps at LEAGUE_WEEKS. */
+var SEASON_START_ISO = '2026-10-19T11:00:00+05:30';
+var LEAGUE_WEEKS = 10;
+
+/** Public leaderboard — Full Name → Designation (the job title shown in the
+ *  board's Designation column). Names not listed here render as '—'. */
+var PLAYER_META = {};
 
 /** Canonical ledger columns — order matters, created on first run. */
 var HEADERS = [
@@ -221,22 +234,25 @@ function doGet(e) {
   try {
     if (p.action === 'ledger') return ledgerEndpoint_(p);
     if (p.action === 'ocr')    return ocrEndpoint_(p);
-    return statsEndpoint_();
+    return statsEndpoint_(p);
   } catch (err) {
     return reply_(p, { ok: false, error: String(err) });
   }
 }
 
-/** Public metrics (unchanged shape — feeds the form page / future board). */
-function statsEndpoint_() {
+/** Public metrics (feeds the form page + the public leaderboard). JSONP
+ *  when `callback` is given — the static board reads it cross-origin with
+ *  zero CORS configuration; plain JSON otherwise, shape unchanged. */
+function statsEndpoint_(p) {
   var s = collect_();
-  return json_({
+  return reply_(p, {
     ok: true,
     totalSubmissions: s.totalSubmissions,
     totalPosts: s.totalPosts,
     uniqueMedia: s.uniqueMedia,
     lastSubmissionAt: s.lastSubmissionAt,
     players: s.players,
+    weeks: s.weeks,
     generatedAt: new Date().toISOString()
   });
 }
@@ -270,7 +286,25 @@ function ocrEndpoint_(p) {
   return reply_(p, out);
 }
 
-/** One read pass over the ledger → rows as objects + totals + players. */
+/** ---------- SEASON CLOCK ---------- */
+
+var WEEK_MS_ = 7 * 24 * 60 * 60 * 1000;
+
+/** Week number for a moment (ms epoch). Pre-season → 1, capped at 10. */
+function weekOfMs_(ms) {
+  var start = new Date(SEASON_START_ISO).getTime();
+  if (!isFinite(ms) || ms < start) return 1;
+  return Math.min(Math.floor((ms - start) / WEEK_MS_) + 1, LEAGUE_WEEKS);
+}
+
+/** The week that is live right now — 0 before the season starts. */
+function currentWeek_() {
+  return Date.now() < new Date(SEASON_START_ISO).getTime()
+    ? 0 : weekOfMs_(Date.now());
+}
+
+/** One read pass over the ledger → rows as objects + totals + players +
+ *  per-week public roll-ups for the leaderboard. */
 function collect_() {
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
@@ -347,19 +381,84 @@ function collect_() {
     var v = values[values.length - 1][0];
     last = v instanceof Date ? v.toISOString() : String(v);
   }
+  // ---- Leaderboard roll-up --------------------------------------------
+  // UPDATE rows repeat the FULL current count (never a delta), so summing
+  // every row would double-count the same post. Per Media ID only the
+  // newest snapshot is current: it wins the impressions/points, credited
+  // to its player, and the media is bucketed in the week of its FIRST
+  // snapshot (when the post entered the league). Verified cells win over
+  // claimed/projected once the review pipeline fills them in.
+  var latestByMedia = {}, firstByMedia = {};
+  rows.forEach(function (r) {
+    var k = r.mediaId || 'row:' + r.row;
+    if (!latestByMedia[k] ||
+        String(r.ts).localeCompare(String(latestByMedia[k].ts)) > 0) {
+      latestByMedia[k] = r;
+    }
+    if (!firstByMedia[k] ||
+        String(r.ts).localeCompare(String(firstByMedia[k].ts)) < 0) {
+      firstByMedia[k] = r;
+    }
+  });
+  var dedup = {};                      // player → deduped season sums
+  var wk = {};                         // week → player → weekly roll-up
+  Object.keys(latestByMedia).forEach(function (k) {
+    var r = latestByMedia[k];
+    if (!players[r.name]) return;      // defensive — name keyed the roll-up
+    var views = numOrBlank_(r.verified);
+    if (views === '') views = toCount_(r.claimed);
+    if (views === '') views = 0;
+    var pts = numOrBlank_(r.verifiedPoints);
+    if (pts === '') pts = numOrBlank_(r.projected);
+    if (pts === '' && views > 0 && r.mult !== '' && !isNaN(Number(r.mult))) {
+      pts = Math.ceil(views * Number(r.mult));
+    }
+    if (pts === '') pts = 0;
+    var d = dedup[r.name] || (dedup[r.name] = { imp: 0, pts: 0, proj: 0, ver: 0 });
+    d.imp += views;
+    d.pts += pts;
+    var proj = numOrBlank_(r.projected);
+    if (proj !== '') d.proj += proj;
+    var ver = numOrBlank_(r.verifiedPoints);
+    if (ver !== '') d.ver += ver;
+    var w = weekOfMs_(new Date(firstByMedia[k].ts).getTime());
+    var bucket = wk[w] || (wk[w] = {});
+    var wp = bucket[r.name] ||
+      (bucket[r.name] = { player: r.name,
+                          designation: PLAYER_META[r.name] || '',
+                          posts: 0, impressions: 0, points: 0 });
+    wp.posts++;
+    wp.impressions += views;
+    wp.points += pts;
+  });
   var playerList = Object.keys(players).map(function (k) {
     var pl = players[k];
+    var d = dedup[k] || { imp: 0, pts: 0, proj: 0, ver: 0 };
     return {
       player: pl.player,
       manager: pl.manager,
+      designation: PLAYER_META[k] || '',
       submissions: Object.keys(pl.submissions).length,
       posts: pl.posts,
       uniqueMedia: Object.keys(pl.media).length,
       formatRatio: pl.formats,
-      projectedPoints: pl.projectedPoints,
-      verifiedPoints: pl.verifiedPoints
+      impressions: d.imp,
+      points: d.pts,
+      projectedPoints: d.proj,         // deduped — latest snapshot per media
+      verifiedPoints: d.ver
     };
   }).sort(function (a, b) { return b.posts - a.posts; });
+  var byWeek = {};
+  Object.keys(wk).map(Number)
+    .sort(function (a, b) { return a - b; })
+    .forEach(function (w) {
+      byWeek[String(w)] = Object.keys(wk[w]).map(function (n) {
+        return wk[w][n];
+      }).sort(function (a, b) {
+        return b.points - a.points || b.impressions - a.impressions ||
+               a.player.localeCompare(b.player);
+      });
+    });
   rows.sort(function (a, b) { return String(b.ts).localeCompare(String(a.ts)); });
   return {
     totalSubmissions: Object.keys(subs).length,
@@ -367,7 +466,13 @@ function collect_() {
     uniqueMedia: Object.keys(media).length,
     lastSubmissionAt: last,
     players: playerList,
-    rows: rows
+    rows: rows,
+    weeks: {
+      seasonStart: SEASON_START_ISO,
+      total: LEAGUE_WEEKS,
+      current: currentWeek_(),
+      byWeek: byWeek
+    }
   };
 }
 

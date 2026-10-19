@@ -1351,3 +1351,20 @@ html[data-pcl-theme="dark"] .pcl-input::placeholder {
 @media (prefers-reduced-motion: reduce) {
   .pcl-blink { animation: none; }
 }
+
+/* ---- Leaderboard link (additive — index.html marquee only) ----------------- */
+/* Lives in the black marquee band, so its colors are theme-independent. */
+.pcl-board-link {
+  display: inline-block;
+  margin-top: 9px;
+  font-family: "Silkscreen", "Press Start 2P", monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-decoration: none;
+  color: var(--pcl-primary-hi, #ff5a1f);
+  border-bottom: 2px solid transparent;
+}
+.pcl-board-link:hover {
+  color: #ffffff;
+  border-bottom-color: var(--pcl-primary-hi, #ff5a1f);
+}

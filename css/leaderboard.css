@@ -1,0 +1,344 @@
+/* ============================================================================
+   PCL LEADERBOARD — "HIGH SCORES" BOARD (leaderboard.html)
+   ----------------------------------------------------------------------------
+   Companion to the pixel-arcade theme. Reads the same design tokens from
+   theme.css (zero token changes) and composes the public standings in the
+   league sheet's look: royal-blue stage, orange score bars, white cell
+   dividers, five columns — RANK · NAME · DESIGNATION · TOTAL IMPRESSIONS ·
+   TOTAL POINTS. Data type is VT323 (vendored): a terminal-pixel face that
+   stays readable at small sizes, unlike the display faces.
+   ========================================================================== */
+
+/* ---- Data face (vendored) ------------------------------------------------ */
+@font-face {
+  font-family: "VT323";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/VT323-Regular.ttf") format("truetype");
+}
+
+.pcl-board {
+  --board-font: "VT323", "Pixelify Sans", "Segoe UI", system-ui, sans-serif;
+  width: min(980px, calc(100% - 32px));
+  margin: 26px auto 40px;
+}
+
+/* ---- Title ---------------------------------------------------------------- */
+.pcl-board-title {
+  margin: 6px 0 18px;
+  font-family: var(--pcl-font-display);
+  font-size: clamp(20px, 4.4vw, 34px);
+  line-height: 1.2;
+  letter-spacing: 2px;
+  text-align: center;
+  color: var(--pcl-text);
+  text-shadow: 3px 3px 0 var(--pcl-glow-soft), 6px 6px 0 rgba(0, 0, 0, 0.12);
+}
+
+/* ---- Season ticker --------------------------------------------------------- */
+.pcl-ticker {
+  overflow: hidden;
+  background: var(--pcl-marquee-bg);
+  border-block: 3px solid var(--pcl-primary-deep);
+  user-select: none;
+}
+.pcl-ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  padding: 7px 0;
+  animation: pcl-ticker-scroll 28s linear infinite;
+}
+.pcl-ticker-text {
+  font-family: var(--pcl-font-title);
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--pcl-primary-hi);
+}
+.pcl-ticker-text .pcl-tick-star { color: var(--pcl-marquee-accent); padding: 0 10px; }
+@keyframes pcl-ticker-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pcl-ticker-track { animation: none; }
+}
+
+/* ---- Week selector ---------------------------------------------------------- */
+.pcl-weeks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 0 0 14px;
+}
+.pcl-weeks:empty { display: none; }
+.pcl-wchip {
+  font-family: var(--pcl-font-title);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  padding: 7px 10px 6px;
+  cursor: pointer;
+}
+.pcl-wchip:hover { border-color: var(--pcl-primary); color: var(--pcl-primary); }
+.pcl-wchip:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--pcl-hard); }
+.pcl-wchip.is-active {
+  color: var(--pcl-on-primary);
+  background: var(--pcl-primary);
+  border-color: var(--pcl-primary-deep);
+}
+.pcl-wchip.is-live::after {
+  content: "";
+  display: inline-block;
+  width: 8px; height: 8px;
+  margin-left: 7px;
+  background: var(--pcl-gold);
+  box-shadow: 0 0 6px 1px var(--pcl-gold);
+  animation: pcl-blink-step 1s steps(2, jump-none) infinite;
+}
+.pcl-wchip.is-locked {
+  opacity: 0.38;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.pcl-wchip.is-locked:hover { border-color: var(--pcl-input-border); color: var(--pcl-text); }
+@keyframes pcl-blink-step { 50% { opacity: 0.15; } }
+
+/* ---- Sync row ---------------------------------------------------------------- */
+.pcl-syncrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+}
+.pcl-sync {
+  font-family: var(--pcl-font-body);
+  font-size: 15px;
+  color: var(--pcl-muted);
+}
+.pcl-rbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--pcl-font-title);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  padding: 6px 10px 5px;
+  cursor: pointer;
+}
+.pcl-rbtn:hover { border-color: var(--pcl-primary); color: var(--pcl-primary); }
+.pcl-rbtn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--pcl-hard); }
+.pcl-rbtn[disabled] { opacity: 0.5; cursor: wait; }
+
+/* pixel refresh glyph (box-shadow pixels, like the theme's other glyphs) */
+.pcl-px-rf {
+  width: 4px; height: 4px;
+  margin-right: 4px;
+  color: currentColor;
+  box-shadow:
+    4px 0 currentColor, 8px 0 currentColor,
+    0 4px currentColor, 12px 4px currentColor,
+    0 8px currentColor, 12px 8px currentColor,
+    4px 12px currentColor, 8px 12px currentColor;
+}
+
+/* ---- The board ---------------------------------------------------------------- */
+.pcl-tablewrap { min-height: 180px; }
+
+.pcl-collabels, .pcl-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1.6fr) minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.pcl-collabels {
+  margin: 0 4px 8px;
+  font-family: var(--pcl-font-title);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--pcl-muted);
+}
+.pcl-collabels .pcl-col { padding: 0 14px; }
+.pcl-collabels .pcl-col--rank,
+.pcl-collabels .pcl-col--imp,
+.pcl-collabels .pcl-col--pts { text-align: center; }
+
+/* One score bar per player — the league's orange row */
+.pcl-row {
+  margin: 0 0 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(0, 0, 0, 0.06)),
+    var(--pcl-primary);
+  border: 3px solid var(--pcl-primary-deep);
+  box-shadow: 4px 4px 0 var(--pcl-hard), 4px 4px 0 3px var(--pcl-glow-soft);
+  color: var(--pcl-on-primary);
+}
+.pcl-row:hover { filter: brightness(1.05); }
+
+.pcl-cell {
+  font-family: var(--board-font);
+  font-size: 24px;
+  line-height: 1.15;
+  padding: 12px 14px 10px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.pcl-cell + .pcl-cell { border-left: 3px solid rgba(255, 255, 255, 0.45); }
+
+.pcl-cell--rank,
+.pcl-cell--imp,
+.pcl-cell--pts { justify-content: center; }
+.pcl-cell--imp .pcl-num,
+.pcl-cell--pts .pcl-num {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+/* rank badge */
+.pcl-rank {
+  font-size: 22px;
+  letter-spacing: 1px;
+}
+.pcl-rankchip {
+  display: inline-block;
+  min-width: 44px;
+  padding: 2px 8px 0;
+  text-align: center;
+  border: 3px solid rgba(255, 255, 255, 0.65);
+  background: rgba(0, 0, 0, 0.14);
+}
+.pcl-row.is-r1 .pcl-rankchip {
+  background: var(--pcl-gold);
+  border-color: var(--pcl-on-primary);
+  color: #14235f;
+  box-shadow: 0 0 10px 2px var(--pcl-glow);
+}
+.pcl-row.is-r2 .pcl-rankchip {
+  background: #cfd8e3; border-color: var(--pcl-on-primary); color: #14235f;
+}
+.pcl-row.is-r3 .pcl-rankchip {
+  background: #e08b46; border-color: var(--pcl-on-primary); color: #14235f;
+}
+
+/* name + designation */
+.pcl-cell--name, .pcl-cell--desig {
+  font-size: 25px;
+  overflow-wrap: anywhere;
+}
+.pcl-cell--desig { color: rgba(255, 255, 255, 0.88); }
+.pcl-desig-blank { opacity: 0.55; font-size: 22px; }
+
+/* subtle champion glow on the whole top bar */
+.pcl-row.is-r1 { box-shadow: 4px 4px 0 var(--pcl-hard), 4px 4px 0 3px var(--pcl-glow); }
+
+/* ---- States -------------------------------------------------------------------- */
+.pcl-state {
+  padding: 44px 20px;
+  text-align: center;
+  border: 3px dashed var(--pcl-line);
+  background: var(--pcl-surface);
+  box-shadow: 5px 5px 0 var(--pcl-inset);
+}
+.pcl-state-blink, .pcl-state-big {
+  display: block;
+  font-family: var(--pcl-font-display);
+  font-size: 18px;
+  letter-spacing: 2px;
+  color: var(--pcl-primary);
+}
+.pcl-state-big { font-size: 22px; }
+.pcl-state-sub {
+  margin: 14px 0 18px;
+  font-family: var(--pcl-font-body);
+  font-size: 16px;
+  color: var(--pcl-muted);
+}
+.pcl-state--err { border-color: var(--pcl-error-soft); }
+.pcl-state--err .pcl-state-big { color: var(--pcl-error); }
+
+.pcl-state-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--pcl-font-title);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-decoration: none;
+  color: var(--pcl-on-primary);
+  background: var(--pcl-primary);
+  border: 3px solid var(--pcl-primary-deep);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  padding: 10px 14px 9px;
+  cursor: pointer;
+}
+.pcl-state-cta:hover { background: var(--pcl-primary-hi); }
+.pcl-state-cta:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--pcl-hard); }
+
+/* ---- Footer --------------------------------------------------------------------- */
+.pcl-footer--board {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  font-family: var(--pcl-font-body);
+  font-size: 15px;
+}
+.pcl-footlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--pcl-secondary);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+}
+.pcl-footlink:hover { color: var(--pcl-primary); border-bottom-color: var(--pcl-primary); }
+.pcl-footlink--play {
+  font-family: var(--pcl-font-title);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--pcl-primary);
+  border: 3px solid var(--pcl-primary);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  padding: 7px 10px 6px;
+}
+.pcl-footlink--play:hover { background: var(--pcl-primary); color: var(--pcl-on-primary); border-bottom-color: var(--pcl-primary-deep); }
+.pcl-footsep { color: var(--pcl-muted); font-size: 9px; }
+
+/* ---- Responsive ------------------------------------------------------------------ */
+@media (max-width: 760px) {
+  .pcl-board { width: calc(100% - 20px); margin-top: 18px; }
+
+  .pcl-collabels { display: none; }
+
+  .pcl-collabels, .pcl-row {
+    grid-template-columns: 56px minmax(0, 1fr) minmax(0, 0.9fr);
+    grid-template-areas:
+      "rank name imp"
+      "rank desig pts";
+  }
+  .pcl-cell { padding: 10px 10px 8px; font-size: 20px; }
+  .pcl-cell--name, .pcl-cell--desig { font-size: 21px; }
+  .pcl-cell + .pcl-cell { border-left: none; }
+
+  .pcl-cell--rank  { grid-area: rank;  justify-content: center; }
+  .pcl-cell--name  { grid-area: name;  border-left: 3px solid rgba(255, 255, 255, 0.45); }
+  .pcl-cell--desig { grid-area: desig; border-left: 3px solid rgba(255, 255, 255, 0.45); border-top: 3px solid rgba(255, 255, 255, 0.25); }
+  .pcl-cell--imp   { grid-area: imp;   border-left: 3px solid rgba(255, 255, 255, 0.45); }
+  .pcl-cell--pts   { grid-area: pts;   border-left: 3px solid rgba(255, 255, 255, 0.45); border-top: 3px solid rgba(255, 255, 255, 0.25); }
+
+  .pcl-rankchip { min-width: 38px; }
+  .pcl-row { box-shadow: 3px 3px 0 var(--pcl-hard); }
+}
