@@ -71,8 +71,9 @@
     <form id="pclForm" class="pcl-form" novalidate autocomplete="off">
       <p class="pcl-form-note">Fields marked <span class="pcl-req-star">*</span> are required.</p>
 
-      <!-- 1 · PLAYER DETAILS — photo sits LEFT of the name fields
-             (mobile: the photo tile moves above them, centred) -->
+      <!-- 1 · PLAYER DETAILS — the photo is a circular avatar INLINE with the
+             name fields, one row (mobile: avatar moves above them, centred).
+             READY/alt text share one small caption line under the row. -->
       <section class="pcl-panel">
         <h2 class="pcl-panel-title">1 &middot; Player Details</h2>
         <div class="pcl-playergrid">
@@ -93,10 +94,7 @@
               <span class="pcl-photothumb" id="photoThumb" hidden>
                 <img id="photoThumbImg" alt="Player photo" />
               </span>
-              <span class="pcl-photostate" id="photoState" hidden></span>
             </button>
-            <p class="pcl-photo-alt" id="photoAlt">Only for the first time &mdash;
-              until the admin approves it.</p>
             <p class="pcl-err" id="photoErr">Upload your photo.</p>
           </div>
           <div class="pcl-field" data-field="fullName">
@@ -116,6 +114,9 @@
             </div>
             <p class="pcl-err">Required</p>
           </div>
+          <p class="pcl-photo-caption"><span class="pcl-photostate" id="photoState"
+              hidden></span><span class="pcl-photo-alt" id="photoAlt">Only for the
+              first time &mdash; until the admin approves it.</span></p>
         </div>
       </section>
 

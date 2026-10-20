@@ -954,14 +954,14 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 }
 .pcl-fmt b { color: var(--pcl-primary-hi); font-weight: 700; }
 
-/* ---- EDIT mode: compact columnar rows ---------------------------------------
-   grid: # | link + badge | views | screenshot                               */
+/* ---- EDIT mode: everything on ONE row ---------------------------------------
+   grid: # | link + badge | views | screenshot square | collab circle         */
 .pcl-post {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 176px 132px;
-  gap: 8px 12px;
-  align-items: start;
-  padding: 13px 0 15px;
+  grid-template-columns: 30px minmax(0, 1fr) 176px 44px 44px;
+  gap: 8px 10px;
+  align-items: center;
+  padding: 10px 0 12px;
   border-bottom: 2px dashed var(--pcl-line-soft);
 }
 .pcl-post:last-child { border-bottom: none; padding-bottom: 6px; }
@@ -971,7 +971,6 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   font-size: 11px;
   color: var(--pcl-primary-hi);
   text-shadow: 0 0 8px var(--pcl-glow-soft);
-  padding-top: 13px;
 }
 
 .pcl-post-main {
@@ -980,7 +979,6 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
-  padding-top: 9px;
 }
 .pcl-post-link {
   min-width: 0;
@@ -997,22 +995,19 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 
 .pcl-views { font-size: 15px; padding: 9px 10px 8px; }
 
-/* screenshot button — dashed "add" well with the open-folder glyph,
-   solid orange + thumbnail once attached */
+/* screenshot button — a compact SQUARE well that fits the row (no wide
+   rectangle): dashed + open-folder glyph when empty, solid orange + a
+   thumbnail filling the square once attached */
 .pcl-shotbtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  width: 100%;
-  font-family: var(--pcl-font-title);
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 0.8px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   color: var(--pcl-muted);
   background: var(--pcl-surface-2);
   border: 3px dashed var(--pcl-line);
-  padding: 9px 8px 8px;
   cursor: pointer;
   transition: border-color 0.1s steps(2), box-shadow 0.1s steps(2),
               color 0.1s steps(2);
@@ -1029,10 +1024,10 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 .pcl-vshot:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
 
 .pcl-shotbtn .pcl-thumb {
-  width: 24px;
-  height: 19px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border: 2px solid var(--pcl-input-border);
+  border: 0;
   flex: 0 0 auto;
 }
 
@@ -1438,14 +1433,13 @@ html[data-pcl-theme="dark"] .pcl-input::placeholder {
   .pcl-grid2 { grid-template-columns: 1fr; }
 
   .pcl-post {
-    grid-template-columns: 22px minmax(0, 1fr) 118px;
+    grid-template-columns: 22px minmax(0, 1fr) 44px 44px;
     grid-template-areas:
-      "num main shot"
-      "num views views"
-      "collab collab collab";
-    gap: 8px 10px;
+      "num main shot collab"
+      "views views views views";
+    gap: 8px 8px;
   }
-  .pcl-post-num { grid-area: num; padding-top: 10px; }
+  .pcl-post-num { grid-area: num; }
   .pcl-post-main { grid-area: main; }
   .pcl-cell--views { grid-area: views; }
   .pcl-cell--shot { grid-area: shot; }
@@ -1523,32 +1517,35 @@ button.pcl-board-link {
   color: var(--pcl-marquee-accent, #35d6ff);
 }
 
-/* ---- Player photo — a square TILE left of the name fields ------------------
-   Icon-first (open-folder glyph), round thumb once a photo is set; the old
-   sub-text is gone — one small alt line under the tile is all it needs. */
+/* ---- Player photo — a CIRCULAR avatar inline with the name fields ----------
+   One row like the admin feed rows: circle + FULL NAME + REPORTING MANAGER.
+   Dashed circle + open-folder glyph when empty; the photo fills the circle
+   (circular boundary, solid orange ring) once set. READY / alt text share
+   one small caption line under the row. */
 .pcl-playergrid {
   display: grid;
-  grid-template-columns: 124px 1fr 1fr;
-  gap: 14px 16px;
+  grid-template-columns: 84px 1fr 1fr;
+  gap: 10px 16px;
   align-items: start;
 }
 .pcl-photofield { margin: 0; }
 .pcl-photo-tile {
-  width: 124px;
-  height: 124px;
+  width: 84px;
+  height: 84px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 8px;
+  padding: 0;
   background: var(--pcl-input-bg);
   border: 3px dashed var(--pcl-line);
+  border-radius: 50%;
+  overflow: hidden;
   color: var(--pcl-muted);
   cursor: pointer;
   transition: border-color 0.1s steps(2), box-shadow 0.1s steps(2),
               color 0.1s steps(2);
 }
+.pcl-photo-tile .pcl-folder-ico { width: 26px; height: 21px; }
 .pcl-photo-tile:hover {
   border-color: var(--pcl-primary);
   color: var(--pcl-text);
@@ -1566,14 +1563,12 @@ button.pcl-board-link {
   box-shadow: 3px 3px 0 var(--pcl-error-soft);
 }
 .pcl-photothumb {
-  width: 62px;
-  height: 62px;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  border: 3px solid var(--pcl-input-border);
-  box-shadow: 2px 2px 0 var(--pcl-hard);
+  border-radius: 50%;
   background: var(--pcl-input-bg);
   flex: 0 0 auto;
-  border-radius: 50%;
 }
 .pcl-photothumb img {
   display: block;
@@ -1581,12 +1576,19 @@ button.pcl-board-link {
   height: 100%;
   object-fit: cover;
 }
+.pcl-photo-caption {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+}
 .pcl-photo-alt {
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--pcl-muted);
-  text-align: center;
-  margin: 7px 0 0;
+  margin: 0;
 }
 .pcl-photostate {
   font-family: var(--pcl-font-title);
@@ -1655,20 +1657,18 @@ html[data-pcl-theme="light"] .pcl-photostate { color: #0b7fa8; }
 
 /* ---- Collab: circular group button + inline popover ------------------------
    The old COLLAB pill became a small round people icon (community-style);
-   tapping it opens the partner field right below, in place. */
+   it sits IN the post row, right of the screenshot square. Tapping it opens
+   the partner field as a popover anchored to the circle, opening leftward. */
 .pcl-collabrow {
-  grid-column: 2 / -1;
   position: relative;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px 10px;
-  margin-top: 2px;
 }
 .pcl-collab-btn {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -1681,7 +1681,7 @@ html[data-pcl-theme="light"] .pcl-photostate { color: #0b7fa8; }
   transition: transform 0.06s steps(2), border-color 0.1s steps(2),
               color 0.1s steps(2);
 }
-.pcl-collab-btn svg { width: 20px; height: 20px; display: block; }
+.pcl-collab-btn svg { width: 22px; height: 22px; display: block; }
 .pcl-collab-btn:hover {
   transform: translate(-1px, -1px);
   border-color: var(--pcl-secondary);
@@ -1711,9 +1711,9 @@ html[data-pcl-theme="dark"] .pcl-collab-half { color: #02020d; border-color: #02
 .pcl-collabpop {
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
+  right: 0;
   z-index: 65;
-  width: min(320px, 100%);
+  width: min(320px, 86vw);
   background: var(--pcl-surface);
   border: 3px solid var(--pcl-input-border);
   box-shadow: 4px 4px 0 var(--pcl-hard), 0 0 16px var(--pcl-glow-soft);
@@ -2033,16 +2033,18 @@ html[data-pcl-theme="light"] .pcl-wk-pts { color: #a06e00; }
   .pcl-board-link { font-size: 9.5px; }
   .pcl-weekrow { gap: 8px; }
   .pcl-infobtn { width: 42px; }
-  .pcl-photo-tile { width: 116px; height: 116px; }
-  .pcl-folder-ico { width: 30px; height: 25px; }
+  .pcl-photo-tile { width: 96px; height: 96px; }
+  .pcl-photo-tile .pcl-folder-ico { width: 30px; height: 25px; }
 
-  /* photo tile moves ABOVE the name fields, centred horizontally
-     (placed late in the file so it wins over the base .pcl-playergrid) */
+  /* photo avatar moves ABOVE the name fields, centred horizontally; the
+     READY/alt caption line centres too (placed late in the file so it wins
+     over the base .pcl-playergrid) */
   .pcl-playergrid { grid-template-columns: 1fr; justify-items: center; }
   .pcl-photofield { justify-self: center; }
+  .pcl-photo-caption { justify-content: center; text-align: center; }
   .pcl-playergrid .pcl-field[data-field="fullName"],
   .pcl-playergrid .pcl-field[data-field="reportingManager"] { justify-self: stretch; }
-  .pcl-collabpop { left: 0; right: auto; }
+  .pcl-collabpop { left: auto; right: 0; }
 
   .pcl-modal-card { padding: 16px 14px; }
   .pcl-rb-table { font-size: 14px; }
