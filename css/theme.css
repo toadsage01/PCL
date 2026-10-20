@@ -72,7 +72,12 @@ html[data-pcl-theme="light"] {
   --pcl-orb-1: rgba(237, 59, 0, 0.13);
   --pcl-orb-2: rgba(36, 64, 200, 0.10);
 
-  --pcl-marquee-bg: #0b0b14;
+  /* header band: deep royal indigo — same family as the panel borders and
+     hard shadows (#14235f), so it complements the cream body + orange bars
+     instead of cutting them with a pure black stripe */
+  --pcl-marquee-bg: #171e56;
+  --pcl-marquee-bg-2: #101643;
+  --pcl-marquee-deep: #0c1134;
   --pcl-marquee-text: #aab4ff;
   --pcl-marquee-accent: #35d6ff;
 
@@ -118,7 +123,9 @@ html[data-pcl-theme="dark"] {
   --pcl-orb-1: rgba(237, 59, 0, 0.17);
   --pcl-orb-2: rgba(59, 110, 255, 0.20);
 
-  --pcl-marquee-bg: #07070f;
+  --pcl-marquee-bg: #0d1240;
+  --pcl-marquee-bg-2: #080b2c;
+  --pcl-marquee-deep: #05071e;
   --pcl-marquee-text: #aab4ff;
   --pcl-marquee-accent: #35d6ff;
 
@@ -173,8 +180,26 @@ html[data-pcl-font="sf"] {
 html[data-pcl-font="vt"] {
   --pcl-font-body: "VT323", "Pixelify Sans", "Segoe UI", system-ui, monospace;
 }
+/* SF Pro reading mode: a step THICKER than default (management asked for the
+   sans face) — weight 500 on copy + a small SOLID drop shadow so the crisp
+   sans sits inside the pixel design. Deliberately lighter than VT323's ink.
+   Headers/titles (Silkscreen + Press Start 2P) and text on orange bars keep
+   their own faces and shadows — they never switch. */
+html[data-pcl-font="sf"] {
+  --pcl-sf-shadow: rgba(20, 35, 95, 0.16);
+}
+html[data-pcl-theme="dark"] { --pcl-sf-shadow: rgba(2, 4, 20, 0.55); }
+html[data-pcl-font="sf"] body {
+  font-weight: 500;
+  text-shadow: 1px 1px 0 var(--pcl-sf-shadow);
+}
+html[data-pcl-font="sf"] .pcl-input,
+html[data-pcl-font="sf"] .pcl-chipinput { font-weight: 500; }
+html[data-pcl-font="sf"] .pcl-input::placeholder,
+html[data-pcl-font="sf"] .pcl-chipinput::placeholder { font-weight: 400; }
+
 /* VT323 is narrow — reading surfaces step up one size to keep the rhythm */
-html[data-pcl-font="vt"] body { font-size: 19px; }
+html[data-pcl-font="vt"] body { font-size: 19px; font-weight: 400; }
 html[data-pcl-font="vt"] .pcl-form-note,
 html[data-pcl-font="vt"] .pcl-hint { font-size: 18.5px; }
 html[data-pcl-font="vt"] .pcl-empty { font-size: 19px; }
@@ -248,9 +273,12 @@ body::before {
 .pcl-main,
 .pcl-footer { position: relative; z-index: 1; }
 
-/* ---- Arcade marquee header (black band on BOTH themes — logo's native home) */
+/* ---- Arcade marquee header (deep indigo band on BOTH themes) -------------
+   The old pure-black stripe fought the cream body; this indigo is the same
+   royal family as the borders/shadows, so the header reads as part of the
+   theme. Still dark enough to keep the logo's native band intact. */
 .pcl-marquee {
-  background: var(--pcl-marquee-bg);
+  background: linear-gradient(180deg, var(--pcl-marquee-bg), var(--pcl-marquee-bg-2));
   border-bottom: 3px solid var(--pcl-primary);
   box-shadow:
     0 3px 0 rgba(255, 255, 255, 0.06) inset,
@@ -369,9 +397,9 @@ body::before {
   place-items: center;
   cursor: pointer;
   border: 3px solid var(--pcl-primary);
-  background: #101024;
+  background: var(--pcl-marquee-deep);
   color: var(--pcl-gold);
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.65);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45);
   transition: transform 0.06s steps(2), box-shadow 0.06s steps(2);
 }
 .pcl-toggle:hover {
@@ -715,11 +743,42 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   border-color: var(--pcl-error);
   background: var(--pcl-surface);
   box-shadow: 2px 2px 0 var(--pcl-error-soft);
-  cursor: help;
+  cursor: pointer;      /* click the chip to jump into the broken part */
 }
 .pcl-chip.is-status {
   color: var(--pcl-status);
   border-color: var(--pcl-status);
+}
+/* the broken SEGMENT of the link, lit up inside the chip — clicking the chip
+   drops the link back into the input with exactly that part selected */
+.pcl-chip-bad {
+  background: var(--pcl-error);
+  color: #fff;
+  padding: 1px 3px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pcl-chip.is-dup {
+  color: var(--pcl-status);
+  border-color: var(--pcl-status);
+  background: var(--pcl-surface);
+  box-shadow: 2px 2px 0 rgba(185, 121, 0, 0.35);
+  overflow: hidden;
+}
+.pcl-chip.is-dup .pcl-dupbar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--pcl-status);
+  animation: pclDupShrink 3s linear forwards;
+}
+@keyframes pclDupShrink { from { width: 100%; } to { width: 0%; } }
+.pcl-chip.is-dup.is-leaving {
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 0.18s steps(3), transform 0.18s steps(3);
 }
 .pcl-chip.is-error::after {
   content: attr(data-reason);
@@ -764,6 +823,44 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 }
 .pcl-chipinput:focus { outline: none; }
 .pcl-chipinput::placeholder { color: var(--pcl-muted); opacity: 0.8; }
+
+/* manager autocomplete — pixel listbox hanging off the reporting-manager well */
+.pcl-acwrap { position: relative; min-width: 0; }
+.pcl-ac {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  z-index: 70;
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 4px 4px 0 var(--pcl-hard), 0 0 14px var(--pcl-glow-soft);
+  max-height: 238px;
+  overflow-y: auto;
+}
+.pcl-ac-opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--pcl-font-body);
+  font-size: 16px;
+  color: var(--pcl-text);
+  background: none;
+  border: none;
+  border-bottom: 2px solid var(--pcl-line-soft);
+  padding: 9px 12px 8px;
+  cursor: pointer;
+}
+.pcl-ac-opt:last-child { border-bottom: none; }
+.pcl-ac-opt:hover,
+.pcl-ac-opt.is-sel { background: var(--pcl-surface-3); }
+.pcl-ac-opt b { color: var(--pcl-primary); }
+.pcl-ac-opt:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: -2px; }
+.pcl-ac-none {
+  font-size: 14px;
+  color: var(--pcl-muted);
+  padding: 9px 12px;
+}
 
 /* small "+ ADD" committer */
 .pcl-addbtn {
@@ -900,7 +997,8 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 
 .pcl-views { font-size: 15px; padding: 9px 10px 8px; }
 
-/* screenshot button — dashed "add" well → solid orange once attached */
+/* screenshot button — dashed "add" well with the open-folder glyph,
+   solid orange + thumbnail once attached */
 .pcl-shotbtn {
   display: inline-flex;
   align-items: center;
@@ -1425,35 +1523,54 @@ button.pcl-board-link {
   color: var(--pcl-marquee-accent, #35d6ff);
 }
 
-/* ---- Player photo field — one compact line: thumb · text · button ---------- */
-.pcl-photofield { margin-top: 14px; }
-.pcl-photoline {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px 16px;
+/* ---- Player photo — a square TILE left of the name fields ------------------
+   Icon-first (open-folder glyph), round thumb once a photo is set; the old
+   sub-text is gone — one small alt line under the tile is all it needs. */
+.pcl-playergrid {
+  display: grid;
+  grid-template-columns: 124px 1fr 1fr;
+  gap: 14px 16px;
+  align-items: start;
 }
-.pcl-photoline-text {
+.pcl-photofield { margin: 0; }
+.pcl-photo-tile {
+  width: 124px;
+  height: 124px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  flex: 1 1 240px;
-  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px;
+  background: var(--pcl-input-bg);
+  border: 3px dashed var(--pcl-line);
+  color: var(--pcl-muted);
+  cursor: pointer;
+  transition: border-color 0.1s steps(2), box-shadow 0.1s steps(2),
+              color 0.1s steps(2);
 }
-.pcl-photoline-text .pcl-label { margin-bottom: 0; }
-.pcl-photoline-text .pcl-hint { margin: 0; }
-.pcl-photobtn { width: auto; min-width: 160px; flex: 0 0 auto; }
-.pcl-field.is-error .pcl-photobtn {
+.pcl-photo-tile:hover {
+  border-color: var(--pcl-primary);
+  color: var(--pcl-text);
+  box-shadow: 0 0 12px var(--pcl-glow-soft);
+}
+.pcl-photo-tile:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+.pcl-photo-tile.is-set {
+  border-style: solid;
+  border-color: var(--pcl-primary);
+  box-shadow: 3px 3px 0 var(--pcl-hard), 0 0 10px var(--pcl-glow-soft);
+}
+.pcl-field.is-error .pcl-photo-tile {
   border-color: var(--pcl-error);
   color: var(--pcl-error);
   box-shadow: 3px 3px 0 var(--pcl-error-soft);
 }
 .pcl-photothumb {
-  width: 64px;
-  height: 64px;
+  width: 62px;
+  height: 62px;
   overflow: hidden;
   border: 3px solid var(--pcl-input-border);
-  box-shadow: 3px 3px 0 var(--pcl-hard);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
   background: var(--pcl-input-bg);
   flex: 0 0 auto;
   border-radius: 50%;
@@ -1464,16 +1581,28 @@ button.pcl-board-link {
   height: 100%;
   object-fit: cover;
 }
+.pcl-photo-alt {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--pcl-muted);
+  text-align: center;
+  margin: 7px 0 0;
+}
 .pcl-photostate {
   font-family: var(--pcl-font-title);
   font-weight: 700;
-  font-size: 10.5px;
+  font-size: 10px;
   letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--pcl-cyan);
-  flex: 1 0 100%;
 }
 html[data-pcl-theme="light"] .pcl-photostate { color: #0b7fa8; }
+
+/* Windows-open-folder glyph — the shared upload icon (photo tile + SHOT wells) */
+.pcl-px-folder { display: block; line-height: 0; flex: 0 0 auto; }
+.pcl-folder-ico { width: 34px; height: 28px; display: block; }
+.pcl-shotbtn .pcl-folder-ico,
+.pcl-vshot .pcl-folder-ico { width: 22px; height: 18px; }
 
 /* ---- Photo cropper — square stage, drag/zoom, JPEG out ---------------------- */
 .pcl-crop-card {
@@ -1524,44 +1653,103 @@ html[data-pcl-theme="light"] .pcl-photostate { color: #0b7fa8; }
   gap: 10px;
 }
 
-/* ---- Collab tag inside a post row ------------------------------------------- */
+/* ---- Collab: circular group button + inline popover ------------------------
+   The old COLLAB pill became a small round people icon (community-style);
+   tapping it opens the partner field right below, in place. */
 .pcl-collabrow {
   grid-column: 2 / -1;
+  position: relative;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 10px;
   margin-top: 2px;
 }
-.pcl-collab-toggle {
-  flex: 0 0 auto;
-  font-family: var(--pcl-font-title);
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing: 0.8px;
+.pcl-collab-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--pcl-muted);
   background: var(--pcl-surface-2);
   border: 2px dashed var(--pcl-line);
-  padding: 4px 9px 3px;
   cursor: pointer;
-  transition: transform 0.06s steps(2);
+  flex: 0 0 auto;
+  transition: transform 0.06s steps(2), border-color 0.1s steps(2),
+              color 0.1s steps(2);
 }
-.pcl-collab-toggle:hover { transform: translate(-1px, -1px); color: var(--pcl-text); }
-.pcl-collab-toggle.is-on {
+.pcl-collab-btn svg { width: 20px; height: 20px; display: block; }
+.pcl-collab-btn:hover {
+  transform: translate(-1px, -1px);
+  border-color: var(--pcl-secondary);
+  color: var(--pcl-secondary);
+}
+.pcl-collab-btn.is-on {
   color: #fff;
   background: linear-gradient(180deg, var(--pcl-secondary), #1a2f9e);
   border: 2px solid #14235f;
-  box-shadow: 2px 2px 0 var(--pcl-hard);
+  box-shadow: 2px 2px 0 var(--pcl-hard), 0 0 10px rgba(77, 116, 255, 0.4);
 }
-.pcl-collab-toggle:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
-.pcl-collab-input { max-width: 260px; flex: 1 1 200px; }
+.pcl-collab-btn:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+.pcl-collab-half {
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 8px;
+  line-height: 1;
+  color: #14235f;
+  background: var(--pcl-gold);
+  border: 2px solid #14235f;
+  padding: 2px 3px 1px;
+}
+html[data-pcl-theme="dark"] .pcl-collab-half { color: #02020d; border-color: #02020d; }
+.pcl-collabpop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 65;
+  width: min(320px, 100%);
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 4px 4px 0 var(--pcl-hard), 0 0 16px var(--pcl-glow-soft);
+  padding: 11px 13px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pcl-collab-title {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--pcl-secondary);
+}
+.pcl-collabpop .pcl-collab-input { max-width: none; width: 100%; }
 .pcl-collab-hint {
   flex: 1 0 100%;
   font-size: 12px;
+  line-height: 1.5;
   color: var(--pcl-muted);
   margin: 0;
 }
 .pcl-collabrow .pcl-err { margin: 0; }
+/* view-mode collab tag (kept from the pill, now just a label) */
+.pcl-collab-toggle {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface-3);
+  border: 2px solid var(--pcl-line);
+  padding: 4px 9px 3px;
+}
 
 /* ---- Weekly challenge row: select + info button ------------------------------ */
 .pcl-weekrow {
@@ -1778,13 +1966,13 @@ html[data-pcl-theme="dark"] [data-fmt="li_post"] .pcl-fmtword { color: #4a9fe8; 
   margin: 0 0 12px;
   text-align: center;
 }
-/* week cards inside the info modal */
+/* week cards inside the info modal — extra breathing room between the bars */
 .pcl-wkcard {
   border: 2px solid var(--pcl-line);
   background: var(--pcl-surface-2);
   box-shadow: 3px 3px 0 var(--pcl-inset);
   padding: 12px 14px;
-  margin: 0 0 12px;
+  margin: 0 0 18px;
 }
 .pcl-wkcard.is-live {
   border-color: var(--pcl-primary);
@@ -1845,7 +2033,17 @@ html[data-pcl-theme="light"] .pcl-wk-pts { color: #a06e00; }
   .pcl-board-link { font-size: 9.5px; }
   .pcl-weekrow { gap: 8px; }
   .pcl-infobtn { width: 42px; }
-  .pcl-photobtn { width: 100%; }
+  .pcl-photo-tile { width: 116px; height: 116px; }
+  .pcl-folder-ico { width: 30px; height: 25px; }
+
+  /* photo tile moves ABOVE the name fields, centred horizontally
+     (placed late in the file so it wins over the base .pcl-playergrid) */
+  .pcl-playergrid { grid-template-columns: 1fr; justify-items: center; }
+  .pcl-photofield { justify-self: center; }
+  .pcl-playergrid .pcl-field[data-field="fullName"],
+  .pcl-playergrid .pcl-field[data-field="reportingManager"] { justify-self: stretch; }
+  .pcl-collabpop { left: 0; right: auto; }
+
   .pcl-modal-card { padding: 16px 14px; }
   .pcl-rb-table { font-size: 14px; }
   .pcl-rb-table th { font-size: 9.5px; padding: 6px 7px; }

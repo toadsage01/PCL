@@ -383,3 +383,68 @@ the board reads GAS directly even when submissions travel through Vercel's
   the new roll-up block verbatim + 5 collab cases (16 assertions);
   fixture_form.js gained the /exec fallback target + dup/route-down
   simulators for the browser E2E.
+
+## Round 15 — Batch 1: SF polish, drafts, typo-pointing links, collab popover
+
+- **SF Pro reading mode, final pass** (`html[data-pcl-font="sf"]`): body copy
+  runs `font-weight: 500` + a 1px hard `text-shadow` (`--pcl-sf-shadow`,
+  navy-tinted in light / near-black in dark mode) — thicker than a default
+  sans, deliberately lighter than VT323's ink. Headers/titles keep
+  Silkscreen + Press Start 2P; text on orange bars keeps its own face and
+  shadow (per management's scope). VT323 mode still swaps everything with
+  the Aa toggle (size compensations kept). Rulebook layout untouched.
+- **Header band re-coloured**: `--pcl-marquee-bg` `#0b0b14`/`#07070f` (near
+  black) → deep royal indigo `#171e56→#101643` gradient (dark mode
+  `#0d1240→#080b2c`) + `--pcl-marquee-deep` for the toggle wells. Same
+  family as the panel-border/hard-shadow navy, so the band complements the
+  cream body and orange bars instead of cutting them; all three pages share
+  it via `theme.css`.
+- **Draft auto-save** (`pcl_draft_v1`): text + posts state → localStorage
+  (debounced 350 ms via capture listeners + `noteDraft()` inside
+  `renderRows`/`renderPhoto`); media (cropped photo, per-post screenshots)
+  → IndexedDB `pcl-draft/kv` (`photo`, `shot:<mediaId>` — data URLs are too
+  fat for the 5 MB LS budget). `restoreDraft()` rehydrates on load (week
+  only if still open), shows "DRAFT RESTORED ✓", re-fires the photo JSONP
+  lookup. `clearDraft()` runs ONLY in the success branch of the submit
+  chain. Both stores fail soft (private mode / quota → drafts off).
+- **Undo/redo (links section)**: snapshot = {input value, posts clones,
+  chipErrors clones}; push points = paste (pre-paste), commit, chip/error
+  deletion, error-chip edit, typing bursts (first input of a >700 ms-idle
+  burst pushes the settled pre-burst snapshot). `Ctrl+Z` / `Ctrl+Y` /
+  `Ctrl+Shift+Z` on the link input; `preventDefault` keeps native undo out
+  of the way. Stack capped at 60.
+- **Duplicate UX**: a duplicate media id no longer creates a persistent
+  error chip — an amber `.is-dup` chip ("duplicate, removing…") lands with
+  a shrinking 3 s countdown bar (`.pcl-dupbar` keyframe) and removes itself
+  (`.is-leaving` fade). Same-post-twice-in-one-paste gets the same treat.
+- **Typo-pointing errors**: `classifyUrl` failures now carry
+  `{token, bad:{s,e}}` — the mistyped HOST (edit-distance ≤2/3 against the
+  canonical host list, "youtube.cm → did you mean youtube.com?"), the wrong
+  PATH on a right platform, or the whole host for foreign platforms. The
+  error chip renders the segment as `.pcl-chip-bad`; clicking the chip
+  (`fixErrChip`) loads the full URL into the input with that exact range
+  selected (`setSelectionRange`).
+- **Photo tile**: player photo moved out of its own row into
+  `.pcl-playergrid` (`124px | 1fr | 1fr`, photo LEFT of Full name; ≤620 px
+  single column, tile centred above — the override lives in the late
+  "Mobile additions" block so it wins the cascade). Sub-text removed; one
+  alt line ("Only for the first time — until the admin approves it",
+  swapped to "Photo on file — reused" when the JSONP lookup hits). Tile is
+  icon-first with the Windows-open-folder SVG (shared `FOLDER_SVG`, also
+  replaces the vague camera/bucket glyphs on the per-post SHOT wells and
+  VIEW-row buttons).
+- **Collab popover**: the COLLAB pill became `.pcl-collab-btn` — a 36px
+  circular people icon (GROUP_SVG, community style). Tap toggles + opens
+  `.pcl-collabpop` right below (partner input, 50:50 hint, error slot),
+  gold `½` badge pinned when on; VIEW rows keep a plain COLLAB · name tag.
+  Payload + backend flow unchanged.
+- **Week info cards**: gap between challenge bars 12 → 18 px.
+- **Tests**: `scripts/test_url_diag.js` (headless extract of the URL engine:
+  valid shapes, typo suggestions, host-range math, path ranges, not-a-link)
+  24/24; fixture E2E (agent-browser): SF 500+shadow, VT toggle both ways,
+  indigo header on 3 pages, autocomplete case-blind + Enter top-pick,
+  typo chip → selected segment, dup chip auto-remove (3.4 s), undo/redo
+  across commits + real ctrl+z key event, collab pop + ½ badge + toggle,
+  full draft round-trip (text + photo + screenshot via real change handler,
+  LEVEL CLEARED → draft wiped → no restore), mobile 390 stacked tile +
+  no h-scroll, dark mode, console clean.

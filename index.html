@@ -71,10 +71,34 @@
     <form id="pclForm" class="pcl-form" novalidate autocomplete="off">
       <p class="pcl-form-note">Fields marked <span class="pcl-req-star">*</span> are required.</p>
 
-      <!-- 1 · PLAYER DETAILS -->
+      <!-- 1 · PLAYER DETAILS — photo sits LEFT of the name fields
+             (mobile: the photo tile moves above them, centred) -->
       <section class="pcl-panel">
         <h2 class="pcl-panel-title">1 &middot; Player Details</h2>
-        <div class="pcl-grid2">
+        <div class="pcl-playergrid">
+          <div class="pcl-field pcl-photofield" data-field="playerPhoto">
+            <button type="button" class="pcl-photo-tile" id="photoBtn"
+                    aria-label="Upload your player photo"
+                    title="Upload your player photo">
+              <span class="pcl-px-folder" id="photoFolderIcon" aria-hidden="true"
+              ><svg class="pcl-folder-ico" viewBox="0 0 16 13" shape-rendering="crispEdges"
+                    role="img" aria-hidden="true">
+                <rect x="1" y="0" width="6" height="2" fill="#e8a200"/>
+                <rect x="1" y="2" width="14" height="10" fill="#f5b81e"/>
+                <rect x="1" y="2" width="14" height="1" fill="#ffd76b"/>
+                <polygon points="4,5 15,5 13,11 2,11" fill="#fffdf6"/>
+                <polygon points="2,5 16,5 13.5,12 0,12" fill="#ffd042"/>
+                <polygon points="2,5 16,5 15.7,6.2 2.3,6.2" fill="#ffe28a"/>
+              </svg></span>
+              <span class="pcl-photothumb" id="photoThumb" hidden>
+                <img id="photoThumbImg" alt="Player photo" />
+              </span>
+              <span class="pcl-photostate" id="photoState" hidden></span>
+            </button>
+            <p class="pcl-photo-alt" id="photoAlt">Only for the first time &mdash;
+              until the admin approves it.</p>
+            <p class="pcl-err" id="photoErr">Upload your photo.</p>
+          </div>
           <div class="pcl-field" data-field="fullName">
             <label class="pcl-label" for="fullName">Full name <span class="pcl-req-star">*</span></label>
             <input class="pcl-input" id="fullName" name="fullName"
@@ -83,29 +107,15 @@
           </div>
           <div class="pcl-field" data-field="reportingManager">
             <label class="pcl-label" for="reportingManager">Reporting manager <span class="pcl-req-star">*</span></label>
-            <input class="pcl-input" id="reportingManager" name="reportingManager"
-                   type="text" placeholder="e.g. Rahul" />
+            <div class="pcl-acwrap">
+              <input class="pcl-input" id="reportingManager" name="reportingManager"
+                     type="text" placeholder="e.g. Rahul" autocomplete="off"
+                     role="combobox" aria-expanded="false"
+                     aria-autocomplete="list" aria-controls="managerAc" />
+              <div class="pcl-ac" id="managerAc" role="listbox" hidden></div>
+            </div>
             <p class="pcl-err">Required</p>
           </div>
-        </div>
-        <div class="pcl-field pcl-photofield" data-field="playerPhoto">
-          <div class="pcl-photoline">
-            <span class="pcl-photothumb" id="photoThumb" hidden>
-              <img id="photoThumbImg" alt="Player photo" />
-            </span>
-            <span class="pcl-photoline-text">
-              <label class="pcl-label" for="photoBtn">Player photo <span class="pcl-req-star">*</span></label>
-              <span class="pcl-hint">Tap to add a square photo for the leaderboard —
-                you crop it right here. On file already? It appears by itself
-                when you type your name.</span>
-            </span>
-            <button type="button" class="pcl-shotbtn pcl-photobtn" id="photoBtn">
-              <span class="pcl-px-photo" aria-hidden="true"></span><span
-                id="photoBtnLabel">+ UPLOAD</span>
-            </button>
-            <span class="pcl-photostate" id="photoState" hidden></span>
-          </div>
-          <p class="pcl-err" id="photoErr">Upload your photo.</p>
         </div>
       </section>
 

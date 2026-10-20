@@ -170,30 +170,57 @@
       (withMult ? " <b>×" + f.mult + "</b>" : "") + "</span>";
   }
 
+  /* Windows-style OPEN FOLDER — the one upload glyph everywhere (photo tile
+     + SHOT wells). The old box-arrow / bucket glyphs read vague at 13px. */
+  var FOLDER_SVG = '<svg class="pcl-folder-ico" viewBox="0 0 16 13" ' +
+    'shape-rendering="crispEdges" aria-hidden="true">' +
+    '<rect x="1" y="0" width="6" height="2" fill="#e8a200"/>' +
+    '<rect x="1" y="2" width="14" height="10" fill="#f5b81e"/>' +
+    '<rect x="1" y="2" width="14" height="1" fill="#ffd76b"/>' +
+    '<polygon points="4,5 15,5 13,11 2,11" fill="#fffdf6"/>' +
+    '<polygon points="2,5 16,5 13.5,12 0,12" fill="#ffd042"/>' +
+    '<polygon points="2,5 16,5 15.7,6.2 2.3,6.2" fill="#ffe28a"/></svg>';
+  /* community-style PEOPLE icon — the collab button (WhatsApp/Teams vibe) */
+  var GROUP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">' +
+    '<circle cx="8.7" cy="8.6" r="3.1"/>' +
+    '<path d="M2.7 18.4c.5-3.3 3-5.2 6-5.2s5.5 1.9 6 5.2z"/>' +
+    '<circle cx="16.8" cy="9.4" r="2.5" opacity="0.72"/>' +
+    '<path d="M15.5 13.6c2.9-.2 5.4 1.6 6 4.8h-5c-.15-1.9-.9-3.6-2-4.8z" ' +
+    'opacity="0.72"/></svg>';
+
   function classifyUrl(raw) {
     var tok = String(raw || "").trim().replace(/[)\]}>,.;]+$/, "");
     if (!tok) return null;
+    var whole = { s: 0, e: tok.length };
     if (!/^https?:\/\//i.test(tok)) {
       if (/^(www\.|[\w-]+\.[a-z]{2,})/i.test(tok)) tok = "https://" + tok;
       else if (/\./.test(tok) || /\//.test(tok)) {
-        return { ok: false, reason: "Not a link — paste the full post URL." };
+        return { ok: false, token: tok,
+        reason: "Not a link — paste the full post URL.", bad: whole };
       } else return null; // stray word from a sentence — ignore silently
     }
     var u;
     try { u = new URL(tok); } catch (e) {
-      return { ok: false, reason: "Not a link — paste the full post URL." };
+      return { ok: false, token: tok,
+        reason: "Not a link — paste the full post URL.", bad: whole };
     }
     if (!/\./.test(u.hostname)) {
-      return { ok: false, reason: "Not a link — paste the full post URL." };
+      return { ok: false, token: tok,
+        reason: "Not a link — paste the full post URL.", bad: whole };
     }
     var host = u.hostname.replace(/^www\./i, "").toLowerCase();
     var path = u.pathname || "";
+    /* the exact segment that is wrong — the error chip lights THIS part up
+       and one click drops the link back into the input with it selected */
+    var hostRange = rangeOf(tok, u.hostname) || whole;
+    var pathRange = path ? rangeOf(tok, path) : null;
 
     if (/(^|\.)instagram\.com$/.test(host) || host === "instagr.am") {
       var im = path.match(/\/(reel|reels|tv|p)\/([A-Za-z0-9_-]+)/i);
       if (!im) {
-        return { ok: false,
-          reason: "Instagram — only Reel or Post links count in the league." };
+        return { ok: false, token: tok,
+          reason: "Instagram — only Reel or Post links count in the league.",
+          bad: pathRange || hostRange };
       }
       return {
         ok: true, url: tok,
@@ -211,29 +238,84 @@
       var bm = !vid && !lm && host === "youtu.be" ? path.match(/^\/([A-Za-z0-9_-]+)/) : null;
       var id = vid || (lm && lm[1]) || (bm && bm[1]);
       if (id) return { ok: true, url: tok, format: "yt_long", mediaId: "yt_" + id };
-      return { ok: false,
-        reason: "YouTube — only video or Shorts links count in the league." };
+      return { ok: false, token: tok,
+        reason: "YouTube — only video or Shorts links count in the league.",
+        bad: pathRange || hostRange };
     }
 
     if (/(^|\.)linkedin\.com$/.test(host) || host === "lnkd.in") {
       var pm = path.match(/\/(?:posts|feed\/update|pulse)\/([^\/?#]+)/i) ||
                path.match(/activity[-:]?(\d{10,})/i);
       if (!pm && host !== "lnkd.in") {
-        return { ok: false,
-          reason: "LinkedIn — only post links count in the league." };
+        return { ok: false, token: tok,
+          reason: "LinkedIn — only post links count in the league.",
+          bad: pathRange || hostRange };
       }
       if (!pm) pm = path.match(/^\/([A-Za-z0-9_-]+)/);   // lnkd.in/<token>
       if (!pm) {
-        return { ok: false,
-          reason: "LinkedIn — that lnkd.in link looks truncated." };
+        return { ok: false, token: tok,
+          reason: "LinkedIn — that lnkd.in link looks truncated.",
+          bad: whole };
       }
       var am = tok.match(/activity[-:](\d{10,})/i);
       return { ok: true, url: tok, format: "li_post",
                mediaId: "li_" + (am ? am[1] : pm[1]) };
     }
 
-    return { ok: false,
-      reason: "Unsupported platform — Instagram, YouTube or LinkedIn only." };
+    /* wrong domain: first guess the typo (youtube.cm → youtube.com), then
+       flag the whole host as foreign — both ways, the chip shows WHERE it
+       broke and one click loads it for editing with that part selected */
+    var typo = hostTypo(host);
+    if (typo) {
+      return { ok: false, token: tok,
+        reason: host + " looks mistyped — did you mean " + typo.dom + "?",
+        bad: hostRange };
+    }
+    return { ok: false, token: tok,
+      reason: "Unsupported platform — Instagram, YouTube or LinkedIn only.",
+      bad: hostRange };
+  }
+
+  /* ---- typo + segment diagnostics for the URL engine ---------------------- */
+  function editDist(a, b) {
+    var m = a.length, n = b.length, i, j, t;
+    var prev = [], cur = [];
+    for (j = 0; j <= n; j++) prev[j] = j;
+    for (i = 1; i <= m; i++) {
+      cur[0] = i;
+      for (j = 1; j <= n; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1,
+          prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+      }
+      t = prev; prev = cur; cur = t;
+    }
+    return prev[n];
+  }
+  var HOST_CANON = ["instagram.com", "instagr.am", "youtube.com", "youtu.be",
+    "youtube-nocookie.com", "linkedin.com", "lnkd.in"];
+  var HOST_FIX = {
+    "instagram.com": "instagram.com", "instagr.am": "instagram.com",
+    "youtube.com": "youtube.com", "youtu.be": "youtube.com",
+    "youtube-nocookie.com": "youtube.com", "linkedin.com": "linkedin.com",
+    "lnkd.in": "linkedin.com"
+  };
+  function hostTypo(host) {
+    var h = String(host || "").replace(/^(www|m|music)\./i, "");
+    var best = null;
+    HOST_CANON.forEach(function (k) {
+      var d = editDist(h, k);
+      var tol = k.length >= 12 ? 3 : 2;
+      if (d > 0 && d <= tol && (!best || d < best.dist)) {
+        best = { dist: d, dom: k, fix: HOST_FIX[k] };
+      }
+    });
+    return best;
+  }
+  function rangeOf(tok, needle) {
+    var lo = String(tok).toLowerCase();
+    var i = lo.indexOf(String(needle).toLowerCase());
+    if (i < 0 || !needle) return null;
+    return { s: i, e: i + String(needle).length };
   }
 
   function linkDisplay(url) {
@@ -303,9 +385,25 @@
       '"></button></span>';
   }
   function errChipHtml(e, i) {
-    return '<span class="pcl-chip is-error" data-kind="err" data-reason="' +
-      esc(e.reason) + '" title="' + esc(e.reason) + '">' +
-      '<span class="pcl-chip-label">' + esc(shortToken(e.token)) + '</span>' +
+    var tok = String(e.token || "");
+    var bad = (e.bad && e.bad.s >= 0 && e.bad.e > e.bad.s && e.bad.e <= tok.length)
+      ? e.bad : null;
+    var label;
+    if (bad) {
+      var head = tok.slice(0, bad.s);
+      var mid = tok.slice(bad.s, bad.e);
+      var tail = tok.slice(bad.e);
+      label = (head.length > 20 ? head.slice(0, 18) + "…" : esc(head)) +
+        '<span class="pcl-chip-bad">' +
+        esc(mid.length > 24 ? mid.slice(0, 24) + "…" : mid) + "</span>" +
+        esc(tail.length > 10 ? tail.slice(0, 10) + "…" : tail);
+    } else {
+      label = esc(shortToken(tok));
+    }
+    return '<span class="pcl-chip is-error" data-kind="err" data-act="fixerr" data-i="' +
+      i + '" data-reason="' + esc(e.reason + " — tap the red part to edit.") +
+      '" title="' + esc(e.reason) + '">' +
+      '<span class="pcl-chip-label">' + label + '</span>' +
       '<button type="button" class="pcl-chip-x" data-act="delerr" data-i="' + i +
       '" aria-label="Remove invalid link"></button></span>';
   }
@@ -320,6 +418,22 @@
     chipList.innerHTML = html;
   }
 
+  /* duplicates are ALLOWED to land — the chip shows "duplicate, removing…"
+     with a 3-second countdown bar, then removes itself (user spec) */
+  function addDupChip(tok) {
+    var el = document.createElement("span");
+    el.className = "pcl-chip is-dup";
+    el.setAttribute("data-kind", "dup");
+    el.innerHTML = '<span class="pcl-chip-label">' + esc(shortToken(tok)) +
+      " — duplicate, removing…</span>" +
+      '<span class="pcl-dupbar" aria-hidden="true"></span>';
+    chipList.appendChild(el);
+    setTimeout(function () {
+      el.classList.add("is-leaving");
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 200);
+    }, 3000);
+  }
+
   function renderDetailsHead() {
     postCount.textContent = posts.length + (posts.length === 1 ? " POST" : " POSTS");
     postCount.hidden = posts.length === 0;
@@ -327,18 +441,75 @@
     postEmpty.hidden = posts.length !== 0;
   }
 
+  /* ---------- undo / redo — the links section only (ctrl+z / ctrl+y) ----------
+   Covers typing bursts, pastes, commits, chip deletions and error-chip
+   edits. One step back = exactly what the section looked like before. */
+  var undoStack = [];
+  var redoStack = [];
+  var lastBurstAt = 0;
+  var lastInputSnap = null;
+  function snapLinks() {
+    return {
+      input: linkInput.value,
+      posts: posts.map(function (p) { return Object.assign({}, p); }),
+      errs: chipErrors.map(function (e) { return Object.assign({}, e); })
+    };
+  }
+  function pushUndo(snap) {
+    undoStack.push(snap || snapLinks());
+    if (undoStack.length > 60) undoStack.shift();
+    redoStack.length = 0;
+  }
+  function applySnap(s) {
+    linkInput.value = s.input;
+    posts = s.posts.map(function (p) { return Object.assign({}, p); });
+    chipErrors = s.errs.map(function (e) { return Object.assign({}, e); });
+    renderChips(); renderRows(); renderDetailsHead();
+    clearFieldErr("postLinks");
+    lastInputSnap = snapLinks();
+  }
+  function undoLinks() {
+    if (!undoStack.length) return false;
+    redoStack.push(snapLinks());
+    applySnap(undoStack.pop());
+    return true;
+  }
+  function redoLinks() {
+    if (!redoStack.length) return false;
+    undoStack.push(snapLinks());
+    applySnap(redoStack.pop());
+    return true;
+  }
+  function undoKeys(ev) {
+    if (!(ev.ctrlKey || ev.metaKey)) return;
+    var k = String(ev.key || "").toLowerCase();
+    if (k === "z" && !ev.shiftKey) {
+      ev.preventDefault();
+      undoLinks();
+    } else if ((k === "z" && ev.shiftKey) || k === "y") {
+      ev.preventDefault();
+      redoLinks();
+    }
+  }
+  linkInput.addEventListener("keydown", undoKeys);
+
   function commitLinks() {
     var raw = linkInput.value;
+    if (String(raw || "").trim()) pushUndo();
     chipErrors = [];
     var inBatch = {};
+    var dups = [];
     var added = 0;
     String(raw || "").split(/[\s,;]+/).forEach(function (tok) {
       var c = classifyUrl(tok);
       if (!c) return;
-      if (!c.ok) { chipErrors.push({ token: tok, reason: c.reason }); return; }
-      if (inBatch[c.mediaId]) return;                 // same post twice in one paste
-      if (posts.some(function (p) { return p.id === c.mediaId; })) {
-        chipErrors.push({ token: tok, reason: "Already added — remove it first." });
+      if (!c.ok) {
+        chipErrors.push({ token: c.token || tok, reason: c.reason, bad: c.bad });
+        return;
+      }
+      if (inBatch[c.mediaId] ||
+          posts.some(function (p) { return p.id === c.mediaId; })) {
+        dups.push(c.token || tok);          // “duplicate, removing…” chip
         return;
       }
       inBatch[c.mediaId] = true;
@@ -353,7 +524,27 @@
     renderChips();
     renderRows();
     renderDetailsHead();
+    dups.forEach(addDupChip);
+    lastInputSnap = snapLinks();
     if (added > 0 || chipErrors.length > 0) clearFieldErr("postLinks");
+  }
+
+  /* one click on an error chip → the link lands in the input with exactly
+     the broken segment pre-selected, ready to retype */
+  function fixErrChip(i) {
+    var e = chipErrors[i];
+    if (!e) return;
+    pushUndo();
+    chipErrors.splice(i, 1);
+    linkInput.value = e.token;
+    renderChips();
+    renderDetailsHead();
+    clearFieldErr("postLinks");
+    lastInputSnap = snapLinks();
+    linkInput.focus();
+    var bad = (e.bad && e.bad.e <= e.token.length) ? e.bad
+              : { s: 0, e: e.token.length };
+    try { linkInput.setSelectionRange(bad.s, bad.e); } catch (err) { /* ok */ }
   }
 
   chipList.addEventListener("click", function (ev) {
@@ -361,8 +552,9 @@
     if (!btn) return;
     var act = btn.getAttribute("data-act");
     var i = Number(btn.getAttribute("data-i"));
-    if (act === "del") posts.splice(i, 1);
-    else if (act === "delerr") chipErrors.splice(i, 1);
+    if (act === "del") { pushUndo(); posts.splice(i, 1); }
+    else if (act === "delerr") { pushUndo(); chipErrors.splice(i, 1); }
+    else if (act === "fixerr") { fixErrChip(i); return; }
     renderChips();
     renderRows();
     renderDetailsHead();
@@ -375,10 +567,16 @@
     }
   });
   linkInput.addEventListener("paste", function () {
-    setTimeout(commitLinks, 0);   // let the value land first
+    pushUndo();                    // accidental mega-paste → one ctrl+z away
+    setTimeout(commitLinks, 0);    // let the value land first
   });
   linkInput.addEventListener("input", function () {
     clearFieldErr("postLinks");   // typing → navy well returns
+    var now = Date.now();
+    if (now - lastBurstAt > 700 && lastInputSnap) pushUndo(lastInputSnap);
+    lastBurstAt = now;
+    clearTimeout(linkInput.__snapT);
+    linkInput.__snapT = setTimeout(function () { lastInputSnap = snapLinks(); }, 250);
   });
   addLinksBtn.addEventListener("click", commitLinks);
   chipBox.addEventListener("click", function (ev) {
@@ -404,27 +602,35 @@
       '" /><p class="pcl-err">Required</p></div>';
     var btn = p.shot
       ? '<button type="button" class="pcl-shotbtn is-set" data-act="shot" data-id="' +
-        esc(p.id) + '" title="' + esc(p.shot.name) + '">' +
-        '<img class="pcl-thumb" src="' + p.shot.content + '" alt="" />' + "SHOT</button>"
+        esc(p.id) + '" title="Screenshot attached — click to replace" ' +
+        'aria-label="Screenshot attached — click to replace">' +
+        '<img class="pcl-thumb" src="' + p.shot.content + '" alt="" /></button>'
       : '<button type="button" class="pcl-shotbtn" data-act="shot" data-id="' +
-        esc(p.id) + '"><span class="pcl-px-photo" aria-hidden="true"></span>+ SHOT</button>';
+        esc(p.id) + '" title="Attach analytics screenshot" ' +
+        'aria-label="Attach analytics screenshot">' + FOLDER_SVG + "</button>";
     var cellShot = '<div class="pcl-cell pcl-cell--shot' +
       (p.errShotMsg ? " is-error" : "") + '">' + btn +
       '<p class="pcl-err">' + esc(p.errShotMsg || "Required") + "</p></div>";
     var collab = '<div class="pcl-collabrow">' +
-      '<button type="button" class="pcl-collab-toggle' + (p.collab ? " is-on" : "") +
+      '<button type="button" class="pcl-collab-btn' + (p.collab ? " is-on" : "") +
       '" data-act="collab" data-id="' + esc(p.id) +
       '" aria-pressed="' + (p.collab ? "true" : "false") +
-      '" title="Collab post — points split 50:50 once the partner submits the same link">' +
-      "COLLAB</button>" +
+      '" aria-label="Collab post — add a partner (post ' + n + ')" ' +
+      'title="Collab post — points split 50:50 once the partner submits the same link">' +
+      GROUP_SVG +
+      (p.collab ? '<span class="pcl-collab-half" aria-hidden="true">½</span>' : "") +
+      "</button>" +
       (p.collab
-        ? '<input class="pcl-input pcl-collab-input' + (p.errCollab ? " is-error" : "") +
+        ? '<div class="pcl-collabpop">' +
+          '<span class="pcl-collab-title">Collab · points split 50:50</span>' +
+          '<input class="pcl-input pcl-collab-input' + (p.errCollab ? " is-error" : "") +
           '" data-act="collabname" data-id="' + esc(p.id) +
           '" type="text" placeholder="Partner\u2019s full name" value="' +
           esc(p.collabWith) + '" aria-label="Partner\u2019s full name — post ' + n + '" />' +
-          '<span class="pcl-hint pcl-collab-hint">Same link uploaded by the partner ' +
-          "splits this post\u2019s points 50:50.</span>" +
-          (p.errCollab ? '<p class="pcl-err">Required</p>' : "")
+          '<span class="pcl-hint pcl-collab-hint">Your partner submits the same link — ' +
+          "once the backend confirms the pair, this post\u2019s points split 50:50.</span>" +
+          (p.errCollab ? '<p class="pcl-err">Add your partner\u2019s name.</p>' : "") +
+          "</div>"
         : "") +
       "</div>";
     return '<div class="pcl-post" data-id="' + esc(p.id) + '">' +
@@ -439,11 +645,12 @@
     var n = i + 1;
     var btn = p.shot
       ? '<button type="button" class="pcl-vshot is-set" data-act="photo" data-id="' +
-        esc(p.id) + '" title="Open screenshot"><span class="pcl-px-photo" aria-hidden="true"></span>PHOTO</button>'
+        esc(p.id) + '" title="Open screenshot">' + FOLDER_SVG + "PHOTO</button>"
       : '<button type="button" class="pcl-vshot is-missing" data-act="shot" data-id="' +
-        esc(p.id) + '" title="Attach analytics screenshot"><span class="pcl-px-photo" aria-hidden="true"></span>ADD SHOT</button>';
+        esc(p.id) + '" title="Attach analytics screenshot">' + FOLDER_SVG +
+        "ADD SHOT</button>";
     var collabTag = p.collab
-      ? '<span class="pcl-collab-toggle is-on" aria-hidden="true">COLLAB' +
+      ? '<span class="pcl-collab-toggle" aria-hidden="true">COLLAB' +
         (p.collabWith ? " · " + esc(p.collabWith) : "") + "</span>"
       : "";
     return '<div class="pcl-vrow" data-id="' + esc(p.id) + '">' +
@@ -456,6 +663,7 @@
     if (!posts.length) { postRows.innerHTML = ""; return; }
     postRows.innerHTML = posts.map(viewMode === "edit" ? editRowHtml : viewRowHtml)
                               .join("");
+    noteDraft();
   }
 
   function setMode(mode) {
@@ -516,6 +724,11 @@
       p.collab = !p.collab;
       p.errCollab = false;
       renderRows();
+      if (p.collab) {
+        var pop = postRows.querySelector('.pcl-post[data-id="' + id +
+          '"] .pcl-collab-input');
+        if (pop) pop.focus();
+      }
     }
   });
 
@@ -875,27 +1088,33 @@
   var photoInput = $("photoInput");
   var photoThumb = $("photoThumb");
   var photoThumbImg = $("photoThumbImg");
-  var photoBtnLabel = $("photoBtnLabel");
   var photoStateEl = $("photoState");
+  var photoFolderIcon = $("photoFolderIcon");
+  var photoAlt = $("photoAlt");
+  var PHOTO_ALT_NEW = "Only for the first time — until the admin approves it.";
+  var PHOTO_ALT_REUSE = "Photo on file — reused for this entry.";
 
   function renderPhoto() {
     var src = photoState.file ? photoState.file.content
               : (photoState.existing ? photoState.existing.thumb : "");
     photoThumb.hidden = !src;
     if (src) photoThumbImg.src = src;
+    photoFolderIcon.hidden = !!src;
+    photoBtn.classList.toggle("is-set", !!src);
     if (photoState.file) {
-      photoBtnLabel.textContent = "CHANGE PHOTO";
       photoStateEl.hidden = false;
       photoStateEl.textContent = "READY ✓";
+      photoAlt.textContent = PHOTO_ALT_NEW;
     } else if (photoState.existing) {
-      photoBtnLabel.textContent = "REPLACE PHOTO";
       photoStateEl.hidden = false;
-      photoStateEl.textContent = "ON FILE ✓ — REUSED";
+      photoStateEl.textContent = "ON FILE ✓";
+      photoAlt.textContent = PHOTO_ALT_REUSE;
     } else {
-      photoBtnLabel.textContent = "+ UPLOAD PHOTO";
       photoStateEl.hidden = true;
       photoStateEl.textContent = "";
+      photoAlt.textContent = PHOTO_ALT_NEW;
     }
+    noteDraft();
   }
 
   photoBtn.addEventListener("click", function () { photoInput.click(); });
@@ -1008,6 +1227,7 @@
       clearFieldErr("playerPhoto");
       close();
       renderPhoto();
+      noteDraft();
     }
 
     root.addEventListener("click", function (ev) {
@@ -1118,6 +1338,266 @@
   $("weekInfoBtn").addEventListener("click", openWeekInfo);
   $("pclRulebookBtn").addEventListener("click", openRulebook);
   buildWeekOptions();   // only the ONGOING week is selectable
+
+  /* ============================================================================
+     DRAFT PERSISTENCE — accidental-reload insurance.
+     Text fields + committed posts live in localStorage (key: pcl_draft_v1).
+     MEDIA (cropped photo, per-post screenshots) lives in IndexedDB — data
+     URLs are far too fat for the 5 MB localStorage budget. Everything is
+     restored on load and wiped the moment a submission SUCCEEDS.
+     ========================================================================== */
+  var DRAFT_KEY = "pcl_draft_v1";
+  var draftTimer = null;
+
+  function idbReq(fn) {
+    return new Promise(function (resolve) {
+      try {
+        var open = indexedDB.open("pcl-draft", 1);
+        open.onupgradeneeded = function () {
+          open.result.createObjectStore("kv");
+        };
+        open.onerror = function () { resolve(null); };
+        open.onsuccess = function () {
+          var db = open.result;
+          try { fn(db, resolve); } catch (e) { resolve(null); }
+        };
+      } catch (e) { resolve(null); }
+    });
+  }
+  function idbSet(key, val) {
+    return idbReq(function (db, resolve) {
+      var tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").put(val, key);
+      tx.oncomplete = function () { resolve(true); };
+      tx.onerror = function () { resolve(null); };
+      tx.onabort = function () { resolve(null); };
+    });
+  }
+  function idbGet(key) {
+    return idbReq(function (db, resolve) {
+      var tx = db.transaction("kv", "readonly");
+      var rq = tx.objectStore("kv").get(key);
+      rq.onsuccess = function () { resolve(rq.result || null); };
+      rq.onerror = function () { resolve(null); };
+    });
+  }
+  function idbWipe() {
+    return idbReq(function (db, resolve) {
+      var tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").clear();
+      tx.oncomplete = function () { resolve(true); };
+      tx.onerror = function () { resolve(null); };
+    });
+  }
+
+  function noteDraft() {
+    if (draftTimer) clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 350);
+  }
+  function saveDraft() {
+    if (!doneScreen.hidden) return;              // submitted — nothing to keep
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        v: 1, at: Date.now(),
+        fullName: fullName.value, manager: manager.value,
+        links: linkInput.value,
+        posts: posts.map(function (p) {
+          return { id: p.id, url: p.url, format: p.format, mediaId: p.mediaId,
+                   views: p.views, collab: p.collab, collabWith: p.collabWith,
+                   hasShot: !!p.shot,
+                   shotMeta: p.shot ? { name: p.shot.name, type: p.shot.type } : null };
+        }),
+        week: week.value, challengeUrl: challengeUrl.value,
+        notes: notes.value, mode: viewMode
+      }));
+    } catch (e) { /* storage blocked — media/text drafts unavailable */ }
+    idbSet("photo", photoState.file || null);
+    posts.forEach(function (p) { idbSet("shot:" + p.id, p.shot || null); });
+  }
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* ok */ }
+    idbWipe();
+  }
+
+  function restoreDraft() {
+    var raw = null;
+    try { raw = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); }
+    catch (e) { return; }
+    if (!raw || raw.v !== 1) return;
+    var texty = [raw.fullName, raw.manager, raw.links, raw.week,
+                 raw.challengeUrl, raw.notes].join("");
+    if (!texty && !(raw.posts && raw.posts.length)) return;
+
+    fullName.value = String(raw.fullName || "");
+    manager.value = String(raw.manager || "");
+    linkInput.value = String(raw.links || "");
+    var oldPosts = raw.posts || [];
+    posts = oldPosts.map(function (p) {
+      return { id: p.id, url: p.url, format: p.format, mediaId: p.mediaId,
+               views: String(p.views || ""), shot: null, errViews: false,
+               errShotMsg: "", collab: !!p.collab,
+               collabWith: String(p.collabWith || ""), errCollab: false };
+    });
+    if (raw.week) {   // only if that week is STILL open (options come from the clock)
+      for (var i = 0; i < week.options.length; i++) {
+        if (week.options[i].value === raw.week) {
+          week.value = raw.week;
+          fieldOf("challengeUrl").hidden = false;
+          fieldOf("additionalNotes").hidden = false;
+          break;
+        }
+      }
+    }
+    challengeUrl.value = String(raw.challengeUrl || "");
+    notes.value = String(raw.notes || "");
+    viewMode = raw.mode === "view" ? "view" : "edit";
+    Array.prototype.forEach.call(viewToggle.querySelectorAll(".pcl-vbtn"),
+      function (b) {
+        b.classList.toggle("is-active", b.getAttribute("data-mode") === viewMode);
+      });
+    renderChips();
+    renderRows();
+    renderDetailsHead();
+
+    /* media comes back asynchronously from IndexedDB */
+    idbGet("photo").then(function (f) {
+      if (f && f.content) { photoState.file = f; renderPhoto(); }
+    });
+    oldPosts.forEach(function (p) {
+      if (!p.hasShot && !p.shotMeta) return;
+      idbGet("shot:" + p.id).then(function (s) {
+        var pp = postById(p.id);
+        if (pp && s && s.content) { pp.shot = s; renderRows(); }
+      });
+    });
+
+    saveState.hidden = false;
+    saveState.textContent = "DRAFT RESTORED ✓";
+    setTimeout(function () {
+      if (saveState.textContent === "DRAFT RESTORED ✓") {
+        saveState.hidden = true;
+        saveState.textContent = "";
+      }
+    }, 3200);
+    if (fullName.value.trim().length >= 2) lookupPhoto();
+  }
+  /* every keystroke/change anywhere in the form queues a draft save */
+  form.addEventListener("input", noteDraft, true);
+  form.addEventListener("change", noteDraft, true);
+
+  /* ============================================================================
+     REPORTING MANAGER AUTOCOMPLETE — one letter is enough. Case doesn't lock:
+     "vik", "VIK", "vikr" all surface Vikram Singh. Ranking: word-start matches
+     first, then contains, then initials ("vs" → Vikram Singh). Free text stays
+     allowed — the list only ASSISTS, it never locks the field.
+     ========================================================================== */
+  var MANAGERS = ["Pratham Jindal", "Divya", "Vikram Singh", "Jatin Gulati",
+    "Lagan Garg", "Giriraj Godara", "Kartik Handa", "Aditya Verma",
+    "Deepanshum Srivastava", "Tanishq Shukla", "Shubham Rai", "Vishal Chib",
+    "Ashutosh Gupta"];
+
+  var ManagerAc = (function () {
+    var box = $("managerAc");
+    if (!box || !manager) return { close: function () {} };
+    var openState = false;
+    var sel = -1;
+    var opts = [];
+
+    function score(name, q) {
+      var n = name.toLowerCase();
+      var i = n.indexOf(q);
+      if (i >= 0) {
+        if (i === 0) return 0;                       // starts with
+        if (n.charAt(i - 1) === " ") return 5 + i;   // word start
+        return 20 + i;                               // contains
+      }
+      var initials = n.split(/\s+/).map(function (w) {
+        return w.charAt(0);
+      }).join("");
+      var j = initials.indexOf(q);
+      return j >= 0 ? 60 + j : -1;                   // initials guess
+    }
+    function hl(name, q) {
+      var i = name.toLowerCase().indexOf(q);
+      if (i < 0) return esc(name);
+      return esc(name.slice(0, i)) + "<b>" + esc(name.slice(i, i + q.length)) +
+        "</b>" + esc(name.slice(i + q.length));
+    }
+    function close() {
+      openState = false; sel = -1; opts = [];
+      box.hidden = true;
+      box.innerHTML = "";
+      manager.setAttribute("aria-expanded", "false");
+    }
+    function choose(name) {
+      manager.value = name;
+      close();
+      var f = manager.closest(".pcl-field");
+      if (f) f.classList.remove("is-error");
+      manager.dispatchEvent(new Event("input", { bubbles: true }));
+      manager.focus();
+    }
+    function markSel() {
+      Array.prototype.forEach.call(box.querySelectorAll(".pcl-ac-opt"),
+        function (el, i) { el.classList.toggle("is-sel", i === sel); });
+    }
+    function update() {
+      var q = manager.value.trim().toLowerCase().replace(/\s+/g, " ");
+      if (!q) { close(); return; }
+      var list = MANAGERS.map(function (n) { return { name: n, s: score(n, q) }; })
+        .filter(function (x) { return x.s >= 0; })
+        .sort(function (a, b) { return a.s - b.s || a.name.length - b.name.length; })
+        .slice(0, 6);
+      manager.setAttribute("aria-expanded", "true");
+      if (!list.length) {
+        opts = [];
+        box.innerHTML = '<div class="pcl-ac-none">No match — keep the name as typed.</div>';
+        box.hidden = false;
+        openState = true;
+        sel = -1;
+        return;
+      }
+      opts = list.map(function (x) { return x.name; });
+      box.innerHTML = list.map(function (x, i) {
+        return '<button type="button" class="pcl-ac-opt" role="option" id="pclAcOpt' +
+          i + '" data-name="' + esc(x.name) + '">' + hl(x.name, q) + "</button>";
+      }).join("") +
+        '<div class="pcl-ac-none">Not on the list? Keep the name as typed.</div>';
+      box.hidden = false;
+      openState = true;
+      sel = 0;          // top match pre-highlighted → Enter takes it (no "vikrm" typos)
+      markSel();
+    }
+
+    manager.addEventListener("input", update);
+    manager.addEventListener("keydown", function (ev) {
+      if (!openState) return;
+      if (ev.key === "ArrowDown" && opts.length) {
+        ev.preventDefault();
+        sel = Math.min(sel + 1, opts.length - 1);
+        markSel();
+      } else if (ev.key === "ArrowUp" && opts.length) {
+        ev.preventDefault();
+        sel = Math.max(sel - 1, 0);
+        markSel();
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();              // picker open → Enter never submits
+        if (opts.length) choose(opts[Math.max(0, sel)]);
+        else close();
+      } else if (ev.key === "Escape") {
+        close();
+      }
+    });
+    box.addEventListener("mousedown", function (ev) {
+      var b = ev.target.closest(".pcl-ac-opt");
+      if (b) {
+        ev.preventDefault();              // mousedown beats the input blur
+        choose(b.getAttribute("data-name"));
+      }
+    });
+    manager.addEventListener("blur", function () { setTimeout(close, 140); });
+    return { close: close };
+  })();
 
   /* ============================================================================
      VALIDATION — red well + "Required" below; navy restores on input.
@@ -1316,6 +1796,7 @@
     }
 
     chain.then(function () {
+      clearDraft();                       // a SAVED entry — no draft to keep
       form.hidden = true;
       doneScreen.hidden = false;
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1349,6 +1830,10 @@
     sendPayload(buildPayload());
   });
 
+  /* ---------- boot: bring back any surviving draft ---------- */
+  restoreDraft();
+  lastInputSnap = snapLinks();
+
   /* ---------- debug / automation handle ---------- */
   window.PCL = {
     get posts() { return posts; },
@@ -1359,6 +1844,12 @@
     currentWeek: currentWeek,
     CHALLENGES: CHALLENGES,
     postHash: postHash,
-    Crop: Crop
+    Crop: Crop,
+    undoLinks: undoLinks,
+    redoLinks: redoLinks,
+    MANAGERS: MANAGERS,
+    saveDraft: saveDraft,
+    restoreDraft: restoreDraft,
+    clearDraft: clearDraft
   };
 })();

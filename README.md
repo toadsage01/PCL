@@ -47,14 +47,19 @@ the SUBMISSION TERMINAL kicker (`assets/brand/`, original inspo in
 - **Link ownership + 50:50 collabs** — a submitted link belongs to the
   player who posted it first: the same player re-submitting it saves an
   UPDATE snapshot, but ANOTHER player's identical link is rejected unless
-  it is a confirmed collab. Tag a post as **COLLAB** in Post Details and
-  name the partner; when the partner submits the same link (either side
-  can tag first), the backend confirms the pair, marks both ledger rows
-  CONFIRMED and their points split 50:50 at verification and on the
-  leaderboard roll-up. Unconfirmed collab tags stay PENDING (full points).
+  it is a confirmed collab. Collab tagging is a small circular **people
+  icon** on each post row (community-style); tapping it opens a dropdown
+  right there to name the partner (a ½ badge marks tagged posts). When the
+  partner submits the same link (either side can tag first), the backend
+  confirms the pair, marks both ledger rows CONFIRMED and their points
+  split 50:50 at verification and on the leaderboard roll-up. Unconfirmed
+  collab tags stay PENDING (full points).
 - **Photo cropper** — the player photo opens a square cropper: drag to
   position, zoom (slider / buttons / wheel / pinch), **CROP & USE** exports
-  a 512×512 JPEG (~100 KB) so the submit payload stays light and fast.
+  a 512×512 JPEG (~100 KB) so the submit payload stays light and fast. The
+  photo lives in a compact tile LEFT of the name fields (mobile: above
+  them, centred) — icon-first (a Windows-style open-folder glyph), one alt
+  line: *only for the first time, until the admin approves it*.
 - **Self-healing submit** — `/api/submit` first (12 s guard), then a direct
   simple POST to the GAS `/exec` URL; backend rejections (duplicate link,
   unconfirmed collab, missing env var) surface as their real message —
@@ -77,7 +82,30 @@ the SUBMISSION TERMINAL kicker (`assets/brand/`, original inspo in
   the body face between **SF Pro / system sans** (the default on the form,
   leaderboard and Control Room) and **VT323**, the original terminal-pixel
   reading font. Titles keep the Silkscreen/Press Start 2P skeleton; the
-  choice persists per browser.
+  choice persists per browser. In SF mode the copy runs at weight 500 with
+  a small solid drop shadow so the sans face sits inside the pixel design
+  without turning into VT323's heavy ink.
+- **Draft auto-save (accidental-reload insurance)** — every field, chip,
+  view count, collab tag and the uncommitted link text are continuously
+  saved (localStorage for text, IndexedDB for media). Close the tab, crash
+  the browser, refresh by accident → the form comes back with a
+  "DRAFT RESTORED ✓" note, photo and screenshots included. The draft is
+  wiped only when a submission actually succeeds.
+- **Typo-pointing link errors** — an invalid link is never just "invalid":
+  the error chip lights up the exact broken segment (the mistyped host, the
+  wrong path, or the whole foreign domain — `youtube.cm` even asks "did you
+  mean youtube.com?"). One click drops the link back into the input with
+  that part pre-selected, ready to retype.
+- **Undo / redo in the links box** — `Ctrl+Z` / `Ctrl+Y` (and `Ctrl+Shift+Z`)
+  rewind the whole links section: typing bursts, accidental mega-pastes,
+  commits and chip deletions. Duplicates are allowed to land for a moment
+  as an amber "duplicate, removing…" chip with a 3-second countdown bar,
+  then remove themselves.
+- **Manager autocomplete** — the reporting-manager field suggests from the
+  official list after one letter, case-blind ("VIK" finds Vikram Singh),
+  ranked by word-start → contains → initials, with the top match
+  pre-highlighted so Enter commits the exact spelling. Free text is still
+  allowed — the list assists, it never locks.
 - **Brand badges** — chips and post rows show a small platform logo
   (Instagram / YouTube / LinkedIn SVG) with the word Reel / Post / Short /
   Video tinted in the platform's brand colour — one readable item, not
