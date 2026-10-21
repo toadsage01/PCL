@@ -535,7 +535,8 @@
       posts.push({
         id: c.mediaId, url: c.url, format: c.format, mediaId: c.mediaId,
         views: "", shot: null, errViews: false, errShotMsg: "",
-        collab: false, collabWith: "", errCollab: false
+        collab: false, collabWith: "", errCollab: false,
+        ctype: "PRAPER"
       });
       added++;
     });
@@ -613,6 +614,17 @@
 
   function editRowHtml(p, i) {
     var n = i + 1;
+    /* the 50:50 content balance (rulebook §6) — every post is tagged
+       PRAPER/PAVE or PERSONAL; defaults to PRAPER so it never blocks */
+    var ct = p.ctype === "PERSONAL" ? "PERSONAL" : "PRAPER";
+    var ctToggle = '<span class="pcl-cttoggle" role="group" aria-label="Content type — post ' + n + '">' +
+      '<button type="button" class="pcl-ct pcl-ct--praper' + (ct === "PRAPER" ? " is-on" : "") +
+      '" data-act="ctype" data-ct="PRAPER" data-id="' + esc(p.id) + '" aria-pressed="' +
+      (ct === "PRAPER") + '" title="Praper / PAVE content">PRAPER</button>' +
+      '<button type="button" class="pcl-ct pcl-ct--personal' + (ct === "PERSONAL" ? " is-on" : "") +
+      '" data-act="ctype" data-ct="PERSONAL" data-id="' + esc(p.id) + '" aria-pressed="' +
+      (ct === "PERSONAL") + '" title="Personal content">PERSONAL</button>' +
+      "</span>";
     var cellViews = '<div class="pcl-cell pcl-cell--views' +
       (p.errViews ? " is-error" : "") + '">' +
       '<input class="pcl-input pcl-views" data-id="' + esc(p.id) +
@@ -665,7 +677,7 @@
       '<div class="pcl-post-main"><a class="pcl-post-link" href="' + esc(p.url) +
       '" target="_blank" rel="noopener" title="' + esc(p.url) + '">#' +
       esc(postHash(p)) + "</a>" +
-      fmtHtml(p.format) + "</div>" + cellViews + cellShot + collab + "</div>";
+      fmtHtml(p.format) + ctToggle + "</div>" + cellViews + cellShot + collab + "</div>";
   }
 
   function viewRowHtml(p, i) {
@@ -680,16 +692,53 @@
       ? '<span class="pcl-collab-toggle" aria-hidden="true">COLLAB' +
         (p.collabWith ? " · " + esc(p.collabWith) : "") + "</span>"
       : "";
+    var ctTag = '<span class="pcl-cttag' + (p.ctype === "PERSONAL" ? " is-personal" : "") +
+      '">' + (p.ctype === "PERSONAL" ? "PERSONAL" : "PRAPER") + "</span>";
     return '<div class="pcl-vrow" data-id="' + esc(p.id) + '">' +
       '<span class="pcl-vnum">' + n + "</span>" +
       '<a class="pcl-vlink" href="' + esc(p.url) + '" target="_blank" rel="noopener" title="' +
-      esc(p.url) + '">#' + esc(postHash(p)) + "</a>" + fmtHtml(p.format) + collabTag + btn + "</div>";
+      esc(p.url) + '">#' + esc(postHash(p)) + "</a>" + fmtHtml(p.format) + ctTag + collabTag + btn + "</div>";
+  }
+
+  /* collab partner names — managers + every roster participant, so the
+     partner's name can be picked, not guessed (same engine as the manager
+     field, including the tap-fills-immediately fix). Built LAZILY: MANAGERS
+     and ROSTER are defined further down, so this must not run at parse. */
+  function titleCase(s) {
+    return String(s || "").replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+  var COLLAB_NAMES = null;
+  function collabNames() {
+    if (!COLLAB_NAMES) {
+      COLLAB_NAMES = MANAGERS.concat(Object.keys(ROSTER).map(titleCase))
+        .sort(function (a, b) { return a.localeCompare(b); });
+    }
+    return COLLAB_NAMES;
+  }
+  /* each renderRows() rebuilds the collab popovers — bind a fresh
+     autocomplete to every partner input the first time it appears */
+  function bindCollabAcs() {
+    if (!postRows) return;
+    var names = collabNames();
+    Array.prototype.forEach.call(postRows.querySelectorAll(".pcl-collab-input"),
+      function (inp) {
+        if (inp.__acBound) return;
+        inp.__acBound = true;
+        var box = document.createElement("div");
+        box.className = "pcl-ac";
+        box.hidden = true;
+        box.setAttribute("role", "listbox");
+        inp.parentNode.appendChild(box);
+        makeAutocomplete(inp, box, names,
+          "No match — keep the name as typed.");
+      });
   }
 
   function renderRows() {
     if (!posts.length) { postRows.innerHTML = ""; return; }
     postRows.innerHTML = posts.map(viewMode === "edit" ? editRowHtml : viewRowHtml)
                               .join("");
+    bindCollabAcs();
     noteDraft();
   }
 
@@ -758,6 +807,20 @@
           '"] .pcl-collab-input');
         if (pop) pop.focus();
       }
+    } else if (act === "ctype") {
+      /* in-place flip — no re-render so the row keeps its scroll/caret */
+      var cp = postById(id);
+      if (!cp) return;
+      cp.ctype = btn.getAttribute("data-ct") === "PERSONAL" ? "PERSONAL" : "PRAPER";
+      var rowEl = btn.closest(".pcl-cttoggle");
+      if (rowEl) {
+        Array.prototype.forEach.call(rowEl.querySelectorAll(".pcl-ct"), function (b) {
+          var on = b.getAttribute("data-ct") === cp.ctype;
+          b.classList.toggle("is-on", on);
+          b.setAttribute("aria-pressed", String(on));
+        });
+      }
+      noteDraft();
     }
   });
 
@@ -1087,11 +1150,22 @@
       "winning post of each weekly challenge is featured as a collaborative post with " +
       "Praper Media's official pages.</p>" +
 
-      '<span class="pcl-rb-h">6 · Mandatory Posting — 50:50 Rule</span>' +
-      '<p class="pcl-rb-p">At least <b>50%</b> of your total posts must feature Praper ' +
-      "Media or PAVE Academy (office culture, work experiences, behind-the-scenes, team " +
-      "collabs). The rest can be personal content. The ratio is calculated over the " +
-      "<b>entire challenge</b>, not weekly, and decimals round up.</p>" +
+      '<span class="pcl-rb-h">6 · Mandatory Posting — the 50:50 Balance Rule</span>' +
+      '<p class="pcl-rb-p">All participants are now required to post on ' +
+      "<b>at least 2 social media platforms</b> and maintain a <b>50:50 content " +
+      "balance on each platform individually</b> — 50% Praper/PAVE-related " +
+      "content and 50% personal content.</p>" +
+      '<p class="pcl-rb-p">For example:</p>' +
+      '<ul class="pcl-rb-ul">' +
+      "<li><b>Instagram:</b> 10 posts = 5 Praper/PAVE + 5 Personal</li>" +
+      "<li><b>LinkedIn:</b> 10 posts = 5 Praper/PAVE + 5 Personal</li>" +
+      "</ul>" +
+      '<p class="pcl-rb-p"><b>You cannot post only Praper-related content on ' +
+      "LinkedIn and only personal content on Instagram.</b> The 50:50 balance " +
+      "must be maintained <b>separately on each platform</b>. Tag every post " +
+      "PRAPER or PERSONAL when you submit it — the Control Room checks the " +
+      "balance per platform and unbalanced profiles are flagged before " +
+      "points are confirmed.</p>" +
       '<p class="pcl-rb-p"><b>Minimum posting requirement:</b> publish at least <b>20 ' +
       "eligible posts</b> across all platforms during the 10 weeks to qualify for the " +
       "Grand Prizes. Identical content on multiple platforms counts once.</p>" +
@@ -1242,6 +1316,7 @@
         desig.value = "";
         desigOwner = normId(fullName.value);
         desigLocked = false;
+        updateDesigCapsule();
       }, 240);
     }, 900);
   }
@@ -1438,12 +1513,16 @@
     refreshPhoto();
     desigIdentityCheck();
     clearTimeout(nameTimer);
-    nameTimer = setTimeout(lookupPhoto, 600);
+    nameTimer = setTimeout(function () {
+      rosterDesigFill();
+      lookupPhoto();
+    }, 600);
   });
   manager.addEventListener("input", refreshPhoto);
   desig.addEventListener("input", function () {
     desigLocked = false;
     desigOwner = normId(fullName.value);
+    updateDesigCapsule();
   });
   function lookupPhoto() {
     var name = fullName.value.trim();
@@ -1461,6 +1540,7 @@
           desig.value = out.designation;
           desigLocked = true;
           desigOwner = normId(name);
+          updateDesigCapsule();
         }
         if (out.url) clearFieldErr("playerPhoto");
         refreshPhoto();
@@ -1486,7 +1566,9 @@
       var q = Object.keys(params).map(function (k) {
         return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
       }).join("&");
-      s.src = cfg.gasWebAppUrl + "?" + q + "&callback=" + cb;
+      /* cache-buster — Google's /exec CDN caches GETs; a stale answer here
+         would pose as the player's photo/designation after an update */
+      s.src = cfg.gasWebAppUrl + "?" + q + "&_=" + Date.now() + "&callback=" + cb;
       document.head.appendChild(s);
     });
   }
@@ -1562,6 +1644,7 @@
         posts: posts.map(function (p) {
           return { id: p.id, url: p.url, format: p.format, mediaId: p.mediaId,
                    views: p.views, collab: p.collab, collabWith: p.collabWith,
+                   ctype: p.ctype === "PERSONAL" ? "PERSONAL" : "PRAPER",
                    hasShot: !!p.shot,
                    shotMeta: p.shot ? { name: p.shot.name, type: p.shot.type } : null };
         }),
@@ -1591,13 +1674,15 @@
     desig.value = String(raw.desig || "");
     desigOwner = normId(raw.fullName || "");
     desigLocked = !!desig.value.trim();   // draft text yields to a new identity
+    updateDesigCapsule();
     linkInput.value = String(raw.links || "");
     var oldPosts = raw.posts || [];
     posts = oldPosts.map(function (p) {
       return { id: p.id, url: p.url, format: p.format, mediaId: p.mediaId,
                views: String(p.views || ""), shot: null, errViews: false,
                errShotMsg: "", collab: !!p.collab,
-               collabWith: String(p.collabWith || ""), errCollab: false };
+               collabWith: String(p.collabWith || ""), errCollab: false,
+               ctype: p.ctype === "PERSONAL" ? "PERSONAL" : "PRAPER" };
     });
     if (raw.week) {   // only if that week is STILL open (options come from the clock)
       for (var i = 0; i < week.options.length; i++) {
@@ -1657,17 +1742,158 @@
      first, then contains, then initials ("vs" → Vikram Singh). Free text stays
      allowed — the list only ASSISTS, it never locks the field.
      ========================================================================== */
-  var MANAGERS = ["Pratham Jindal", "Divya", "Vikram Singh", "Jatin Gulati",
+  /* ============================================================================
+     LEAGUE ROSTER — the early-insight designation collection (60 participants),
+     used everywhere it can help:
+       · typing a roster name auto-fills the Desg. field with their real title
+       · the Desg. dropdown lists the league's actual titles (not guesses)
+       · MANAGERS gains the real team leads / assistant team leads
+       · Code.gs carries the same map as PLAYER_META so the public leaderboard
+         shows designations even before a participant's first submission
+     ========================================================================== */
+  var ROSTER = {
+    "sehaj singh": "Social Media Executive",
+    "aryan": "Junior Video Editor",
+    "azkiya qamar": "Content Creator Intern",
+    "harshit": "Video Editor",
+    "japjot singh": "Video Editor Intern",
+    "dipika": "Video Editor",
+    "jaskirt singh": "Assistant Team Lead",
+    "robin": "Video Editor",
+    "bhakti arora": "Content Creator",
+    "arushi chawla": "Content Creator",
+    "sayan chakraborty": "DI Colorist",
+    "supriya singh": "Content Creator",
+    "harjappan singh": "Jr. Motion Graphics Artist",
+    "prerna jaiswani": "Jr. Account Manager",
+    "sakshi lakhmani": "Long-Form Video Editor",
+    "deepanshum srivastava": "Team Lead",
+    "rinky chauhan": "Video Editor",
+    "soyaf ikbal ghanchi": "Junior Video Editor",
+    "aryan maddeshiya": "Video Editor",
+    "hemant kataria": "Jr. Video Editor",
+    "ashutosh gupta": "CBO",
+    "archna kumari": "Senior Executive Finance & Operations",
+    "mayukh bhattacharjee": "Executive Video Editor",
+    "abhijeet singh": "Executive Video Editor (Long Form)",
+    "krish sharma": "Video Editor Intern (Long Form)",
+    "ankush sheokand": "Assistant Team Lead",
+    "vishal k": "Video Editing Mentor",
+    "harpreet singh": "Assistant Team Lead",
+    "mitali": "HR",
+    "muskan": "Executive Video Editor",
+    "deepti": "Key Account Manager",
+    "kanupriya srikoti": "HR Associate",
+    "sejal choudhary": "HR Executive",
+    "sonali dub": "Executive Graphic Designer",
+    "hiten khatri": "Podcast Content Strategist",
+    "ansh kumar": "Senior Executive | Motion Graphics Artist",
+    "kunal verma": "Executive Video Editor",
+    "harsh arora": "Videographer Intern",
+    "kartik shivam": "Creative Video Editor",
+    "shubham rai": "Team Lead",
+    "shreeraag varier": "Video Editor",
+    "rudra pratap singh": "Video Editor",
+    "shreyash rawat": "Junior Video Editor",
+    "nandini singh": "Junior Video Editor",
+    "gaurav rana": "Junior Video Editor",
+    "sumit singh": "Executive Video Editor",
+    "shreyangsu jana": "Junior Motion Graphic Artist",
+    "manas ranjan": "System Engineer",
+    "yashwant rawat": "Executive Motion Graphic Designer",
+    "dheeraj kumar": "Video Editor",
+    "shubham gusain": "Video Editor",
+    "isham grover": "Junior Video Editor",
+    "siddharth thakur": "Junior Graphic Designer",
+    "nitin sharma": "Video Editor and Sound Designer",
+    "adeeba qamar": "Junior Video Editor",
+    "vikram singh": "Social Media Executive",
+    "rohit toor": "Executive Video Editor",
+    "nikhil srivastava": "Executive Video Editor",
+    "hirday sarkar": "Junior Video Editor"
+  };
+
+  /* the league's real titles, most common first — the first six are what the
+     Desg. dropdown shows on an empty focus so selection works with ZERO typing */
+  var DESIGNATIONS = [
+    "Video Editor", "Junior Video Editor", "Executive Video Editor",
+    "Content Creator", "Social Media Executive", "Motion Graphics Artist",
+    "Long-Form Video Editor", "Content Creator Intern", "Video Editor Intern",
+    "Assistant Team Lead", "Team Lead", "Jr. Video Editor",
+    "Jr. Motion Graphics Artist", "Junior Motion Graphic Artist",
+    "Executive Video Editor (Long Form)", "Video Editor Intern (Long Form)",
+    "Creative Video Editor", "Executive Graphic Designer",
+    "Junior Graphic Designer", "Video Editing Mentor",
+    "Video Editor and Sound Designer", "DI Colorist",
+    "Podcast Content Strategist", "Videographer Intern",
+    "Jr. Account Manager", "Key Account Manager",
+    "HR", "HR Associate", "HR Executive",
+    "Senior Executive Finance & Operations",
+    "Senior Executive | Motion Graphics Artist",
+    "Executive Motion Graphic Designer", "System Engineer",
+    "CBO", "COO"
+  ];
+
+  /* smart capsule shortener — plain initials where the title is generic,
+     meaningful abbreviations where initials would be cryptic. Used for the
+     capsule that sits inside the Full name field. */
+  var DESIG_SHORT = {
+    "video editor": "VE",
+    "junior video editor": "Jr. VE",
+    "jr. video editor": "Jr. VE",
+    "executive video editor": "Exec. VE",
+    "executive video editor (long form)": "Exec. VE (LF)",
+    "long-form video editor": "LF VE",
+    "video editor intern": "VE Intern",
+    "video editor intern (long form)": "VE Intern (LF)",
+    "video editing mentor": "VE Mentor",
+    "video editor and sound designer": "VE + Sound",
+    "creative video editor": "Creative VE",
+    "content creator": "Creator",
+    "content creator intern": "Creator Int.",
+    "social media executive": "Social Media Exec.",
+    "assistant team lead": "Asst. TL",
+    "team lead": "TL",
+    "di colorist": "DI Colorist",
+    "jr. motion graphics artist": "Jr. Motion GFX",
+    "junior motion graphic artist": "Jr. Motion GFX",
+    "motion graphics artist": "Motion GFX",
+    "senior executive | motion graphics artist": "Sr. Motion GFX",
+    "executive motion graphic designer": "Exec. Motion GFX",
+    "jr. account manager": "Jr. Acc. Mgr",
+    "key account manager": "Key Acc. Mgr",
+    "account manager": "Acc. Mgr",
+    "cbo": "CBO", "coo": "COO", "hr": "HR",
+    "hr associate": "HR Assoc.",
+    "hr executive": "HR Exec.",
+    "senior executive finance & operations": "Sr. Exec. Fin+Ops",
+    "executive graphic designer": "Exec. GFX Des.",
+    "junior graphic designer": "Jr. GFX Des.",
+    "graphic designer": "GFX Des.",
+    "podcast content strategist": "Podcast Strat.",
+    "videographer intern": "Videographer Int.",
+    "system engineer": "Sys. Engineer"
+  };
+  function shortDesig(d) {
+    var key = String(d || "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (DESIG_SHORT[key]) return DESIG_SHORT[key];
+    var swapped = (" " + key + " ")
+      .replace(/ junior /g, " Jr. ").replace(/ jr\. /g, " Jr. ")
+      .replace(/ senior /g, " Sr. ")
+      .replace(/ executive /g, " Exec. ")
+      .replace(/ assistant /g, " Asst. ")
+      .replace(/ associate /g, " Assoc. ")
+      .replace(/ graphics /g, " GFX ")
+      .replace(/ team lead/g, " TL").trim();
+    if (swapped.length <= 16) return swapped;
+    return key.split(/\s+/).map(function (w) { return w.charAt(0); })
+              .join("").slice(0, 6).toUpperCase();
+  }
+
+  var MANAGERS = ["Pratham Jindal", "Divya", "Vikram Singh Mawari", "Jatin Gulati",
     "Lagan Garg", "Giriraj Godara", "Kartik Handa", "Aditya Verma",
     "Deepanshum Srivastava", "Tanishq Shukla", "Shubham Rai", "Vishal Chib",
-    "Ashutosh Gupta"];
-
-  /* designation suggestions — the league's departments + the common titles
-     (rulebook §8). Free text always wins: the list assists, never locks. */
-  var DESIGNATIONS = ["Content", "Video Editor", "Shorts Editor",
-    "Long-Form Video Editor", "Graphics Designer", "Thumbnail Designer",
-    "QC & YT Management", "PAVE Tutor", "PAVE Content", "Social Media",
-    "Marketing", "HR", "Administration", "IT", "CBO", "COO"];
+    "Ashutosh Gupta", "Jaskirt Singh", "Ankush Sheokand", "Harpreet Singh"];
 
   /* ============================================================================
      AUTOCOMPLETE ENGINE — one factory, two boxes (reporting manager +
@@ -1679,7 +1905,7 @@
      looked like the tap did nothing until you clicked elsewhere. The
      suppress flag + a touchstart claim fix desktop and mobile alike.
      ============================================================================ */
-  function makeAutocomplete(input, box, list, noneMsg) {
+  function makeAutocomplete(input, box, list, noneMsg, optsFocus) {
     if (!box || !input) return { close: function () {} };
     var openState = false;
     var sel = -1;
@@ -1756,7 +1982,25 @@
       markSel();
     }
 
+    /* the FIRST six curated titles — a fresh focus with nothing typed gets
+       these so picking a designation needs zero typing */
+    function openFocus() {
+      if (input.value.trim()) return;
+      if (!optsFocus || !optsFocus.length) return;
+      opts = optsFocus.slice();
+      box.innerHTML = opts.map(function (x, i) {
+        return '<button type="button" class="pcl-ac-opt" role="option" data-name="' +
+          esc(x) + '">' + esc(x) + "</button>";
+      }).join("") +
+        '<div class="pcl-ac-none">' + esc(noneMsg) + "</div>";
+      box.hidden = false;
+      openState = true;
+      sel = 0;
+      markSel();
+    }
+
     input.addEventListener("input", update);
+    input.addEventListener("focus", openFocus);
     input.addEventListener("keydown", function (ev) {
       if (!openState) return;
       if (ev.key === "ArrowDown" && opts.length) {
@@ -1791,7 +2035,43 @@
   var ManagerAc = makeAutocomplete(manager, $("managerAc"), MANAGERS,
     "No match — keep the name as typed.");
   var DesigAc = makeAutocomplete(desig, $("desigAc"), DESIGNATIONS,
-    "Free text is fine — keep it as typed.");
+    "Free text is fine — keep it as typed.", DESIGNATIONS.slice(0, 6));
+
+  /* ---------- Desg. capsule inside the Full name field -------------------
+     The chosen designation renders as a small capsule BEFORE the name,
+     smart-shortened (Jr. VE, Exec. GFX…) so the field still reads as a
+     name field. Hover/click title carries the full title. */
+  var nameWrap = $("nameWrap");
+  var desigCapsule = $("desigCapsule");
+  function updateDesigCapsule() {
+    if (!desigCapsule) return;
+    var d = desig.value.trim();
+    if (!d) {
+      desigCapsule.hidden = true;
+      desigCapsule.textContent = "";
+      if (nameWrap) nameWrap.classList.remove("has-capsule");
+      return;
+    }
+    desigCapsule.textContent = shortDesig(d);
+    desigCapsule.title = d;                     // full title on hover
+    desigCapsule.hidden = false;
+    if (nameWrap) nameWrap.classList.add("has-capsule");
+  }
+
+  /* roster names auto-fill the Desg. field with the participant's real
+     title — one less box to worry about, and the data stays canonical */
+  function rosterDesigFill() {
+    var n = normId(fullName.value);
+    if (!n) return;
+    var t = ROSTER[n];
+    if (!t) return;
+    if (desig.value.trim()) return;               // a typed title always wins
+    if (desigOwner === n && desigLocked) return;  // already filled for them
+    desig.value = t;
+    desigOwner = n;
+    desigLocked = true;
+    updateDesigCapsule();
+  }
 
   /* ============================================================================
      VALIDATION — red well + "Required" below; navy restores on input.
@@ -1901,7 +2181,8 @@
           analyticsScreenshot: p.shot
             ? [{ name: p.shot.name, type: p.shot.type, content: p.shot.content }]
             : [],
-          collabWith: p.collab ? p.collabWith.trim() : ""
+          collabWith: p.collab ? p.collabWith.trim() : "",
+          contentType: p.ctype === "PERSONAL" ? "PERSONAL" : "PRAPER"
         };
       }),
       challengeWeek: week.value,

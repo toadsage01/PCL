@@ -97,6 +97,7 @@
       cb(null, data);
     };
     params.callback = name;
+    params._ = Date.now();   // cache-buster — /exec GETs are CDN-cached
     var qs = Object.keys(params).map(function (k) {
       return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
     }).join("&");

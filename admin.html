@@ -34,22 +34,20 @@
   <link rel="stylesheet" href="css/admin.css" />
 </head>
 <body>
-  <!-- Arcade marquee: the PCL logo's native black band, both themes. -->
+  <!-- Arcade marquee: the PCL logo's native dark band, both themes.
+       Same minimal structure as the form — logo links back to it. -->
   <div class="pcl-marquee">
     <header class="pcl-header">
-      <div class="pcl-header-brand">
+      <a class="pcl-header-brand" href="index.html"
+         aria-label="Praper Content League — back to the entry form"
+         title="Back to the entry form">
         <img class="pcl-logo" src="assets/brand/pcl-logo-web.png"
              alt="Praper Content League" />
-      </div>
-      <div class="pcl-marquee-divider" aria-hidden="true"></div>
-      <div class="pcl-header-text">
-        <p class="pcl-season">SEASON 2</p>
-        <p class="pcl-kicker">Control Room</p>
-        <p class="pcl-insert">
-          <span class="pcl-px-play" aria-hidden="true"></span>
-          ADMIN CONSOLE<span class="pcl-blink" aria-hidden="true">_</span>
-        </p>
-      </div>
+        <span class="pcl-season">SEASON 2</span>
+      </a>
+      <span class="pcl-board-links">
+        <span class="pcl-board-chip">CONTROL ROOM</span>
+      </span>
       <button id="pclFontToggle" class="pcl-toggle pcl-toggle--font" type="button"
               aria-label="Toggle OG arcade font" title="Toggle OG arcade font"
               aria-pressed="false">
@@ -78,10 +76,15 @@
       </div>
       <div class="pcl-field" id="gateOpField">
         <label class="pcl-label" for="gateOperator">Your name</label>
-        <input class="pcl-input" id="gateOperator" type="text"
-               placeholder="Who is on deck — e.g. Manas" autocomplete="off" />
-        <p class="pcl-hint">Logged in the audit catalogue with every change you
-          save, so accidental edits are always traceable.</p>
+        <div class="pcl-selectwrap">
+          <select class="pcl-input pcl-select" id="gateOperator" autocomplete="off">
+            <option value="">Select your name…</option>
+          </select>
+          <span class="pcl-chevron" aria-hidden="true"></span>
+        </div>
+        <p class="pcl-hint">Only the six league operators can unlock this deck —
+          pick your own name. This console remembers the device you usually work
+          from, so nobody can sign in under someone else's name.</p>
       </div>
       <div class="pcl-gate-actions">
         <button id="gateBtn" class="pcl-btn pcl-btn--primary">
@@ -113,6 +116,8 @@
         <div class="pcl-adminbar-right">
           <span class="pcl-sync" id="syncInfo">&hellip;</span>
           <button type="button" class="pcl-abtn" id="refreshBtn">REFRESH</button>
+          <button type="button" class="pcl-abtn pcl-abtn--accent" id="syncNowBtn"
+                  title="Pull today's platform numbers (YouTube now; Instagram/LinkedIn when their keys go live) into the ledger">SYNC NOW</button>
           <button type="button" class="pcl-abtn pcl-abtn--accent" id="exportBtn">EXPORT CSV</button>
         </div>
       </div>
@@ -129,6 +134,11 @@
           <select class="pcl-input pcl-fsel" id="fWeek" aria-label="Filter by week"></select>
           <select class="pcl-input pcl-fsel" id="fFormat" aria-label="Filter by format"></select>
           <select class="pcl-input pcl-fsel" id="fStatus" aria-label="Filter by status"></select>
+          <select class="pcl-input pcl-fsel" id="fCtype" aria-label="Filter by content type">
+            <option value="all">ALL CONTENT</option>
+            <option value="PRAPER">PRAPER</option>
+            <option value="PERSONAL">PERSONAL</option>
+          </select>
           <select class="pcl-input pcl-fsel" id="fType" aria-label="Filter by entry type"></select>
         </div>
 
@@ -165,8 +175,26 @@
                     title="Rank by league points">POINTS</button>
             <button type="button" class="pcl-subchip" data-metric="views"
                     title="Rank by total views across their posts">VIEWS</button>
-            <button type="button" class="pcl-subchip" data-metric="apps"
-                    title="Rank by number of applications (submissions)">APPS</button>
+          </div>
+          <!-- platform picker: multi-select with the three app icons —
+               shows only participants who posted on the chosen apps -->
+          <div class="pcl-platpick" id="platPick">
+            <button type="button" class="pcl-platbtn" id="platBtn"
+                    aria-haspopup="true" aria-expanded="false">
+              <span id="platBtnLabel">ALL APPS</span>
+              <span class="pcl-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="pcl-platmenu" id="platMenu" hidden>
+              <label class="pcl-platopt"><input type="checkbox" value="ig" />
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="pcl-plat-ico"><defs><linearGradient id="pclAdmIg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#feda75"/><stop offset=".28" stop-color="#fa7e1e"/><stop offset=".55" stop-color="#d62976"/><stop offset=".8" stop-color="#962fbf"/><stop offset="1" stop-color="#4f5bd5"/></linearGradient></defs><rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5.4" fill="none" stroke="url(#pclAdmIg)" stroke-width="2.7"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="url(#pclAdmIg)" stroke-width="2.7"/><circle cx="17.3" cy="6.7" r="1.7" fill="url(#pclAdmIg)"/></svg>
+                Instagram</label>
+              <label class="pcl-platopt"><input type="checkbox" value="yt" />
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="pcl-plat-ico"><rect x="1.5" y="4.8" width="21" height="14.4" rx="4" fill="#FF0000"/><path d="M10 9l6 3-6 3z" fill="#fff"/></svg>
+                YouTube</label>
+              <label class="pcl-platopt"><input type="checkbox" value="li" />
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="pcl-plat-ico"><rect x="2" y="2" width="20" height="20" rx="3.2" fill="#0A66C2"/><rect x="5.4" y="9.9" width="2.9" height="8.8" fill="#fff"/><circle cx="6.85" cy="6.5" r="1.75" fill="#fff"/><path d="M11.4 9.9h2.8v1.25c.5-.8 1.55-1.55 3.1-1.55 2.5 0 3.85 1.6 3.85 4.45v4.65h-2.9v-4.2c0-1.45-.6-2.35-1.75-2.35-1.25 0-2.2.9-2.2 2.55v4h-2.9z" fill="#fff"/></svg>
+                LinkedIn</label>
+            </div>
           </div>
           <button type="button" class="pcl-sortbtn" id="sortAlpha"
                   aria-pressed="false" title="Sort alphabetically — click again to flip A–Z / Z–A">
@@ -263,6 +291,7 @@
           <p class="pcl-rv-num" id="rvNum">#1</p>
           <p class="pcl-rv-player" id="rvPlayer">PLAYER</p>
           <p class="pcl-rv-meta" id="rvMeta">FORMAT</p>
+          <p class="pcl-rv-desig" id="rvDesig" hidden></p>
           <a class="pcl-rv-link" id="rvLink" href="#" target="_blank" rel="noopener">POST LINK &#8599;</a>
 
           <div class="pcl-rv-stats">
@@ -302,6 +331,18 @@
                 <option value="MATCH">MATCH</option>
                 <option value="MISMATCH">MISMATCH</option>
                 <option value="BOOST?">BOOST?</option>
+              </select>
+              <span class="pcl-chevron" aria-hidden="true"></span>
+            </div>
+          </div>
+
+          <div class="pcl-rv-field">
+            <label class="pcl-label" for="rvCtype">Content type (50:50 rule)</label>
+            <div class="pcl-selectwrap">
+              <select class="pcl-input pcl-select" id="rvCtype">
+                <option value="">Not tagged</option>
+                <option value="PRAPER">PRAPER / PAVE</option>
+                <option value="PERSONAL">PERSONAL</option>
               </select>
               <span class="pcl-chevron" aria-hidden="true"></span>
             </div>

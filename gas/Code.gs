@@ -99,10 +99,72 @@ var SEASON_START_ISO = '2026-10-19T11:00:00+05:30';
 var LEAGUE_WEEKS = 10;
 
 /** Public leaderboard fallback — Full Name → Designation (the job title shown
- *  in the board's Designation column). The REAL source is the ledger's
+ *  in the board's Designation column). THE LEAGUE'S REAL ROSTER from the
+ *  early-insight collection (60 participants): the board shows everyone's
+ *  actual title even before their first submission; the ledger's
  *  'Player Designation' column (written by the form, verified in the Control
- *  Room); PLAYER_META only fills gaps for names never submitted. */
-var PLAYER_META = {};
+ *  Room) always wins over this fallback. Keys are normName_-normalized. */
+var PLAYER_META = {
+  'sehaj singh': 'Social Media Executive',
+  'aryan': 'Junior Video Editor',
+  'azkiya qamar': 'Content Creator Intern',
+  'harshit': 'Video Editor',
+  'japjot singh': 'Video Editor Intern',
+  'dipika': 'Video Editor',
+  'jaskirt singh': 'Assistant Team Lead',
+  'robin': 'Video Editor',
+  'bhakti arora': 'Content Creator',
+  'arushi chawla': 'Content Creator',
+  'sayan chakraborty': 'DI Colorist',
+  'supriya singh': 'Content Creator',
+  'harjappan singh': 'Jr. Motion Graphics Artist',
+  'prerna jaiswani': 'Jr. Account Manager',
+  'sakshi lakhmani': 'Long-Form Video Editor',
+  'deepanshum srivastava': 'Team Lead',
+  'rinky chauhan': 'Video Editor',
+  'soyaf ikbal ghanchi': 'Junior Video Editor',
+  'aryan maddeshiya': 'Video Editor',
+  'hemant kataria': 'Jr. Video Editor',
+  'ashutosh gupta': 'CBO',
+  'archna kumari': 'Senior Executive Finance & Operations',
+  'mayukh bhattacharjee': 'Executive Video Editor',
+  'abhijeet singh': 'Executive Video Editor (Long Form)',
+  'krish sharma': 'Video Editor Intern (Long Form)',
+  'ankush sheokand': 'Assistant Team Lead',
+  'vishal k': 'Video Editing Mentor',
+  'harpreet singh': 'Assistant Team Lead',
+  'mitali': 'HR',
+  'muskan': 'Executive Video Editor',
+  'deepti': 'Key Account Manager',
+  'kanupriya srikoti': 'HR Associate',
+  'sejal choudhary': 'HR Executive',
+  'sonali dub': 'Executive Graphic Designer',
+  'hiten khatri': 'Podcast Content Strategist',
+  'ansh kumar': 'Senior Executive | Motion Graphics Artist',
+  'kunal verma': 'Executive Video Editor',
+  'harsh arora': 'Videographer Intern',
+  'kartik shivam': 'Creative Video Editor',
+  'shubham rai': 'Team Lead',
+  'shreeraag varier': 'Video Editor',
+  'rudra pratap singh': 'Video Editor',
+  'shreyash rawat': 'Junior Video Editor',
+  'nandini singh': 'Junior Video Editor',
+  'gaurav rana': 'Junior Video Editor',
+  'sumit singh': 'Executive Video Editor',
+  'shreyangsu jana': 'Junior Motion Graphic Artist',
+  'manas ranjan': 'System Engineer',
+  'yashwant rawat': 'Executive Motion Graphic Designer',
+  'dheeraj kumar': 'Video Editor',
+  'shubham gusain': 'Video Editor',
+  'isham grover': 'Junior Video Editor',
+  'siddharth thakur': 'Junior Graphic Designer',
+  'nitin sharma': 'Video Editor and Sound Designer',
+  'adeeba qamar': 'Junior Video Editor',
+  'vikram singh': 'Social Media Executive',
+  'rohit toor': 'Executive Video Editor',
+  'nikhil srivastava': 'Executive Video Editor',
+  'hirday sarkar': 'Junior Video Editor'
+};
 
 /** Canonical ledger columns — order matters, created on first run.
  *  APPEND-ONLY: new columns go at the END so the review-column indexes
@@ -181,6 +243,7 @@ function doPost(e) {
     if (payload && payload.action === 'adminVerify') return adminVerify_(payload);
     if (payload && payload.action === 'adminPlayerVerify') return adminPlayerVerify_(payload);
     if (payload && payload.action === 'adminLogin') return adminLogin_(payload);
+    if (payload && payload.action === 'syncNow') return syncNow_(payload);
 
     var id = payload.submissionId || Utilities.getUuid();
     var d = payload.data || {};
@@ -319,7 +382,10 @@ function doPost(e) {
       row['Snapshot #'] = snapshotNo;
       row['Full Name'] = fullName;
       row['Reporting Manager'] = manager;
-      row['Content Type'] = '';           // deprecated — column kept for layout
+      // 50:50 balance rule (rulebook §6) — the form tags every post
+      // PRAPER/PAVE or PERSONAL; the column was kept for exactly this revival
+      row['Content Type'] = str_(b.p.contentType).toUpperCase() === 'PERSONAL'
+        ? 'PERSONAL' : 'PRAPER';
       row['Platform'] = PLATFORM_LABELS[b.fmt] || '';
       row['Format'] = FORMAT_LABELS[b.fmt] || b.fmt;
       row['Multiplier'] = b.mult;
@@ -531,7 +597,8 @@ function collect_() {
         verifiedPoints: r[c['Verified Points']],
         collabWith: c['Collab With'] !== undefined ? str_(r[c['Collab With']]) : '',
         collabStatus: c['Collab Status'] !== undefined
-          ? str_(r[c['Collab Status']]) : ''
+          ? str_(r[c['Collab Status']]) : '',
+        ctype: c['Content Type'] !== undefined ? str_(r[c['Content Type']]) : ''
       });
     });
     var v = values[values.length - 1][0];
@@ -652,6 +719,22 @@ function collect_() {
       });
     });
   rows.sort(function (a, b) { return String(b.ts).localeCompare(String(a.ts)); });
+  // Tracked metrics join — the latest PCL-Snapshots count per Media ID rides
+  // every matching ledger row so the console shows it as an AUTO tag (a
+  // platform-observed number the reviewer can compare against the claim).
+  try {
+    var snaps = latestSnapshots_();
+    if (Object.keys(snaps).length) {
+      rows.forEach(function (r) {
+        var s = snaps[r.mediaId];
+        if (s && s.views !== '' && s.views !== undefined) {
+          r.tracked = true;
+          r.trackedViews = s.views;
+          r.trackedAt = s.ts;
+        }
+      });
+    }
+  } catch (ignore) { /* snapshots absent — rows stay untouched */ }
   return {
     totalSubmissions: Object.keys(subs).length,
     totalPosts: totalPosts,
@@ -778,7 +861,8 @@ function checkAdmin_(key) {
 }
 
 // Admin write-back: {action:'adminVerify', adminKey, operator, updates:[
-//   {row:<sheet row>, ocrCount:…, crossCheck:…, verifiedCount:…}, … ]}
+//   {row:<sheet row>, ocrCount:…, crossCheck:…, verifiedCount:…,
+//    contentType:'PRAPER'|'PERSONAL'|''}, … ]}
 // Verified Points are always recomputed here — the console never sends them.
 // Every write is catalogued in the AdminLog sheet (operator + old→new values)
 // so accidental/random edits in the Control Room are always traceable.
@@ -795,6 +879,7 @@ function adminVerify_(payload) {
   var lastRow = sheet.getLastRow();
   var updated = 0, errors = [];
   var nameCol = HEADERS.indexOf('Full Name') + 1;
+  var ctCol = HEADERS.indexOf('Content Type') + 1;
 
   updates.forEach(function (u) {
     var row = Math.floor(Number(u.row));
@@ -817,6 +902,13 @@ function adminVerify_(payload) {
     // can still override it by sending a different crossCheck).
     if (vcount !== '' && String(u.crossCheck || '').trim() === '') check = 'MATCH';
 
+    // 50:50 balance tagging — only the two rulebook §6 values are legal
+    var ctype = String(u.contentType || '').toUpperCase().trim();
+    if (ctype && ctype !== 'PRAPER' && ctype !== 'PERSONAL') {
+      errors.push({ row: row, error: 'Content Type must be PRAPER or PERSONAL' });
+      return;
+    }
+
     // Confirmed collab pairs split the post's points 50:50 — both players'
     // rows carry Collab Status = CONFIRMED, each keeps half the total.
     var collabStatus = str_(sheet.getRange(row, HEADERS.indexOf('Collab Status') + 1, 1, 1)
@@ -826,10 +918,12 @@ function adminVerify_(payload) {
 
     // capture the old review values BEFORE writing (for the audit log)
     var oldVals = sheet.getRange(row, COL_OCR, 1, 4).getDisplayValues()[0];
+    var oldCt = str_(sheet.getRange(row, ctCol, 1, 1).getDisplayValue());
     var pname = sheet.getRange(row, nameCol, 1, 1).getDisplayValue();
 
     sheet.getRange(row, COL_OCR, 1, 4)
          .setValues([[ocr, check, vcount, vpoints]]);
+    if (ctype) sheet.getRange(row, ctCol).setValue(ctype);
     updated++;
 
     logAdmin_(payload.operator, 'VERIFY', 'row ' + row + ' · ' + pname,
@@ -837,6 +931,7 @@ function adminVerify_(payload) {
       ' · CHECK: ' + oldVals[1] + '→' + check +
       ' · VERIFIED: ' + oldVals[2] + '→' + (vcount === '' ? '—' : vcount) +
       ' · VPTS: ' + oldVals[3] + '→' + (vpoints === '' ? '—' : vpoints) +
+      (ctype ? ' · CT: ' + (oldCt || '—') + '→' + ctype : '') +
       (split === 2 ? ' · COLLAB ½' : ''));
   });
 
@@ -898,13 +993,257 @@ function adminPlayerVerify_(payload) {
                    ? errors[0].error : undefined });
 }
 
-/** Admin LOGIN trail — the console calls this right after a successful gate
- *  unlock, so the catalogue shows who entered the Control Room and when. */
+/** Admin LOGIN trail + DEVICE BINDING — the console sends a browser
+ *  fingerprint with every unlock. The FIRST device an operator unlocks
+ *  from becomes theirs; the same name from a DIFFERENT device is refused
+ *  (the audit catalogue records the denial), so nobody can sign in under
+ *  somebody else's name. A legitimate new device is unlocked once by the
+ *  league engineer: resetAdminDevice("Full Name") from the script editor. */
 function adminLogin_(payload) {
   var err = checkAdmin_(payload.adminKey);
   if (err) return json_({ ok: false, error: err });
-  logAdmin_(payload.operator, 'LOGIN', 'Control Room', 'gate unlocked');
+  var op = normName_(payload.operator);
+  if (!op) return json_({ ok: false, error: 'Select your name before unlocking.' });
+  var device = str_(payload.device) || 'unknown-device';
+  var hash = device.split('·')[0];
+  var devices = adminDevices_();
+  var rec = devices[op];
+  if (rec && rec.hash && rec.hash !== hash) {
+    logAdmin_(payload.operator, 'LOGIN-DENIED', 'Control Room',
+      'device mismatch — name is bound to device ' + rec.hash +
+      ', this browser is ' + hash);
+    return json_({ ok: false, error: '"' + str_(payload.operator) +
+      '" is usually operated from another device. If this is really you, ask ' +
+      'the league engineer to run resetAdminDevice("' + str_(payload.operator) +
+      '") once in the Apps Script editor.' });
+  }
+  if (!rec) {
+    devices[op] = { hash: hash, device: device, ts: new Date().toISOString() };
+    setAdminDevices_(devices);
+  }
+  logAdmin_(payload.operator, 'LOGIN', 'Control Room',
+    'gate unlocked · device ' + hash);
   return json_({ ok: true });
+}
+
+/** Device bindings live in Script Properties as JSON — never in the code. */
+var ADMIN_DEVICES_PROP = 'ADMIN_DEVICES';
+function adminDevices_() {
+  try {
+    var raw = PropertiesService.getScriptProperties()
+      .getProperty(ADMIN_DEVICES_PROP);
+    return raw ? JSON.parse(raw) : {};
+  } catch (ignore) { return {}; }
+}
+function setAdminDevices_(map) {
+  PropertiesService.getScriptProperties()
+    .setProperty(ADMIN_DEVICES_PROP, JSON.stringify(map || {}));
+}
+/** Run from the script editor when an operator legitimately changes device:
+ *  resetAdminDevice("Sejal Choudhary") — their next unlock re-binds. */
+function resetAdminDevice(name) {
+  var who = normName_(name);
+  if (!who) throw new Error('Usage:  resetAdminDevice("Full Name")');
+  var devices = adminDevices_();
+  delete devices[who];
+  setAdminDevices_(devices);
+  logAdmin_(name, 'DEVICE-RESET', 'Control Room',
+    'device binding cleared — next unlock re-binds');
+  return 'Device binding cleared for ' + name + '.';
+}
+/** Nuclear option — clear every binding (e.g. after a team-wide migration). */
+function resetAdminDevices() {
+  setAdminDevices_({});
+  logAdmin_('engineer', 'DEVICE-RESET', 'Control Room', 'all device bindings cleared');
+  return 'All device bindings cleared.';
+}
+
+/** ---------- METRICS TRACKING (Phase 1) ----------
+ *  The league's daily view-count pipeline (docs/METRICS-RESEARCH.md):
+ *    · YouTube — LIVE. YouTube Data API v3 videos.list, 50 IDs per call
+ *      (1 quota unit), fresh view/like/comment counts per unique yt_ post.
+ *    · Instagram — AWAITS the Meta app review (Business Discovery needs the
+ *      league IG token in Script Properties: META_IG_TOKEN + META_IG_USER_ID).
+ *    · LinkedIn — decision (c): OCR impressions stay the source of truth via
+ *      the existing SCAN pipeline; guest engagement fetches are attempted
+ *      best-effort and only recorded when LinkedIn actually answers.
+ *  Snapshots append to their own sheet ('PCL-Snapshots') — never silently
+ *  zero, never rewriting history. collect_() joins the latest tracked count
+ *  onto every ledger row so the console shows it as an AUTO tag.
+ *  Runs twice daily (09:00 & 21:00 IST triggers, self-healing on every
+ *  SYNC NOW) and on demand from the console's SYNC NOW button. */
+var DEFAULT_YT_API_KEY = 'AIzaSyChPgXr6U4MICfIPtdobUFTQHp_uS9veog';
+var SNAP_SHEET_NAME = 'PCL-Snapshots';
+var SNAP_HEADERS = ['Timestamp', 'Media ID', 'Platform', 'Source',
+                    'Views', 'Likes', 'Comments', 'Status', 'Note'];
+
+function ytKey_() {
+  var k = String(PropertiesService.getScriptProperties()
+    .getProperty('YOUTUBE_API_KEY') || '');
+  return k || DEFAULT_YT_API_KEY;
+}
+
+function getSnapSheet_() {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(SNAP_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SNAP_SHEET_NAME);
+    sheet.appendRow(SNAP_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function appendSnapshot_(mediaId, platform, source, views, likes, comments,
+                         status, note) {
+  try {
+    getSnapSheet_().appendRow([new Date(), mediaId, platform, source,
+                               views === '' ? '' : Number(views),
+                               likes === '' ? '' : Number(likes),
+                               comments === '' ? '' : Number(comments),
+                               status || 'OK', str_(note)]);
+  } catch (ignore) { /* tracking must never break the ledger */ }
+}
+
+/** Latest snapshot per Media ID — one read, last write wins. */
+function latestSnapshots_() {
+  var out = {};
+  try {
+    var sh = getSpreadsheet_().getSheetByName(SNAP_SHEET_NAME);
+    if (!sh) return out;
+    var last = sh.getLastRow();
+    if (last < 2) return out;
+    var vals = sh.getRange(2, 1, last - 1, SNAP_HEADERS.length).getValues();
+    vals.forEach(function (r) {
+      var mid = str_(r[1]);
+      if (!mid) return;
+      out[mid] = {
+        views: r[4] === '' ? '' : Number(r[4]),
+        ts: r[0] instanceof Date ? r[0].toISOString() : str_(r[0]),
+        status: str_(r[7])
+      };
+    });
+  } catch (ignore) { /* no snapshots yet */ }
+  return out;
+}
+
+/** YouTube leg — batched videos.list over every unique yt_ post on the
+ *  ledger. A count that hasn't moved since the last snapshot writes nothing
+ *  (the sheet stays a real change-log, not a copy of YouTube). */
+function syncYouTube_() {
+  var out = { checked: 0, updated: 0, note: '' };
+  try {
+    var key = ytKey_();
+    if (!key) { out.note = 'no API key'; return out; }
+    var sheet = getSheet_();
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) { out.note = 'ledger empty'; return out; }
+    var c = {};
+    HEADERS.forEach(function (h, i) { c[h] = i; });
+    var vals = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+    var seen = {};
+    var ids = [];
+    vals.forEach(function (r) {
+      var mid = str_(r[c['Media ID']]);
+      if (mid.indexOf('yt_') !== 0) return;
+      var vid = mid.slice(3);
+      if (vid && !seen[vid]) { seen[vid] = true; ids.push(vid); }
+    });
+    if (!ids.length) { out.note = 'no YT posts yet'; return out; }
+    var latest = latestSnapshots_();
+    for (var i = 0; i < ids.length; i += 50) {
+      var chunk = ids.slice(i, i + 50);
+      var url = 'https://www.googleapis.com/youtube/v3/videos' +
+                '?part=statistics&id=' + chunk.join(',') + '&key=' + key;
+      var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+      if (res.getResponseCode() !== 200) {
+        out.note = 'YT API HTTP ' + res.getResponseCode() +
+                   ' — check the key / quota';
+        break;
+      }
+      var data = JSON.parse(res.getContentText());
+      (data.items || []).forEach(function (item) {
+        var st = item.statistics || {};
+        if (st.viewCount === undefined) return;
+        out.checked++;
+        var mid = 'yt_' + item.id;
+        var prev = latest[mid];
+        if (prev && String(prev.views) === String(st.viewCount)) return;
+        appendSnapshot_(mid, 'YouTube', 'YT_API', st.viewCount,
+                        st.likeCount || '', st.commentCount || '', 'OK', '');
+        out.updated++;
+      });
+    }
+    if (!out.note) out.note = out.updated ? 'tracked' : 'no changes';
+  } catch (err) {
+    out.note = String(err).slice(0, 120);
+  }
+  return out;
+}
+
+/** Instagram leg — Business Discovery needs the league token (Meta app
+ *  currently under review). Until META_IG_TOKEN + META_IG_USER_ID land in
+ *  Script Properties this reports and exits — it never invents counts. */
+function syncInstagram_() {
+  var out = { checked: 0, updated: 0, note: 'awaiting Meta app token' };
+  try {
+    var token = String(PropertiesService.getScriptProperties()
+      .getProperty('META_IG_TOKEN') || '');
+    var userId = String(PropertiesService.getScriptProperties()
+      .getProperty('META_IG_USER_ID') || '');
+    if (!token || !userId) return out;
+    out.note = 'token present — BD pass needs the IG username map';
+    // Phase 2: per-participant Business Discovery + media.pull — built the
+    // moment the league's IG usernames are registered in PLAYER_META.
+  } catch (ignore) { /* defensive */ }
+  return out;
+}
+
+/** LinkedIn leg — decision (c): OCR impressions stay the review floor; the
+ *  auto leg is best-effort only and writes nothing unless LinkedIn itself
+ *  answers (guest fetches usually meet the login wall — expected, never an
+ *  error worth a junk snapshot row). */
+function syncLinkedIn_() {
+  return { checked: 0, updated: 0,
+           note: 'option c — OCR floor + guest engagement best-effort' };
+}
+
+/** SYNC NOW — the console's button; also self-heals the daily triggers. */
+function syncNow_(payload) {
+  var err = checkAdmin_(payload.adminKey);
+  if (err) return json_({ ok: false, error: err });
+  var yt = syncYouTube_();
+  var ig = syncInstagram_();
+  var li = syncLinkedIn_();
+  try { ensureMetricsTriggers_(); } catch (ignore) { /* best effort */ }
+  logAdmin_(payload.operator || 'console', 'SYNC', 'metrics',
+    'YT ' + yt.updated + '/' + yt.checked + (yt.note ? ' (' + yt.note + ')' : '') +
+    (ig.note ? ' · IG ' + ig.note : '') +
+    (li.note ? ' · LI ' + li.note : ''));
+  return json_({ ok: true, yt: yt, ig: ig, li: li });
+}
+
+/** Twice-daily tracker — 09:00 & 21:00 IST-ish (script timezone governs;
+ *  set the project timezone to Kolkata in the editor's settings). */
+function metricsDaily_() {
+  var yt = syncYouTube_();
+  if (yt.note) logAdmin_('system', 'SYNC', 'metrics',
+    'scheduled · YT ' + yt.updated + '/' + yt.checked + ' (' + yt.note + ')');
+}
+function ensureMetricsTriggers_() {
+  var want = 'metricsDaily_';
+  var existing = ScriptApp.getProjectTriggers().filter(function (t) {
+    return t.getHandlerFunction() === want;
+  });
+  if (existing.length >= 2) return;
+  existing.forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger(want).timeBased().everyDays(1).atHour(9).create();
+  ScriptApp.newTrigger(want).timeBased().everyDays(1).atHour(21).create();
+}
+/** Run ONCE from the editor if triggers should exist before the first SYNC NOW. */
+function setupMetricsTriggers() {
+  ensureMetricsTriggers_();
+  return 'Daily tracking triggers installed (09:00 & 21:00).';
 }
 
 /** ---------- AUDIT LOG ("AdminLog" sheet) ---------- */
@@ -1241,7 +1580,7 @@ function buildAdminGuide() {
     ['Snapshot #', 'Form (automatic)', 'Which report this is for the post (S1 = first, S2 = second…).'],
     ['Full Name', 'Player', 'The player as they typed it — the key for photos, designation, points.'],
     ['Reporting Manager', 'Player', 'Who they report to — used for identity checks.'],
-    ['Content Type', '(retired)', 'Old column, kept so column letters never shift. Ignore it.'],
+    ['Content Type', 'Player (per post) + admin', 'PRAPER = Praper/PAVE content · PERSONAL = personal content. The 50:50 balance rule is checked PER PLATFORM on the PLAYERS tab (IG 5:5 = balanced).'],
     ['Platform / Format / Multiplier', 'Form (automatic)', 'Detected from the link itself. Multiplier: YT video ×2, Reels/Shorts ×1.25, IG/LI posts ×1.'],
     ['Post URL / Media ID', 'Form (automatic)', 'The post link and its unique fingerprint — the dedup key.'],
     ['Weekly Challenge / Challenge URL / Notes', 'Player (optional)', 'Filled only when entering the weekly challenge.'],
@@ -1255,7 +1594,9 @@ function buildAdminGuide() {
     ['Player Photo', 'Form (automatic)', 'One photo per player, reused on every entry.'],
     ['Collab With / Collab Status', 'Form (automatic)', 'COLLAB pairs. CONFIRMED = both players submitted the same link → points split 50:50.'],
     ['Player Designation', 'Player (first time)', 'Job title shown on the leaderboard. Reused automatically afterwards.'],
-    ['Player Verified', 'Admin', 'VERIFIED = photo + designation checked → tick badge shows everywhere. Empty = no badge.'],
+    ['Player Verified', 'Admin', 'VERIFIED = photo + designation checked against name · manager · designation (PLAYERS tab → CONFIRM ID). Green tick shows everywhere. Empty = no badge.'],
+    ['PCL-Snapshots tab', 'Automatic (YouTube tracking)', 'The SYNC NOW pipeline appends every platform-observed count here: Timestamp · Media ID · Source · Views. Ledger rows show the latest as an AUTO tag in the feed.'],
+    ['Admin devices', 'Automatic', 'Each operator\'s first unlock binds their browser. A different device under the same name is refused (LOGIN-DENIED in the log). Fix: resetAdminDevice("Full Name") in the editor.'],
     ['', '', ''],
     ['DAILY FLOW', '', '1. FEED tab: newest entries.  2. SCAN + compare screenshot.  3. Type Verified Count.'],
     ['', '', '4. Set Cross-Check.  5. SAVE CHANGES (sticky bar).  6. REPORTS → Players → VERIFY ID for new players.'],

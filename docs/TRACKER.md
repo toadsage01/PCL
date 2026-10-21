@@ -1,6 +1,6 @@
 # PCL SEASON 2 — MASTER TRACKER
 **The ultimate list: everything needed · everything done · everything still open.**
-**Deadline: Wednesday 23 October 2026, 12:00 PM IST.** Owner split: 🔧 = built by the dev agent · 🧑 = needs Praper/user. Updated 22 Oct night (review round A2 in).
+**Deadline: Wednesday 23 October 2026, 12:00 PM IST.** Owner split: 🔧 = built by the dev agent · 🧑 = needs Praper/user. Updated 22 Oct late night (review round B — ledger tabs, designation capsule, 50:50, device binding, YT tracking — in).
 
 ---
 
@@ -185,23 +185,93 @@ deadline (with owner) · D) post-deadline / continuous ops. If an item has a
 
 ---
 
+## A2 · DONE — review round B (22 Oct late night)
+
+### Ledger trust fixes 🔧
+- **DONE tab semantics**: a row is done when the review FINISHED —
+  cross-check **MATCH** or a filled verified count. Before, MATCH-only rows
+  never appeared, which read as "the done tab never updates". Chip counters
+  use the same rule.
+- **Cache-buster on every JSONP read** (admin + form + board): Google's
+  /exec CDN was serving stale GET responses, so REFRESH could show old
+  numbers even after a write. Every read is now a unique URL.
+
+### Header + identity 🔧
+- **Marquee rebuilt on all three portals**: neutral graphite band (the blue
+  was rejected), logo is a LINK back to the form, **SEASON 2 mini-tag
+  (7.5px Silkscreen) right under the logo**, "Submission Terminal" and the
+  kicker/insert texts removed, LEADERBOARD chip (renamed from VIEW
+  LEADERBOARD) stacked top-right, CONTROL ROOM chip on admin.
+- **"Participant Details"**: section 1 renamed; completion screen now reads
+  **ENTRY LOGGED! · Points Queued · see you next time** (LEVEL CLEARED and
+  +100 XP retired).
+- **Desg. field moved before Full name** (label "Desg."), dropdown opens on
+  focus with the league's six most common titles, fed by the **real 60-person
+  roster**; roster names auto-fill their designation.
+- **Designation capsule inside the Full name field**: smart-shortened
+  (Jr. VE · Exec. GFX · Asst. TL …) with the full title on hover; admin
+  sees the full text in the feed, the review modal and the players tab.
+- **Collab partner input** now uses the same autocomplete as the manager
+  field (tap fills immediately — the "click elsewhere first" bug is dead
+  there too), suggesting managers + every roster participant.
+
+### 50:50 balance rule (rulebook §6 rewrite + verification) 🔧
+- Rulebook §6 now carries the exact new wording: at least 2 platforms,
+  50:50 maintained **separately per platform**.
+- Every post row has a **PRAPER / PERSONAL toggle** (default PRAPER, never
+  blocks). Stored in the ledger's revived Content Type column; the admin can
+  retag per row in the review modal.
+- PLAYERS tab shows each participant's per-platform balance chips
+  (e.g. `IG 5:5` green, `IG 7:3` amber) computed from those tags.
+
+### Admin console 🔧
+- **Access Terminal**: name is a **dropdown of the six league operators**;
+  each operator's first unlock **binds their browser fingerprint** — the
+  same name from another device is refused before the console opens and
+  logged as LOGIN-DENIED. Reset: `resetAdminDevice("Full Name")`.
+- **App icons everywhere**: feed rows, players cards and the review modal
+  use the IG/YT/LI logos with the format word in the platform's own
+  colour/gradient; the post URL is the same #hash logic as the form.
+- **Platform multi-select** (replaces the APPS sub-filter): a dropdown with
+  the three app icons; pick IG+YT → only participants present on both.
+- Players tab: avatar ring shadow removed, designation fully visible,
+  CONFIRM ID button (photo + designation against name · manager ·
+  designation) with the **green verified circle**.
+- **SYNC NOW** button + AUTO tags (below).
+
+### Metrics tracker — Phase 1 LIVE 🔧
+- **YouTube leg shipped inside gas/Code.gs** (single paste): batch-50
+  videos.list against the provided key, append-only **PCL-Snapshots** tab
+  (Timestamp · Media ID · Source · Views · Likes · Comments · Status),
+  09:00 & 21:00 daily triggers (self-healing on every SYNC NOW).
+- Ledger rows carry the latest tracked count as an **AUTO tag** in the feed
+  (a platform-observed number beside the claim).
+- IG leg stubbed until the Meta app lands; LinkedIn runs decision (c) —
+  OCR stays the floor.
+- `PLAYER_META` is now the **real 60-person roster**, so the public board
+  shows correct designations before a player's first submission.
+
+
+---
+
 ## C · OPEN — before the deadline (owner + cost)
 
 | # | Item | Owner | Blocking? | Notes |
 |---|---|---|---|---|
-| C1 | **Paste updated `gas/Code.gs` + click New version** (Manage deployments → Edit → New version, same /exec URL). The sheet migration adds `Player Designation` + `Player Verified` columns automatically on first run. Then run `buildAdminGuide()` once in the editor for the START HERE tab. | 🧑 Praper | **YES — leaderboard + identity features are dead in the water until this** | This is the SAME click that resolves the SIGNAL LOST question. If the /exec URL ever changed (Case B), send the new URL and we patch `js/gas-endpoint.js`. |
+| C1 | **Paste updated `gas/Code.gs` + click New version** (Manage deployments → Edit → New version, same /exec URL). This paste ALSO installs the YouTube tracking leg + PCL-Snapshots tab + SYNC NOW — no extra file. Then optionally run `buildAdminGuide()` once in the editor. | 🧑 Praper | **YES — content-type persistence, device binding, YT tracking and the designation roster are dead until this** | User reports MATCH writes now land (re-pasted an earlier build); THIS paste brings the 22 Oct night build |
 | C2 | **Tell us Case A or Case B** for the current deployment (same URL re-versioned vs new URL) | 🧑 Praper | YES (pairs with C1) | 30 seconds |
-| C3 | **YouTube Data API key** (console.cloud.google.com → enable YouTube Data API v3 → restricted key → paste to us) | 🧑 Praper | Blocks metrics Phase 1 (YT leg) | Free, ~10 min; key lives in Script Properties, never in git |
-| C4 | **Meta app + league IG professional account + linked FB Page** → App ID + Secret after review (1–3 days — start today to beat the deadline window) | 🧑 Praper | Blocks IG leg (Phase 2) | We draft the review screencast script on request |
-| C5 | **LinkedIn ranking decision**: (a) weekly screenshot OCR · (b) auto engagement score · (c) both ⭐ recommended | 🧑 Praper | Blocks LinkedIn leg (Phase 3) | 30 seconds |
+| ~~C3~~ | ~~YouTube Data API key~~ **DONE — key received 22 Oct night, embedded as the default `DEFAULT_YT_API_KEY` in Code.gs (Script Property `YOUTUBE_API_KEY` overrides it). YT leg + snapshots + triggers SHIP with the C1 paste.** | ✅ resolved | — | Key was explicitly flagged non-sensitive (public/restricted); rotate any time via `setYouTubeKey()` |
+| C4 | **Meta app + league IG professional account + linked FB Page** → App ID + Secret after review (1–3 days — started 22 Oct) | 🧑 Praper | Blocks IG leg (Phase 2) | Leg already stubbed (`syncInstagram_` reports 'awaiting Meta app token' — never invents counts) |
+| ~~C5~~ | ~~LinkedIn ranking decision~~ **DONE — user chose (c): OCR impressions stay the review floor + guest engagement best-effort. Shipped as `syncLinkedIn_`.** | ✅ resolved | — | Guest fetches usually meet LinkedIn's login wall; OCR (SCAN button) remains LI's source of truth |
 | C6 | Optional Apify token (vendor insurance leg) | 🧑 Praper | No — fallback only | $0 until triggered; ~$50–100/season worst case |
 | C7 | Verify the OG-font toggle + mobile cards on a real iPhone/Android (we only have the emulator) | 🧑 Praper | No | 2 minutes on your phone |
 | C8 | Sheet hygiene: freeze row 1 + colour the two new columns if you want them to stand out (the START HERE tab documents them) | 🧑 Praper | No | Cosmetic |
 
 ### What lands the moment each key arrives (dev side, same day)
-- **C3** → `gas/Metrics.gs`: YouTube leg (batch-50 `videos.list`, pre-season
-  rejection), append-only `PCL-Snapshots` tab, 09:00 & 21:00 IST triggers,
-  admin SYNC NOW, velocity flags. YT is the same-day win.
+- **C3 (RESOLVED 22 Oct)** → shipped inside `gas/Code.gs` (single file to
+  paste): YouTube leg (batch-50 `videos.list`), append-only
+  `PCL-Snapshots` tab, 09:00 & 21:00 triggers, admin SYNC NOW, AUTO tags
+  on feed rows.
 - **C4** → IG Business Discovery leg (1 call per participant, non-expiring
   Page token) + fallback ladder (yt-dlp league-cookies → vendor → OCR floor)
   + health monitor + per-source badges.

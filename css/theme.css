@@ -75,11 +75,11 @@ html[data-pcl-theme="light"] {
   /* header band: deep royal indigo — same family as the panel borders and
      hard shadows (#14235f), so it complements the cream body + orange bars
      instead of cutting them with a pure black stripe */
-  --pcl-marquee-bg: #171e56;
-  --pcl-marquee-bg-2: #101643;
-  --pcl-marquee-deep: #0c1134;
-  --pcl-marquee-text: #aab4ff;
-  --pcl-marquee-accent: #35d6ff;
+  --pcl-marquee-bg: #1a1b20;
+  --pcl-marquee-bg-2: #121317;
+  --pcl-marquee-deep: #0c0d11;
+  --pcl-marquee-text: #c9cdd8;
+  --pcl-marquee-accent: #ff8a5c;
 
   --pcl-surface: #fffaf0;
   --pcl-surface-2: #fff2da;
@@ -123,11 +123,11 @@ html[data-pcl-theme="dark"] {
   --pcl-orb-1: rgba(237, 59, 0, 0.17);
   --pcl-orb-2: rgba(59, 110, 255, 0.20);
 
-  --pcl-marquee-bg: #0d1240;
-  --pcl-marquee-bg-2: #080b2c;
-  --pcl-marquee-deep: #05071e;
-  --pcl-marquee-text: #aab4ff;
-  --pcl-marquee-accent: #35d6ff;
+  --pcl-marquee-bg: #131418;
+  --pcl-marquee-bg-2: #0b0c0f;
+  --pcl-marquee-deep: #060709;
+  --pcl-marquee-text: #c9cdd8;
+  --pcl-marquee-accent: #ff8a5c;
 
   --pcl-surface: #0e1348;
   --pcl-surface-2: #131a5e;
@@ -264,16 +264,16 @@ body::before {
 .pcl-main,
 .pcl-footer { position: relative; z-index: 1; }
 
-/* ---- Arcade marquee header (deep indigo band on BOTH themes) -------------
-   The old pure-black stripe fought the cream body; this indigo is the same
-   royal family as the borders/shadows, so the header reads as part of the
-   theme. Still dark enough to keep the logo's native band intact. */
+/* ---- Arcade marquee header (neutral graphite band on BOTH themes) --------
+   The user rejected the royal-indigo band (and pure black was only "a little
+   better"): this is a near-black graphite with an orange edge — the logo's
+   native band stays intact and the orange border carries the brand. */
 .pcl-marquee {
   background: linear-gradient(180deg, var(--pcl-marquee-bg), var(--pcl-marquee-bg-2));
   border-bottom: 3px solid var(--pcl-primary);
   box-shadow:
-    0 3px 0 rgba(255, 255, 255, 0.06) inset,
-    0 6px 26px var(--pcl-glow-soft);
+    0 3px 0 rgba(255, 255, 255, 0.04) inset,
+    0 6px 26px rgba(0, 0, 0, 0.35);
 }
 
 .pcl-header {
@@ -285,7 +285,15 @@ body::before {
   gap: 18px;
 }
 
-.pcl-header-brand { flex: 0 0 auto; display: flex; }
+/* the brand is a LINK on every portal: click the logo → back to the form */
+.pcl-header-brand {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+}
 
 .pcl-logo {
   display: block;
@@ -295,6 +303,21 @@ body::before {
   filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.55));
   flex: 0 0 auto;
 }
+
+/* SEASON 2 — a tiny stylish tag RIGHT BELOW the logo (user spec: 7–8px,
+   a face that fits the pixel logo). Silkscreen is the logo's own family. */
+.pcl-season {
+  font-family: "Silkscreen", "Press Start 2P", monospace;
+  font-size: 7.5px;
+  letter-spacing: 3px;
+  text-indent: 3px;           /* optically re-centres the letter-spaced caps */
+  color: #ff8a5c;
+  text-shadow: 1px 1px 0 #000, 0 0 10px rgba(237, 59, 0, 0.55);
+  margin: 0;
+  white-space: nowrap;
+  transition: color 0.12s steps(2);
+}
+.pcl-header-brand:hover .pcl-season { color: #fff; }
 
 .pcl-marquee-divider {
   width: 3px;
@@ -306,39 +329,12 @@ body::before {
 
 .pcl-header-text { flex: 1; min-width: 0; }
 
-/* SEASON 2 — sits directly ABOVE the "Submission Terminal" kicker, periwinkle
-   blue (a step darker than --pcl-marquee-text) so it reads as the season tag. */
-.pcl-season {
-  font-family: var(--pcl-font-display);
-  font-size: 9px;
-  letter-spacing: 3px;
-  color: #8d98f2;
-  text-shadow: 2px 2px 0 #000, 0 0 12px rgba(77, 116, 255, 0.55);
-  margin: 0 0 7px;
-  white-space: nowrap;
-}
-
-.pcl-header-text .pcl-kicker {
-  font-family: var(--pcl-font-title);
-  font-weight: 400;
-  font-size: 11.5px;
-  letter-spacing: 2.5px;
-  color: var(--pcl-marquee-accent);
-  text-transform: uppercase;
-  margin: 0 0 8px;
-}
-
-.pcl-header-text .pcl-insert {
-  font-family: var(--pcl-font-display);
-  font-size: 11px;
-  line-height: 1.8;
-  letter-spacing: 0.5px;
-  color: #fff;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* SEASON 2 tag is styled above (under the logo). The old kicker/insert
+   rows are gone from the header — the marquee is deliberately minimal. */
+.pcl-header-text .pcl-kicker,
+.pcl-header-text .pcl-insert,
+.pcl-header-text { font-size: inherit; }
+.pcl-header-text { flex: 1; min-width: 0; }
 
 /* pixel "insert" play glyph — points RIGHT (▶), towards the entry drop */
 .pcl-px-play {
@@ -1414,11 +1410,10 @@ html[data-pcl-theme="dark"] .pcl-input::placeholder {
 @media (max-width: 620px) {
   .pcl-header { gap: 12px; padding: 12px 14px; }
   .pcl-logo { width: 118px; }
-  .pcl-season { font-size: 8px; letter-spacing: 2px; margin-bottom: 6px; }
+  .pcl-season { font-size: 7px; letter-spacing: 2.4px; text-indent: 2.4px; }
   .pcl-marquee-divider { display: none; }
   .pcl-toggle { margin-right: 4px; width: 42px; height: 42px; }
-  .pcl-header-text .pcl-kicker { font-size: 10px; letter-spacing: 1.6px; }
-  .pcl-header-text .pcl-insert { font-size: 9.5px; }
+  .pcl-board-links { gap: 6px; }
   .pcl-main { padding: 16px 14px 28px; }
 
   .pcl-panel { padding: 14px 12px 16px; }
@@ -1482,8 +1477,8 @@ html[data-pcl-theme="dark"] .pcl-input::placeholder {
   .pcl-blink { animation: none; }
 }
 
-/* ---- Leaderboard link (additive — index.html marquee only) ----------------- */
-/* Lives in the black marquee band, so its colors are theme-independent. */
+/* ---- Leaderboard link (marquee band on every portal) ----------------------- */
+/* Lives in the graphite marquee band, so its colors are theme-independent. */
 .pcl-board-link {
   display: inline-block;
   margin-top: 9px;
@@ -1493,19 +1488,22 @@ html[data-pcl-theme="dark"] .pcl-input::placeholder {
   text-decoration: none;
   color: var(--pcl-primary-hi, #ff5a1f);
   border-bottom: 2px solid transparent;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 .pcl-board-link:hover {
   color: #ffffff;
   border-bottom-color: var(--pcl-primary-hi, #ff5a1f);
 }
 
-/* both marquee links on one line (leaderboard + rulebook) */
+/* the portal links (LEADERBOARD / RULEBOOK) — a right-aligned stack between
+   the brand and the toggles: the marquee reads logo → links → controls */
 .pcl-board-links {
+  flex: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 18px;
-  margin-top: 9px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  min-width: 0;
 }
 .pcl-board-links .pcl-board-link { margin-top: 0; }
 button.pcl-board-link {
@@ -1544,9 +1542,9 @@ button.pcl-board-link {
   display: grid;
   grid-template-columns: 84px 1fr 1fr;
   grid-template-areas:
-    "photo name  manager"
-    "photo desig desig"
-    "cap   cap   cap";
+    "photo desig name"
+    "photo manager manager"
+    "cap   cap     cap";
   gap: 10px 16px;
   align-items: start;
 }
@@ -2108,8 +2106,8 @@ html[data-pcl-theme="light"] .pcl-wk-pts { color: #a06e00; }
     justify-items: center;
     grid-template-areas:
       "photo"
-      "name"
       "desig"
+      "name"
       "manager"
       "cap";
   }
@@ -2127,14 +2125,14 @@ html[data-pcl-theme="light"] .pcl-wk-pts { color: #a06e00; }
   .pcl-wk-date { margin-left: 0; flex-basis: 100%; }
 }
 
-/* very narrow cabinets: marquee text gets its own full-width row below the
-   logo + both toggle buttons (the Aa font toggle squeezed it too hard) */
+/* very narrow cabinets: the brand takes the first row, toggles sit beside
+   it, the link stack drops to its own full-width row below */
 @media (max-width: 520px) {
   .pcl-header { flex-wrap: wrap; row-gap: 10px; }
-  .pcl-header-brand { flex: 1 1 auto; }
-  .pcl-toggle--font { order: 1; margin-right: 2px; }
-  .pcl-toggle { order: 2; margin-right: 0; }
-  .pcl-header-text { order: 3; flex: 1 1 100%; }
+  .pcl-header-brand { flex: 1 1 auto; align-items: flex-start; }
+  .pcl-board-links { order: 3; flex: 1 1 100%; flex-direction: row;
+                     justify-content: center; gap: 18px; }
+  .pcl-board-link { font-size: 9.5px; }
 }
 
 /* ============================================================================
@@ -2235,3 +2233,103 @@ html:not([data-pcl-font="og"]) .pcl-wk-pts { font-size: 12px; letter-spacing: 0.
   object-fit: cover;
   border-radius: 50%;
 }
+
+/* ============================================================================
+   ROUND 21 ADDITIONS — name capsule, 50:50 content-type toggle
+   ============================================================================ */
+
+/* ---- Desg. capsule inside the Full name field ----------------------------
+   .pcl-namewrap looks exactly like a .pcl-input; inside, the designation
+   renders as a smart-shortened capsule (Jr. VE, Exec. GFX…) BEFORE the
+   borderless real input. Hovering the capsule shows the full title. */
+.pcl-namewrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 8px;
+  background: var(--pcl-input-bg, var(--pcl-surface));
+  border: 3px solid var(--pcl-line-soft);
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.06);
+  cursor: text;
+}
+.pcl-namewrap.has-capsule { border-color: var(--pcl-primary); }
+.pcl-namewrap .pcl-nameinput {
+  flex: 1;
+  min-width: 0;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 4px 2px;
+  height: auto;
+}
+.pcl-namewrap .pcl-nameinput:focus { outline: none; }
+.pcl-desig-capsule {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  line-height: 1;
+  color: #fff;
+  background: linear-gradient(180deg, var(--pcl-primary-hi), var(--pcl-primary));
+  border: 2px solid var(--pcl-primary-deep);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 4px 7px 3px;
+  cursor: help;
+}
+.pcl-field.is-error .pcl-namewrap { border-color: var(--pcl-error, #d81b4e); }
+html[data-pcl-font="og"] .pcl-desig-capsule { font-size: 8px; }
+
+/* ---- PRAPER / PERSONAL toggle (rulebook §6 — 50:50 balance) -------------- */
+.pcl-cttoggle {
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  border: 2px solid var(--pcl-line-soft);
+  background: var(--pcl-surface-3);
+}
+.pcl-ct {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 8.5px;
+  letter-spacing: 0.7px;
+  color: var(--pcl-muted);
+  background: transparent;
+  border: none;
+  padding: 4px 7px 3px;
+  cursor: pointer;
+  line-height: 1;
+}
+.pcl-ct + .pcl-ct { border-left: 2px solid var(--pcl-line-soft); }
+.pcl-ct:hover { color: var(--pcl-text); }
+.pcl-ct.is-on { color: #fff; }
+.pcl-ct--praper.is-on { background: var(--pcl-primary); text-shadow: 1px 1px 0 rgba(0,0,0,0.4); }
+.pcl-ct--personal.is-on { background: #33409f; text-shadow: 1px 1px 0 rgba(0,0,0,0.4); }
+.pcl-cttag {
+  display: inline-block;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 8.5px;
+  letter-spacing: 0.7px;
+  line-height: 1;
+  color: #fff;
+  background: var(--pcl-primary);
+  padding: 3px 6px 2px;
+  border: 2px solid var(--pcl-primary-deep);
+  flex: 0 0 auto;
+}
+.pcl-cttag.is-personal { background: #33409f; border-color: #232c6e; }
+html[data-pcl-font="og"] .pcl-ct,
+html[data-pcl-font="og"] .pcl-cttag { font-size: 7px; }
+
+/* SF readability for the new pieces */
+html:not([data-pcl-font="og"]) .pcl-desig-capsule { font-weight: 600; letter-spacing: 0.2px; }
+html:not([data-pcl-font="og"]) .pcl-ct { font-weight: 600; }

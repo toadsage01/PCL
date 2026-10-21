@@ -96,10 +96,11 @@
   }
 
   /* admin-verified tick — inline SVG (no emoji), shared with the form and
-     the leaderboard. ONLY verified players carry it; unverified = nothing. */
+     the leaderboard. GREEN circle per user spec: green = the Control Room
+     has confirmed this participant. Unverified players carry nothing. */
   var TICK_SVG = '<svg class="pcl-vbadge pcl-vbadge--sm" viewBox="0 0 24 24" ' +
     'role="img" aria-label="Admin verified">' +
-    '<circle cx="12" cy="12" r="10.5" fill="var(--pcl-primary, #ed3b00)"/>' +
+    '<circle cx="12" cy="12" r="10.5" fill="#1d9e57"/>' +
     '<circle cx="12" cy="12" r="10.5" fill="none" stroke="#fffdf6" stroke-width="1.4"/>' +
     '<circle cx="12" cy="12" r="7.7" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>' +
     '<path d="M7.6 12.3l3 3.1 5.9-6.3" fill="none" stroke="#fff" stroke-width="2.5" ' +
@@ -113,6 +114,96 @@
     "LinkedIn Post": "LI POST"
   };
   function fmtShort(f) { return FORMAT_SHORT[f] || String(f || "?").toUpperCase(); }
+
+  /* platform logos + platform-coloured format words — the SAME markup the
+     form uses (.pcl-fmtbrand), so review reads by icon and colour, not by
+     deciphering uppercase words. Reel/Post/Short/Video take the platform
+     logo's brand colour/gradient via [data-fmt] rules in theme.css. */
+  var BRAND_LOGO = {
+    ig: '<svg class="pcl-fmtlogo" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<defs><linearGradient id="pclAdmIgGrad" x1="0" y1="1" x2="1" y2="0">' +
+        '<stop offset="0" stop-color="#feda75"/><stop offset=".28" stop-color="#fa7e1e"/>' +
+        '<stop offset=".55" stop-color="#d62976"/><stop offset=".8" stop-color="#962fbf"/>' +
+        '<stop offset="1" stop-color="#4f5bd5"/></linearGradient></defs>' +
+        '<rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5.4" fill="none" ' +
+        'stroke="url(#pclAdmIgGrad)" stroke-width="2.7"/>' +
+        '<circle cx="12" cy="12" r="4.5" fill="none" stroke="url(#pclAdmIgGrad)" stroke-width="2.7"/>' +
+        '<circle cx="17.3" cy="6.7" r="1.7" fill="url(#pclAdmIgGrad)"/></svg>',
+    yt: '<svg class="pcl-fmtlogo" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<rect x="1.5" y="4.8" width="21" height="14.4" rx="4" fill="#FF0000"/>' +
+        '<path d="M10 9l6 3-6 3z" fill="#fff"/></svg>',
+    li: '<svg class="pcl-fmtlogo" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<rect x="2" y="2" width="20" height="20" rx="3.2" fill="#0A66C2"/>' +
+        '<rect x="5.4" y="9.9" width="2.9" height="8.8" fill="#fff"/>' +
+        '<circle cx="6.85" cy="6.5" r="1.75" fill="#fff"/>' +
+        '<path d="M11.4 9.9h2.8v1.25c.5-.8 1.55-1.55 3.1-1.55 2.5 0 3.85 1.6 3.85 4.45v4.65h-2.9v-4.2c0-1.45-.6-2.35-1.75-2.35-1.25 0-2.2.9-2.2 2.55v4h-2.9z" fill="#fff"/></svg>'
+  };
+  var FORMAT_WORD = {
+    "Instagram Reel": "Reel", "Instagram Post / Carousel": "Post",
+    "YouTube Shorts": "Short", "YouTube Long-Form": "Video",
+    "LinkedIn Post": "Post"
+  };
+  function fmtKey(f) {
+    if (f === "Instagram Reel") return "ig_reel";
+    if (f === "Instagram Post / Carousel") return "ig_post";
+    if (f === "YouTube Shorts") return "yt_shorts";
+    if (f === "YouTube Long-Form") return "yt_long";
+    if (f === "LinkedIn Post") return "li_post";
+    return "";
+  }
+  function brandBadgeAdm(f, mult) {
+    var key = fmtKey(f);
+    if (!key) return '<b>' + esc(fmtShort(f)) + "</b>";
+    var plat = key.split("_")[0];
+    var word = FORMAT_WORD[f] || fmtShort(f);
+    return '<span class="pcl-fmtbrand" data-fmt="' + key + '">' +
+      BRAND_LOGO[plat] + '<span class="pcl-fmtword">' + esc(word) + "</span></span>";
+  }
+  function platKeyOf(r) {
+    var p = String(r.platform || "").toLowerCase();
+    if (p.indexOf("instagram") === 0) return "ig";
+    if (p.indexOf("youtube") === 0) return "yt";
+    if (p.indexOf("linkedin") === 0) return "li";
+    var k = fmtKey(r.format);
+    return k ? k.split("_")[0] : "";
+  }
+  /* the #hash identity — the SAME link logic as the form: icon-ish hash
+     text, full URL on hover/href (user: "replace the url with the same
+     logic we have") */
+  function postHashOf(r) {
+    var tail = String(r.mediaId || "").split("_").slice(1).join("_");
+    if (!tail) return shortLink(r.url);
+    return tail.length > 8 ? tail.slice(0, 8) + "…" : tail;
+  }
+  function ctTagHtml(ct) {
+    if (ct !== "PRAPER" && ct !== "PERSONAL") return "";
+    return '<span class="pcl-cttag' + (ct === "PERSONAL" ? " is-personal" : "") +
+      '">' + ct + "</span>";
+  }
+
+  /* device/browser identity — a readable fingerprint so the league can
+     check WHO usually operates each name (nobody signs in under somebody
+     else's name). Sent with every login; the backend binds the first
+     device per operator and refuses mismatches. */
+  function deviceFingerprint() {
+    var parts = [];
+    try {
+      var n = navigator;
+      parts.push(n.userAgent.split(")").pop().trim().slice(0, 40) || "?");
+      parts.push((n.platform || "?").slice(0, 20));
+      parts.push(n.language || "?");
+      parts.push(screen.width + "x" + screen.height);
+      parts.push(String(new Date().getTimezoneOffset()));
+      parts.push(String(n.hardwareConcurrency || "?"));
+    } catch (e) { /* best effort */ }
+    var raw = parts.join(" | ");
+    var h = 0, i, c;
+    for (i = 0; i < raw.length; i++) {
+      c = raw.charCodeAt(i);
+      h = ((h << 5) - h + c) | 0;
+    }
+    return (h >>> 0).toString(36) + "·" + raw.replace(/\|/g, "·");
+  }
 
   /* ---------- theme + reading-font toggles (shared behaviour/storage) ---------- */
   var toggleBtn = $("pclThemeToggle");
@@ -230,22 +321,25 @@
             snap: 1, name: "Priya Sharma", manager: "Rahul", platform: "Instagram",
             format: "Instagram Reel", mult: 1.25, url: "https://instagram.com/reel/Cx1mock01/",
             mediaId: "ig_Cx1mock01", week: "Week 2 — Best Storytelling Debut",
+            ctype: "PRAPER", tracked: true, trackedViews: 18120,
             claimed: 18400, projected: 23000, check: "PENDING OCR", ocr: "", verified: "" }),
       row({ row: 4,  ts: new Date(t - 5 * H).toISOString(), id: "pcl-mock-a2", type: "NEW",
             snap: 1, name: "Rohit Kharal", manager: "Sneha", platform: "Instagram",
             format: "Instagram Reel", mult: 1.25, url: "https://instagram.com/reel/Cx1mock01/",
             mediaId: "ig_Cx1mock01", week: "",
+            ctype: "PERSONAL",
             collabWith: "Priya Sharma", collabStatus: "CONFIRMED",
             claimed: 18400, projected: 23000, check: "MATCH", ocr: 18412, verified: 18412 }),
       row({ row: 5,  ts: new Date(t - 5 * H).toISOString(), id: "pcl-mock-a2", type: "NEW",
             snap: 1, name: "Priya Sharma", manager: "Rahul", platform: "YouTube",
             format: "YouTube Long-Form", mult: 2, url: "https://youtube.com/watch?v=mockYT01",
-            mediaId: "yt_mockYT01", week: "", claimed: 9600, projected: 19200,
-            check: "MATCH", ocr: 9612, verified: 9612 }),
+            mediaId: "yt_mockYT01", week: "", ctype: "PERSONAL", claimed: 9600,
+            projected: 19200, check: "MATCH", ocr: 9612, verified: 9612 }),
       row({ row: 6,  ts: new Date(t - 8 * H).toISOString(), id: "pcl-mock-b7", type: "UPDATE",
             snap: 3, name: "Arjun Verma", manager: "Sneha", platform: "Instagram",
             format: "Instagram Reel", mult: 1.25, url: "https://instagram.com/reel/Cx2mock02/",
-            mediaId: "ig_Cx2mock02", week: "", claimed: 61200, projected: 76500,
+            mediaId: "ig_Cx2mock02", week: "", ctype: "PRAPER", tracked: true,
+            trackedViews: 64001, claimed: 61200, projected: 76500,
             check: "PENDING OCR", ocr: "", verified: "" }),
       row({ row: 7,  ts: new Date(t - 34 * H).toISOString(), id: "pcl-mock-b7", type: "UPDATE",
             snap: 2, name: "Arjun Verma", manager: "Sneha", platform: "Instagram",
@@ -342,6 +436,7 @@
           if (!e) return;
           if (e.ocrCount !== undefined) r.ocr = e.ocrCount;
           if (e.crossCheck !== undefined) r.check = e.crossCheck;
+          if (e.contentType !== undefined && e.contentType) r.ctype = e.contentType;
           if (e.verifiedCount !== undefined) {
             r.verified = e.verifiedCount;
             r.verifiedPoints = e.verifiedCount !== ""
@@ -411,7 +506,10 @@
       var q = Object.keys(params).map(function (k) {
         return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
       }).join("&");
-      s.src = cfg.gasWebAppUrl + "?" + q + "&callback=" + cb;
+      /* cache-buster — Google's /exec CDN caches GET responses aggressively,
+         and a cached "ledger" is exactly the "REFRESH shows the same old
+         numbers" bug; every read must look like a brand-new URL */
+      s.src = cfg.gasWebAppUrl + "?" + q + "&_=" + Date.now() + "&callback=" + cb;
       document.head.appendChild(s);
     });
   }
@@ -430,7 +528,7 @@
           (body.updates || []).forEach(function (u) {
             mockEdits[u.row] = {
               ocrCount: u.ocrCount, crossCheck: u.crossCheck,
-              verifiedCount: u.verifiedCount
+              verifiedCount: u.verifiedCount, contentType: u.contentType
             };
           });
           if (body.action === "adminPlayerVerify") {
@@ -476,15 +574,20 @@
     totals: null,
     generatedAt: null,
     log: [],             // audit catalogue (newest first)
-    pending: {},          // sheet row → {ocrCount?, crossCheck?, verifiedCount?}
-    filters: { q: "", week: "all", format: "all", status: "all", type: "all" },
+    pending: {},          // sheet row → {ocrCount?, crossCheck?, verifiedCount?, contentType?}
+    filters: { q: "", week: "all", format: "all", status: "all", type: "all", ctype: "all" },
+    plats: [],            // participants tab: selected platform keys ['ig','yt','li']
     pq: "",               // participants tab search
     /* participants list ordering — two filters, each flips direction on
        re-click: POINTS starts highest-first, A–Z starts A→Z. The points
-       filter carries toggleable sub-metrics (points / views / apps). */
+       filter carries toggleable sub-metrics (points / views). */
     psort: { mode: "points", metric: "points", pdir: "desc", adir: "asc" },
     tab: "feed"
   };
+
+  /* the six league operators — the ONLY names the gate accepts */
+  var ADMINS = ["Pratham Jindal", "Sejal Choudhary", "Kanupriya Srikoti",
+                "Vikram Singh Mawari", "Lagan Garg", "Manas Ranjan"];
 
   function operatorName() {
     var el = $("gateOperator");
@@ -497,21 +600,25 @@
       ocr: p.ocrCount !== undefined ? p.ocrCount : (r.ocr === 0 ? "" : r.ocr),
       check: normCheck(p.crossCheck !== undefined ? p.crossCheck : r.check),
       verified: p.verifiedCount !== undefined ? p.verifiedCount
-                : (r.verified === 0 ? "" : r.verified)
+                : (r.verified === 0 ? "" : r.verified),
+      ctype: p.contentType !== undefined ? p.contentType
+              : (r.ctype === "PRAPER" || r.ctype === "PERSONAL" ? r.ctype : "")
     };
   }
   function stage(r, patch) {
     var cur = state.pending[r.row] || {
       ocrCount: r.ocr === "" ? "" : r.ocr,
       crossCheck: normCheck(r.check),
-      verifiedCount: r.verified === "" ? "" : r.verified
+      verifiedCount: r.verified === "" ? "" : r.verified,
+      contentType: (r.ctype === "PRAPER" || r.ctype === "PERSONAL") ? r.ctype : ""
     };
     Object.keys(patch).forEach(function (k) { cur[k] = patch[k]; });
     // staged entry dissolves when it matches the ledger again (untouch)
     var unchanged =
       String(cur.ocrCount) === String(r.ocr === "" ? "" : r.ocr) &&
       normCheck(cur.crossCheck) === normCheck(r.check) &&
-      String(cur.verifiedCount) === String(r.verified === "" ? "" : r.verified);
+      String(cur.verifiedCount) === String(r.verified === "" ? "" : r.verified) &&
+      String(cur.contentType || "") === String(r.ctype || "");
     if (unchanged) delete state.pending[r.row];
     else state.pending[r.row] = cur;
     syncDirtyBar();
@@ -537,6 +644,11 @@
 
   function tryUnlock(key, silent) {
     if (!key) { if (!silent) gateError("Enter the access key."); return Promise.resolve(false); }
+    var op = operatorName();
+    if (op === "unnamed") {
+      if (!silent) gateError("Select your name from the list first.");
+      return Promise.resolve(false);
+    }
     if (MOCK && key.length < 4) {
       if (!silent) gateError("Mock mode: any key with 4+ characters unlocks.");
       return Promise.resolve(false);
@@ -549,10 +661,15 @@
           if (!silent) gateError((out && out.error) || "Access denied.");
           return false;
         }
-        unlockWith(key);
-        ingest(out);
-        announceLogin(key);
-        return true;
+        /* the login write doubles as the DEVICE CHECK — a name trying to
+           unlock from somebody else's browser is refused BEFORE the console
+           opens, and the denial lands in the AdminLog (LOGIN-DENIED) */
+        return loginCheck(key).then(function (ok) {
+          if (!ok) return false;
+          unlockWith(key);
+          ingest(out);
+          return true;
+        });
       })
       .catch(function (err) {
         gateBusy(false);
@@ -561,20 +678,36 @@
       });
   }
 
-  /* audit trail: every unlock is logged with the operator's name */
-  function announceLogin(key) {
+  /* login + device binding; resolves false when the backend refuses */
+  function loginCheck(key) {
     var op = operatorName();
     try { sessionStorage.setItem(OP_STORE, op === "unnamed" ? "" : op); } catch (e) { /* ok */ }
+    var dev = deviceFingerprint();
     if (MOCK) {
       mockLog.unshift({ ts: new Date().toISOString(), operator: op,
         action: "LOGIN", target: "Control Room",
-        detail: "gate unlocked (mock)" });
+        detail: "gate unlocked (mock) · device " + String(dev).split("·")[0] });
       renderLog();
-      return;
+      return Promise.resolve(true);
     }
-    gasPost({ action: "adminLogin", adminKey: key, operator: op })
-      .catch(function () { /* log write is best-effort */ });
+    return gasPost({ action: "adminLogin", adminKey: key, operator: op, device: dev })
+      .then(function (out) {
+        if (out && out.ok === false && out.error) {
+          gateError(out.error);
+          return false;
+        }
+        return true;
+      })
+      .catch(function () {
+        /* the log write is best-effort — a network hiccup on it must not
+           lock a verified operator out of an already-verified key */
+        return true;
+      });
   }
+
+  /* (legacy announceLogin absorbed into loginCheck — kept as a no-op-safe
+     alias in case an older surface still calls it) */
+  function announceLogin(key) { return loginCheck(key); }
 
   function unlockWith(key) {
     state.key = key;
@@ -592,6 +725,7 @@
       r.claimed = (r.claimed === "" || r.claimed == null) ? "" : Number(r.claimed);
       r.ocr = (r.ocr === "" || r.ocr == null) ? "" : Number(r.ocr);
       r.verified = (r.verified === "" || r.verified == null) ? "" : Number(r.verified);
+      r.ctype = (r.ctype === "PRAPER" || r.ctype === "PERSONAL") ? r.ctype : "";
       r.weekNum = weekOf(r.ts);
       return r;
     });
@@ -708,10 +842,19 @@
       if (state.filters.week !== "all" && String(r.weekNum) !== state.filters.week) return false;
       if (state.filters.format !== "all" && r.format !== state.filters.format) return false;
       if (state.filters.type !== "all" && r.type !== state.filters.type) return false;
+      if (state.filters.ctype !== "all") {
+        var d0 = displayOf(r);
+        if ((d0.ctype || "") !== state.filters.ctype) return false;
+      }
       if (state.filters.status !== "all") {
         var d = displayOf(r);
         if (state.filters.status === "VERIFIED") {
-          if (d.verified === "") return false;
+          /* DONE = the review finished on this row: cross-check MATCH (the
+             reviewer confirmed the claim) OR a verified count typed in.
+             Before this, DONE only counted a filled verified number, so a
+             row saved as MATCH never appeared here and the tab "never
+             updated" — MATCH is exactly what marks a row done. */
+          if (d.check !== "MATCH" && d.verified === "") return false;
         } else if (d.check !== state.filters.status) return false;
       }
       if (q) {
@@ -781,6 +924,11 @@
     var tags = '<span class="pcl-fr-tags">' +
       (r.type === "UPDATE" ? "" : '<span class="pcl-tag pcl-tag--new">NEW</span>') +
       collabBadgeHtml(r) +
+      ctTagHtml(d.ctype) +
+      (r.tracked && r.trackedViews !== "" && r.trackedViews !== undefined
+        ? '<span class="pcl-tag pcl-tag--track" title="Latest platform-tracked count (SYNC NOW pipeline)">AUTO ' +
+          esc(fmt(r.trackedViews)) + "</span>"
+        : "") +
       (dirty ? '<span class="pcl-tag pcl-tag--dirty">STAGED</span>' : "") +
       "</span>";
     return '<div class="pcl-feedrow' + (dirty ? " is-dirty" : "") + '" data-row="' + r.row + '">' +
@@ -793,10 +941,10 @@
       "</span>" +
       '<span class="fr-post">' + thumb +
         '<span class="pcl-fr-posttext">' +
-          '<a class="pcl-fr-link" href="' + esc(r.url) + '" target="_blank" rel="noopener">' +
-            esc(shortLink(r.url)) + "</a>" +
-          '<span class="pcl-fr-fmt"><b>' + esc(fmtShort(r.format)) + "</b> " + esc(multOf(r.mult)) +
-            ' <span class="pcl-fr-id">· ' + esc(mediaTail(r.mediaId)) + "</span>" +
+          '<a class="pcl-fr-link" href="' + esc(r.url) + '" target="_blank" rel="noopener"' +
+          ' title="' + esc(r.url) + '">#' + esc(postHashOf(r)) + "</a>" +
+          '<span class="pcl-fr-fmt">' + brandBadgeAdm(r.format) + " <b>" + esc(multOf(r.mult)) +
+            '</b> <span class="pcl-fr-id">· ' + esc(postHashOf(r)) + "</span>" +
             (r.weekNum ? ' <span class="pcl-fr-id">· W' + r.weekNum + "</span>" : "") +
           "</span>" +
         "</span>" +
@@ -844,7 +992,10 @@
       state.rows.forEach(function (r) {
         var v = displayOf(r);
         if (d.key === "all") n++;
-        else if (d.key === "VERIFIED") { if (v.verified !== "") n++; }
+        else if (d.key === "VERIFIED") {
+          /* same rule as the filter: MATCH or a verified count = done */
+          if (v.check === "MATCH" || v.verified !== "") n++;
+        }
         else if (v.check === d.key) n++;
       });
       var active = state.filters.status === d.key ? " is-active" : "";
@@ -879,6 +1030,7 @@
         ? ""
         : '<span class="pcl-tag pcl-tag--new">NEW</span>';
       html += collabBadgeHtml(r);
+      html += ctTagHtml(d.ctype);
       if (dirty) html += '<span class="pcl-tag pcl-tag--dirty">STAGED</span>';
       tags.innerHTML = html;
     }
@@ -938,6 +1090,9 @@
   $("fStatus").addEventListener("change", function () {
     state.filters.status = this.value; renderFeed();
   });
+  $("fCtype").addEventListener("change", function () {
+    state.filters.ctype = this.value; renderFeed();
+  });
   $("fType").addEventListener("change", function () {
     state.filters.type = this.value; renderFeed();
   });
@@ -970,19 +1125,21 @@
 
   function savePending() {
     var rows = Object.keys(state.pending).map(function (no) {
-      var p = state.pending[no];   // always carries all three keys
+      var p = state.pending[no];   // always carries all four keys
       return {
         row: Number(no),
         ocrCount: p.ocrCount,
         crossCheck: p.crossCheck,
-        verifiedCount: p.verifiedCount
+        verifiedCount: p.verifiedCount,
+        contentType: p.contentType
       };
     });
     if (!rows.length) return;
     $("saveBtn").disabled = true;
     $("saveBtn").textContent = "SAVING…";
     gasPost({ action: "adminVerify", adminKey: state.key,
-              operator: operatorName(), updates: rows })
+              operator: operatorName(), device: deviceFingerprint(),
+              updates: rows })
       .then(function (out) {
         if (!out || out.ok === false) {
           throw new Error((out && (out.error || (out.errors && out.errors[0] &&
@@ -1062,13 +1219,25 @@
       " · " + fmtTS(r.ts) + " IST";
     var l = $("rvLink");
     l.href = r.url;
-    l.textContent = shortLink(r.url) + " ↗";
+    l.textContent = "#" + postHashOf(r) + " ↗";
+    l.title = r.url;
     $("rvClaimed").textContent = fmt(r.claimed);
     $("rvSnap").textContent = "S" + r.snap;
     $("rvWeek").textContent = r.weekNum ? "W" + r.weekNum : "–";
     $("rvOcr").value = d.ocr === "" ? "" : d.ocr;
     $("rvVerified").value = d.verified === "" ? "" : d.verified;
     $("rvStatus").value = d.check;
+    $("rvCtype").value = d.ctype || "";
+    /* full designation visibility for the reviewer (user spec) */
+    var dEl = $("rvDesig");
+    var pd = pmapOf(r.name);
+    if (pd && pd.designation) {
+      dEl.textContent = "Desg. · " + pd.designation;
+      dEl.hidden = false;
+    } else {
+      dEl.textContent = "";
+      dEl.hidden = true;
+    }
     $("rvOcrNote").textContent = "";
     $("rvScanBtn").disabled = false;
   }
@@ -1136,7 +1305,8 @@
     stage(r, {
       ocrCount: digitsOf($("rvOcr").value),
       verifiedCount: digitsOf($("rvVerified").value),
-      crossCheck: $("rvStatus").value
+      crossCheck: $("rvStatus").value,
+      contentType: $("rvCtype").value || ""
     });
     toast("Row staged — SAVE CHANGES writes it");
   });
@@ -1235,7 +1405,8 @@
     function blank(name) {
       return { name: name || "", manager: "", apps: 0, posts: 0, uniqueMedia: 0,
                ppts: 0, vpts: 0, views: 0, photoId: "",
-               lastTs: "", lastUrl: "", lastFormat: "", formatRatio: {} };
+               lastTs: "", lastUrl: "", lastFormat: "", formatRatio: {},
+               plats: {}, balance: {} };
     }
     state.players.forEach(function (p) {
       var a = map[String(p.player || "").toLowerCase()] = blank(p.player);
@@ -1268,15 +1439,50 @@
       if (isNewer) { a.lastTs = r.ts; a.lastUrl = r.url || ""; a.lastFormat = r.format || ""; }
       if (r.photoId && (isNewer || !a.photoId)) a.photoId = r.photoId;
     });
+    /* platform presence + the 50:50 balance per platform (rulebook §6) —
+       every ledger row carries its PRAPER/PERSONAL tag, so the balance is
+       computed straight from the data the Control Room reviews */
+    state.rows.forEach(function (r) {
+      var a = map[String(r.name || "").toLowerCase()];
+      if (!a) return;
+      var pk = platKeyOf(r);
+      if (!pk) return;
+      a.plats[pk] = true;
+      var b = a.balance[pk] || (a.balance[pk] = { p: 0, pe: 0 });
+      var d = displayOf(r);
+      if (d.ctype === "PERSONAL") b.pe++;
+      else if (d.ctype === "PRAPER") b.p++;
+    });
     return Object.keys(map).map(function (k) { return map[k]; });
+  }
+
+  /* per-platform balance chips: "IG 5:5" green when balanced (|p−pe| ≤ 1
+     allows rounding slack), amber when the 50:50 rule is drifting */
+  function balanceHtml(a) {
+    var names = { ig: "IG", yt: "YT", li: "LI" };
+    return Object.keys(a.balance || {}).map(function (pk) {
+      var b = a.balance[pk];
+      var n = b.p + b.pe;
+      if (!n) return "";
+      var off = Math.abs(b.p - b.pe) > 1;
+      return '<span class="pcl-bal' + (off ? " is-off" : "") + '" title="' +
+        esc(names[pk] + " · " + b.p + " Praper : " + b.pe + " Personal" +
+            (off ? " — off the 50:50 balance" : " — 50:50 OK")) + '">' +
+        names[pk] + " <b>" + b.p + ":" + b.pe + "</b></span>";
+    }).join("");
   }
 
   function mixShort(a) {
     var keys = Object.keys(a.formatRatio || {});
     if (!keys.length) return "";
     return keys.slice(0, 2).map(function (f) {
-      return "<b>" + a.formatRatio[f] + "×</b> " + esc(fmtShort(f));
+      return "<b>" + a.formatRatio[f] + "×</b> " + brandBadgeAdm(f);
     }).join(" · ") + (keys.length > 2 ? " +" + (keys.length - 2) : "");
+  }
+  /* bare media tail → the #hash chip (mediaTail expects prefixed ids) */
+  function tail8(t) {
+    t = String(t || "");
+    return t.length > 8 ? t.slice(0, 8) + "…" : t;
   }
 
   function pstat(label, val, lead) {
@@ -1301,18 +1507,21 @@
         esc((a.name || "?").charAt(0).toUpperCase()) + "</span>";
     var latest = a.lastUrl
       ? '<a class="pcl-plink" href="' + esc(a.lastUrl) + '" target="_blank" rel="noopener" title="' +
-        esc(a.lastUrl) + '">' + (a.lastFormat ? "<b>" + esc(fmtShort(a.lastFormat)) + "</b> " : "") +
-        esc(shortLink(a.lastUrl)) + " &#8599;</a>"
+        esc(a.lastUrl) + '">' + (a.lastFormat ? brandBadgeAdm(a.lastFormat) + " " : "") +
+        "#" + esc(tail8(mediaIdOfUrl(a.lastUrl))) + " &#8599;</a>"
       : '<span class="pcl-plink is-none">No posts yet</span>';
+    var bal = balanceHtml(a);
     return '<div class="pcl-pcard">' +
       '<span class="pcl-prank">' + rank + "</span>" +
       avatar +
       '<div class="pcl-pid">' +
         '<p class="pcl-pname"><span class="pcl-pnametext">' + esc(a.name) + tick + "</span></p>" +
         '<p class="pcl-psub">' +
-          (desig ? esc(desig) + " · " : "") + "mgr " + esc(a.manager || "–") +
+          (desig ? '<span class="pcl-pdesig">' + esc(desig) + "</span> · " : "") +
+          "mgr " + esc(a.manager || "–") +
           (mixShort(a) ? ' · <span class="pcl-pmix">' + mixShort(a) + "</span>" : "") +
         "</p>" +
+        (bal ? '<p class="pcl-pbal">' + bal + "</p>" : "") +
       "</div>" +
       '<div class="pcl-pstats">' +
         pstat("VERIFIED PTS", a.vpts ? fmt(a.vpts) : "–", true) +
@@ -1324,10 +1533,23 @@
       '<div class="pcl-pact">' + latest +
         '<button type="button" class="pcl-abtn pcl-abtn--small pcl-pvbtn' +
           (ver ? " is-on" : "") + '" data-pv-name="' + esc(a.name) +
-          '" data-pv-to="' + (ver ? "0" : "1") + '">' +
-          (ver ? "CLEAR TICK" : "VERIFY ID") + "</button>" +
+          '" data-pv-to="' + (ver ? "0" : "1") + '" title="Confirm photo + designation against ' +
+          'name · manager · designation before the tick goes live">' +
+          (ver ? "CLEAR TICK" : "CONFIRM ID") + "</button>" +
       "</div>" +
       "</div>";
+  }
+  function mediaIdOfUrl(url) {
+    try {
+      var u = new URL(url, "https://x");
+      var m = (u.pathname || "").match(/\/(?:reel|reels|tv|p)\/([A-Za-z0-9_-]+)/i) ||
+              (u.pathname || "").match(/\/(?:posts|pulse)\/([A-Za-z0-9_-]+)/i) ||
+              (u.pathname || "").match(/\/(?:shorts|live|embed|v)\/([A-Za-z0-9_-]+)/i) ||
+              (u.searchParams.get("v") ? [null, u.searchParams.get("v")] : null) ||
+              (u.hostname === "youtu.be" ? (u.pathname || "").match(/^\/([A-Za-z0-9_-]+)/) : null) ||
+              String(url).match(/activity[-:](\d{10,})/i);
+      return m ? m[1] : "";
+    } catch (e) { return ""; }
   }
 
   function renderPlayers() {
@@ -1340,6 +1562,12 @@
         return (a.name + " " + a.manager).toLowerCase().indexOf(q) >= 0;
       });
     }
+    /* platform picker — only participants who posted on EVERY chosen app */
+    if (state.plats.length) {
+      list = list.filter(function (a) {
+        return state.plats.every(function (pk) { return a.plats && a.plats[pk]; });
+      });
+    }
     var s = state.psort;
     var dir = s.mode === "alpha" ? s.adir : s.pdir;
     var mul = dir === "asc" ? 1 : -1;
@@ -1349,8 +1577,6 @@
         v = String(x.name || "").localeCompare(String(y.name || ""));
       } else if (s.metric === "views") {
         v = (x.views - y.views) || ((x.vpts + x.ppts) - (y.vpts + y.ppts));
-      } else if (s.metric === "apps") {
-        v = (x.apps - y.apps) || (x.vpts - y.vpts);
       } else {
         v = (x.vpts - y.vpts) || (x.ppts - y.ppts);   // verified leads, projected breaks ties
       }
@@ -1527,6 +1753,8 @@
     ["OCR Count", function (r) { return displayOf(r).ocr; }],
     ["Cross-Check", function (r) { return displayOf(r).check; }],
     ["Verified Count", function (r) { return displayOf(r).verified; }],
+    ["Content Type", function (r) { return displayOf(r).ctype; }],
+    ["Tracked Views", function (r) { return r.trackedViews !== undefined ? r.trackedViews : ""; }],
     ["Verified Points", function (r) {
       var d = displayOf(r);
       return d.verified !== "" ? Math.ceil(d.verified * (Number(r.mult) || 1)) : r.verifiedPoints;
@@ -1599,6 +1827,71 @@
   $("refreshBtn").addEventListener("click", function () { loadAll(); });
   $("exportBtn").addEventListener("click", exportCsv);
 
+  /* SYNC NOW — pull the auto-tracked platform counts (YouTube Data API leg;
+     IG/LI activate when their Phase-0 keys go live) into the ledger. The
+     fresh counts surface in the feed as AUTO tags beside each row. */
+  $("syncNowBtn").addEventListener("click", function () {
+    var btn = this;
+    btn.disabled = true;
+    var old = btn.textContent;
+    btn.textContent = "SYNCING…";
+    gasPost({ action: "syncNow", adminKey: state.key,
+              operator: operatorName(), device: deviceFingerprint() })
+      .then(function (out) {
+        if (!out || out.ok === false) {
+          throw new Error((out && out.error) || "Sync failed");
+        }
+        var bits = [];
+        if (out.yt) bits.push("YT " + out.yt.updated + "/" + out.yt.checked);
+        if (out.ig && out.ig.note) bits.push("IG " + out.ig.note);
+        if (out.li && out.li.note) bits.push("LI " + out.li.note);
+        toast("Sync done — " + (bits.join(" · ") || "nothing to track yet"));
+        return loadAll(true);
+      })
+      .catch(function (err) {
+        toast(err.message || "Sync failed", true);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = old;
+      });
+  });
+
+  /* platform picker (participants tab) — icon multi-select; the button label
+     mirrors the pick, an empty pick = ALL APPS */
+  (function () {
+    var pick = $("platPick"), btn = $("platBtn"), menu = $("platMenu");
+    if (!pick || !btn || !menu) return;
+    function syncLabel() {
+      var boxes = Array.prototype.slice.call(menu.querySelectorAll("input"));
+      var on = boxes.filter(function (b) { return b.checked; })
+                    .map(function (b) { return b.value.toUpperCase(); });
+      state.plats = on.map(function (v) { return v.toLowerCase(); });
+      $("platBtnLabel").textContent = on.length ? on.join(" + ") : "ALL APPS";
+      btn.classList.toggle("is-active", on.length > 0);
+      renderPlayers();
+    }
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      menu.hidden = !menu.hidden;
+      btn.setAttribute("aria-expanded", String(!menu.hidden));
+    });
+    menu.addEventListener("change", syncLabel);
+    document.addEventListener("click", function (ev) {
+      if (menu.hidden) return;
+      if (!pick.contains(ev.target)) {
+        menu.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+      }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && !menu.hidden) {
+        menu.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+      }
+    });
+  })();
+
   /* ============================================================================
      GATE WIRING + BOOT
      ========================================================================== */
@@ -1619,12 +1912,26 @@
   });
 
   (function boot() {
-    var saved = "";
-    try { saved = sessionStorage.getItem(KEY_STORE) || ""; } catch (e) { /* ok */ }
+    /* gate operator dropdown — ONLY the six league operators appear */
+    var opSel = $("gateOperator");
+    if (opSel && opSel.options.length <= 1) {   // placeholder only → fill it
+      ADMINS.forEach(function (n) {
+        var o = document.createElement("option");
+        o.value = n;
+        o.textContent = n;
+        opSel.appendChild(o);
+      });
+    }
     try {
       var savedOp = sessionStorage.getItem(OP_STORE);
-      if (savedOp && $("gateOperator")) $("gateOperator").value = savedOp;
+      if (savedOp && opSel) {
+        for (var i = 0; i < opSel.options.length; i++) {
+          if (opSel.options[i].value === savedOp) { opSel.value = savedOp; break; }
+        }
+      }
     } catch (e) { /* ok */ }
+    var saved = "";
+    try { saved = sessionStorage.getItem(KEY_STORE) || ""; } catch (e) { /* ok */ }
     if (saved) {
       tryUnlock(saved, true).then(function (ok) {
         if (!ok) {

@@ -448,3 +448,92 @@ the board reads GAS directly even when submissions travel through Vercel's
   full draft round-trip (text + photo + screenshot via real change handler,
   LEVEL CLEARED → draft wiped → no restore), mobile 390 stacked tile +
   no h-scroll, dark mode, console clean.
+
+## Round 21 — review round B: ledger trust, participant identity, 50:50, device binding, YT tracking
+
+**Form (index.html + js/app.js + css/theme.css)**
+- **Header**: marquee rebuilt — graphite band (`--pcl-marquee-*` now neutral
+  #1a1b20/#131418), `.pcl-header-brand` is an `<a>` (index → #pclForm,
+  admin/leaderboard → index.html) with the **SEASON 2 tag under the logo**
+  (7.5px Silkscreen, orange glow). Kicker + insert texts deleted;
+  `.pcl-board-links` is a right-aligned stack (LEADERBOARD renamed from
+  VIEW LEADERBOARD; admin shows a CONTROL ROOM chip; board shows SUBMIT
+  ENTRY). ≤520px: brand row + centred link row.
+- **Participant Details** (was Player Details); done screen: ENTRY LOGGED! /
+  Points Queued / "see you next time" copy.
+- **Desg. before Full name** (grid areas `photo | desig | name` then
+  `photo | manager | manager`). `makeAutocomplete` gained `optsFocus` — an
+  empty focus opens the list with the six most common real titles.
+- **Roster**: `ROSTER` (60 names → designations from the early-insight
+  collection) + `DESIG_SHORT` dictionary + `shortDesig()` (dictionary →
+  word-swap → initials fallback). `rosterDesigFill()` auto-fills on the
+  name settle timer; `updateDesigCapsule()` renders the **capsule inside
+  `.pcl-namewrap`** (a flex field styled as the input, real input
+  borderless inside — an `<input>` can't contain spans). MANAGERS:
+  "Vikram Singh" → "Vikram Singh Mawari" + the roster's real team leads.
+- **Collab autocomplete**: `bindCollabAcs()` re-binds after every
+  renderRows; partner list = managers + roster (built lazily — the list
+  must NOT evaluate at parse time, MANAGERS is assigned further down:
+  the first boot crashed on `MANAGERS.concat` at line 709 before the
+  assignment ran).
+- **Content type**: posts carry `ctype` ("PRAPER" default); `.pcl-cttoggle`
+  segmented control flips in place (no re-render). Payload gains
+  `postDetails[].contentType`; draft persistence + restore include it;
+  rulebook §6 rewritten with the per-platform 50:50 wording.
+- JSONP reads carry `_=<ms>` cache-buster.
+
+**Admin (admin.html + js/admin.js + css/admin.css)**
+- **DONE = MATCH-or-verified** in `filteredRows()` + `renderQuickChips`
+  counters (was verified-count-only, which is why the DONE tab "never
+  updated" for MATCH rows). JSONP cache-buster.
+- `displayOf`/`stage` are now 4-key (ocr / check / verified / contentType);
+  review modal gained `#rvDesig` (full designation) + `#rvCtype`; mock
+  `gasPost` + `mockNet` persist contentType.
+- Feed rows: `brandBadgeAdm()` (icon + platform-coloured word + ×mult),
+  `postHashOf()` (#hash link text, full URL in href/title), `ctTagHtml`,
+  AUTO tag when `r.tracked`. Feed filter bar gained the CONTENT select.
+- Players: `playerAgg` collects `plats` + per-platform `balance`
+  (PRAPER/PERSONAL counts from displayOf); `balanceHtml` chips (amber when
+  |p−pe| > 1); platform multi-select `#platPick` (icon checkboxes, label
+  mirrors the pick, players must be present on EVERY chosen app); psort
+  metrics are POINTS/VIEWS only (APPS became the picker); pavatar ring
+  shadow removed; TICK_SVG is **green** (#1d9e57); CONFIRM ID button title
+  names the triple (photo + designation against name · manager ·
+  designation); `mediaIdOfUrl` + `tail8` for latest-post #hash links.
+- **Gate**: `#gateOperator` is a SELECT of `ADMINS` (6 names);
+  `deviceFingerprint()` (UA tail · platform · language · screen · tz ·
+  cores → hash·readable); `tryUnlock` now runs the login POST BEFORE
+  unlocking (`loginCheck`) so a device mismatch refuses the console;
+  mock log carries the device hash.
+
+**Backend (gas/Code.gs)**
+- `PLAYER_META` = the real 60-person roster (leaderboard designations
+  before first submission; ledger values still win).
+- `doPost` writes `Content Type` from `postDetails[].contentType`
+  (revived column; PRAPER default). `adminVerify_` accepts
+  `u.contentType` (whitelist PRAPER/PERSONAL) → writes col 7 + logs
+  `CT: old→new`.
+- `adminLogin_` = **device binding**: Script Properties `ADMIN_DEVICES`
+  JSON keyed by normName; first login binds the hash part of the
+  fingerprint; mismatch → `LOGIN-DENIED` log entry + refusal text naming
+  `resetAdminDevice("Full Name")`; `resetAdminDevices()` clears all.
+- **Metrics Phase 1**: `DEFAULT_YT_API_KEY` (provided key; Script Property
+  `YOUTUBE_API_KEY` overrides), `syncYouTube_` (unique yt_ IDs → batch-50
+  videos.list → snapshots only when the count changed), `PCL-Snapshots`
+  sheet (append-only), `latestSnapshots_` join → rows carry
+  trackedViews/trackedAt, `syncInstagram_` (reports until the Meta token
+  lands), `syncLinkedIn_` (decision c — OCR floor note), `syncNow_` (admin
+  POST action + AdminLog SYNC entry), `metricsDaily_` + triggers at
+  09:00/21:00 (`setupMetricsTriggers()` runnable once, self-healing on
+  SYNC NOW). `buildAdminGuide()` documents Content Type, snapshots,
+  device binding.
+
+**Tests**: harness +8 (13/13b CT default+explicit, 14/14b adminVerify CT
+write+rejection, 15/15b/15c/15d device bind/refuse/repeat/empty-op) — all
+green; rollup 16/16; url diag 24/24. E2E: focus dropdown → tap-fill →
+capsule (VE / Sys. Engineer), roster autofill, collab AC tap-fill
+("sehaj" → Sehaj Singh), P/P flip + payload (PERSONAL/PRAPER + partner),
+done-screen copy, DONE chip 3 = MATCH-or-verified rows, feed badges/tags,
+players balance + platform picker (IG+YT → 2), review modal designation +
+CT stage→save→persist, gate dropdown 6 names, mobile 390 + OG dark, three
+portals zero console errors in a fresh session.

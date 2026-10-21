@@ -36,6 +36,29 @@ the SUBMISSION TERMINAL kicker (`assets/brand/`, original inspo in
   "Required" below, navy restored on input. Link errors appear at commit
   time, never after the final submit. (Amber state reserved for a future
   link-liveness / privacy check.)
+- **Participant identity done right** — Desg. dropdown (opens on focus with
+  the league's real titles) sits before Full name and renders as a
+  smart-shortened capsule inside the name field (Jr. VE · Exec. GFX …);
+  the 60-person league roster auto-fills a player's title from their name;
+  collab partner input autocompletes managers + roster; the logo is a link
+  back to the form; the completion screen reads ENTRY LOGGED · Points
+  Queued.
+- **50:50 balance rule (§6)** — every post is tagged PRAPER or PERSONAL
+  (toggle per row). The Control Room checks the balance PER PLATFORM
+  (players tab shows `IG 5:5` chips) and can retag any row from the review
+  modal. Rulebook §6 carries the exact wording.
+- **Admin access is bound** — the gate is a dropdown of the six league
+  operators; each operator's first unlock binds their browser, so nobody
+  can sign in under someone else's name (denials are logged; a legitimate
+  new device is unlocked once with `resetAdminDevice("Name")`).
+- **Auto-tracked views (YouTube live)** — SYNC NOW + twice-daily triggers
+  pull fresh YouTube counts into an append-only PCL-Snapshots tab; ledger
+  rows show the tracked number as an AUTO tag beside the claim. Instagram
+  activates when the Meta app lands; LinkedIn runs decision (c) with OCR
+  as the floor.
+- **Ledger that tells the truth** — the DONE filter counts every finished
+  review (MATCH or verified), and every read carries a cache-buster so
+  REFRESH can never serve stale numbers again.
 - **Official link formats only** — every pasteable shape of the three
   league platforms passes: Instagram `instagram.com` + `instagr.am` legacy
   domain (`/p/`, `/reel/`, `/reels/`, `/tv/`), YouTube `youtube.com`

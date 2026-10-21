@@ -651,8 +651,7 @@ html:not([data-pcl-font="og"]) .pcl-gate-note code { font-size: 12px; }
 .pcl-pavatar {
   width: 48px; height: 48px; display: block; object-fit: cover;
   border-radius: 50%;
-  border: 3px solid var(--pcl-input-border);
-  box-shadow: 2px 2px 0 var(--pcl-hard);
+  border: 2px solid var(--pcl-input-border);
   background: var(--pcl-surface-2);
 }
 .pcl-pavatar--letter {
@@ -768,3 +767,106 @@ html:not([data-pcl-font="og"]) .pcl-photolb-line { font-size: 11.5px; letter-spa
 @media (max-width: 760px) {
   .pcl-playerbar .pcl-fsearch { flex-basis: 100%; }
 }
+
+/* ============================================================================
+   ROUND 21 — platform picker, balance chips, control-room chip, tags
+   ============================================================================ */
+
+/* header page chip (admin/leaderboard) — neutral, out of the way */
+.pcl-board-chip {
+  display: inline-block;
+  font-family: "Silkscreen", monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--pcl-marquee-text, #c9cdd8);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  padding: 5px 10px 4px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* AUTO-tracked tag — the SYNC NOW pipeline's platform count */
+.pcl-tag--track {
+  color: #1d9e57;
+  border-color: #1d9e57;
+  background: rgba(29, 158, 87, 0.08);
+}
+
+/* review modal — full designation line */
+.pcl-rv-desig {
+  font-family: var(--pcl-font-title);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface-2);
+  border: 2px dashed var(--pcl-line);
+  padding: 5px 8px 4px;
+  margin: 0 0 8px;
+}
+
+/* participants tab — platform multi-select with app icons */
+.pcl-platpick { position: relative; }
+.pcl-platbtn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--pcl-font-title); font-weight: 700;
+  font-size: 10px; letter-spacing: 1px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface);
+  border: 2px solid var(--pcl-line);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 7px 10px 6px;
+  cursor: pointer;
+}
+.pcl-platbtn .pcl-chevron { width: 8px; height: 8px; }
+.pcl-platbtn.is-active {
+  border-color: var(--pcl-primary);
+  color: var(--pcl-primary);
+  box-shadow: 2px 2px 0 var(--pcl-hard), 0 0 10px var(--pcl-glow-soft);
+}
+.pcl-platmenu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  min-width: 190px;
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-line);
+  box-shadow: 5px 5px 0 var(--pcl-hard), 0 14px 30px rgba(0,0,0,0.22);
+  padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.pcl-platopt {
+  display: flex; align-items: center; gap: 9px;
+  font-family: var(--pcl-font-title); font-weight: 600; font-size: 12px;
+  color: var(--pcl-text);
+  padding: 7px 8px;
+  cursor: pointer;
+}
+.pcl-platopt:hover { background: var(--pcl-surface-2); }
+.pcl-platopt input { accent-color: var(--pcl-primary); width: 15px; height: 15px; }
+.pcl-plat-ico { width: 17px; height: 17px; flex: 0 0 auto; display: block; }
+
+/* per-platform 50:50 balance chips on participant cards */
+.pcl-pbal { display: flex; flex-wrap: wrap; gap: 5px; margin: 5px 0 0; }
+.pcl-bal {
+  font-family: var(--pcl-font-title); font-weight: 700;
+  font-size: 9.5px; letter-spacing: .4px;
+  color: #1d7a46; background: rgba(29, 158, 87, 0.10);
+  border: 2px solid rgba(29, 158, 87, 0.55);
+  padding: 2px 6px 1px;
+  line-height: 1.3;
+}
+.pcl-bal b { font-weight: 800; }
+.pcl-bal.is-off {
+  color: #a05a00; background: rgba(240, 150, 20, 0.12);
+  border-color: rgba(202, 138, 4, 0.65);
+}
+html[data-pcl-theme="dark"] .pcl-bal { color: #5fd598; }
+html[data-pcl-theme="dark"] .pcl-bal.is-off { color: #ffc35c; }
+
+/* designation is always fully visible on participant cards */
+.pcl-pdesig { font-weight: 700; color: var(--pcl-text); }
+
+/* feed filter bar gains one more select — keep the wrap tidy */
+.pcl-filterbar .pcl-fsel { min-width: 118px; }
+
+/* SF readability for the new pieces */
+html:not([data-pcl-font="og"]) .pcl-platbtn,
+html:not([data-pcl-font="og"]) .pcl-bal,
+html:not([data-pcl-font="og"]) .pcl-board-chip { font-weight: 600; }

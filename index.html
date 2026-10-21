@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Praper Content League — Submission Terminal</title>
+  <title>Praper Content League — Entry Form</title>
   <link rel="icon" type="image/png" href="assets/brand/pcl-logo-web.png" />
 
   <!-- Apply saved/system theme + reading font BEFORE first paint (no flash) -->
@@ -33,27 +33,23 @@
   <link rel="stylesheet" href="css/theme.css" />
 </head>
 <body>
-  <!-- Arcade marquee: the PCL logo's native black band, both themes. -->
+  <!-- Arcade marquee: the PCL logo's native dark band, both themes.
+       Minimal by design: logo (click = back to the form) + SEASON 2 tag
+       right under it + the two portal links + the toggles. -->
   <div class="pcl-marquee">
     <header class="pcl-header">
-      <div class="pcl-header-brand">
+      <a class="pcl-header-brand" href="#pclForm"
+         aria-label="Praper Content League — back to the entry form"
+         title="Back to the entry form">
         <img class="pcl-logo" src="assets/brand/pcl-logo-web.png"
              alt="Praper Content League" />
-      </div>
-      <div class="pcl-marquee-divider" aria-hidden="true"></div>
-      <div class="pcl-header-text">
-        <p class="pcl-season">SEASON 2</p>
-        <p class="pcl-kicker">Submission Terminal</p>
-        <p class="pcl-insert">
-          <span class="pcl-px-play" aria-hidden="true"></span>
-          DROP YOUR ENTRY<span class="pcl-blink" aria-hidden="true">_</span>
-        </p>
-        <span class="pcl-board-links">
-          <a class="pcl-board-link" href="leaderboard.html">VIEW LEADERBOARD &#9656;</a>
-          <button type="button" class="pcl-board-link pcl-board-link--btn"
-                  id="pclRulebookBtn">RULEBOOK &#9656;</button>
-        </span>
-      </div>
+        <span class="pcl-season">SEASON 2</span>
+      </a>
+      <span class="pcl-board-links">
+        <a class="pcl-board-link" href="leaderboard.html">LEADERBOARD &#9656;</a>
+        <button type="button" class="pcl-board-link pcl-board-link--btn"
+                id="pclRulebookBtn">RULEBOOK &#9656;</button>
+      </span>
       <button id="pclFontToggle" class="pcl-toggle pcl-toggle--font" type="button"
               aria-label="Toggle OG arcade font" title="Toggle OG arcade font"
               aria-pressed="false">
@@ -75,7 +71,7 @@
              name fields, one row (mobile: avatar moves above them, centred).
              READY/alt text share one small caption line under the row. -->
       <section class="pcl-panel">
-        <h2 class="pcl-panel-title">1 &middot; Player Details</h2>
+        <h2 class="pcl-panel-title">1 &middot; Participant Details</h2>
         <div class="pcl-playergrid">
           <div class="pcl-field pcl-photofield" data-field="playerPhoto">
             <button type="button" class="pcl-photo-tile" id="photoBtn"
@@ -107,22 +103,25 @@
             </button>
             <p class="pcl-err" id="photoErr">Upload your photo.</p>
           </div>
-          <div class="pcl-field" data-field="fullName">
-            <label class="pcl-label" for="fullName">Full name <span class="pcl-req-star">*</span></label>
-            <input class="pcl-input" id="fullName" name="fullName"
-                   type="text" placeholder="e.g. Priya" />
-            <p class="pcl-err">Required</p>
-          </div>
           <div class="pcl-field" data-field="playerDesig">
-            <label class="pcl-label" for="playerDesig">Designation <span class="pcl-req-star">*</span></label>
+            <label class="pcl-label" for="playerDesig">Desg. <span class="pcl-req-star">*</span></label>
             <div class="pcl-acwrap">
               <input class="pcl-input" id="playerDesig" name="playerDesig"
-                     type="text" placeholder="e.g. Shorts Editor" autocomplete="off"
+                     type="text" placeholder="e.g. Video Editor" autocomplete="off"
                      role="combobox" aria-expanded="false"
                      aria-autocomplete="list" aria-controls="desigAc" />
               <div class="pcl-ac" id="desigAc" role="listbox" hidden></div>
             </div>
             <p class="pcl-hint pcl-desig-hint">First time only — we reuse it on every entry.</p>
+            <p class="pcl-err">Required</p>
+          </div>
+          <div class="pcl-field" data-field="fullName">
+            <label class="pcl-label" for="fullName">Full name <span class="pcl-req-star">*</span></label>
+            <div class="pcl-namewrap" id="nameWrap">
+              <span class="pcl-desig-capsule" id="desigCapsule" hidden></span>
+              <input class="pcl-input pcl-nameinput" id="fullName" name="fullName"
+                     type="text" placeholder="e.g. Priya" />
+            </div>
             <p class="pcl-err">Required</p>
           </div>
           <div class="pcl-field" data-field="reportingManager">
@@ -213,10 +212,11 @@
     <!-- shown after a successful submission -->
     <div id="pclDone" class="pcl-done" hidden>
       <div class="pcl-done-stars" aria-hidden="true">&#9733;&#9733;&#9733;</div>
-      <h3>LEVEL CLEARED!</h3>
-      <p class="pcl-done-sub">Entry Logged &middot; Points Queued</p>
-      <div class="pcl-done-xp">+100 XP</div>
-      <p class="pcl-done-note">All posts logged. See you next week.</p>
+      <h3>ENTRY LOGGED!</h3>
+      <p class="pcl-done-sub">Points Queued</p>
+      <div class="pcl-done-note">Thanks, participant — your entry is in the
+        ledger and your points are queued for verification. See you next time!
+        Keep creating.</div>
     </div>
   </main>
 
