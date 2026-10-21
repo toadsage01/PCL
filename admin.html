@@ -16,11 +16,13 @@
           window.matchMedia("(prefers-color-scheme: dark)").matches;
         document.documentElement.setAttribute(
           "data-pcl-theme", saved || (sysDark ? "dark" : "light"));
-        // "sf" = SF Pro / system sans (default) · "vt" = VT323 pixel terminal
+        // "sf" = SF Pro / system sans (default) · "og" = the OG arcade faces
+        // (Press Start 2P + Silkscreen headings, plain sans data). Legacy
+        // stored values ("vt"/"px") map onto "og" so nobody loses their pick.
         var font = "sf";
         try {
           font = localStorage.getItem("pcl_font") || "sf";
-          if (font !== "sf" && font !== "vt") font = "vt";
+          if (font !== "sf") font = "og";
         } catch (e) { /* ok */ }
         document.documentElement.setAttribute("data-pcl-font", font);
       } catch (e) { /* keep defaults */ }
@@ -49,7 +51,7 @@
         </p>
       </div>
       <button id="pclFontToggle" class="pcl-toggle pcl-toggle--font" type="button"
-              aria-label="Toggle reading font" title="Toggle reading font"
+              aria-label="Toggle OG arcade font" title="Toggle OG arcade font"
               aria-pressed="false">
         <span class="pcl-font-glyph" aria-hidden="true">Aa</span>
       </button>
@@ -115,6 +117,9 @@
 
       <!-- ============ TAB 1 · SUBMISSIONS FEED ========================== -->
       <section id="tabFeed" class="pcl-tab">
+        <!-- quick status chips — the 5-second answer to "what needs me?" -->
+        <div class="pcl-quickchips" id="quickChips" role="group"
+             aria-label="Quick status filters"></div>
         <div class="pcl-filterbar">
           <input class="pcl-input pcl-fsearch" id="fSearch" type="search"
                  placeholder="Search player, link or media id&hellip;"

@@ -44,16 +44,18 @@
   }
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
 
-  /* ---------- reading-font toggle (SF Pro default ⇄ VT323 pixel) ---------- */
+  /* ---------- reading-font toggle (SF Pro default ⇄ OG arcade) ---------- */
   var fontBtn = $("pclFontToggle");
   if (fontBtn) {
+    fontBtn.setAttribute("title", "Toggle OG arcade font");
+    fontBtn.setAttribute("aria-label", "Toggle OG arcade font");
     fontBtn.setAttribute("aria-pressed",
-      String(document.documentElement.getAttribute("data-pcl-font") === "vt"));
+      String(document.documentElement.getAttribute("data-pcl-font") === "og"));
     fontBtn.addEventListener("click", function () {
-      var next = document.documentElement.getAttribute("data-pcl-font") === "vt"
-        ? "sf" : "vt";
+      var next = document.documentElement.getAttribute("data-pcl-font") === "og"
+        ? "sf" : "og";
       document.documentElement.setAttribute("data-pcl-font", next);
-      fontBtn.setAttribute("aria-pressed", String(next === "vt"));
+      fontBtn.setAttribute("aria-pressed", String(next === "og"));
       try { localStorage.setItem("pcl_font", next); } catch (e) { /* ok */ }
     });
   }
@@ -107,22 +109,22 @@
      ========================================================================== */
   function mockData() {
     var players = [
-      { player: "Jatin Gulati", designation: "COO", posts: 6, uniqueMedia: 6,
+      { player: "Jatin Gulati", designation: "COO", verified: true, posts: 6, uniqueMedia: 6,
         impressions: 148326, points: 148326,
         projectedPoints: 148326, verifiedPoints: 148326 },
-      { player: "Ashutosh", designation: "CBO", posts: 5, uniqueMedia: 5,
+      { player: "Ashutosh", designation: "CBO", verified: true, posts: 5, uniqueMedia: 5,
         impressions: 121845, points: 121845,
         projectedPoints: 121845, verifiedPoints: 0 },
-      { player: "Lagan Garg", designation: "Backend Developer", posts: 4, uniqueMedia: 4,
+      { player: "Lagan Garg", designation: "Backend Developer", verified: false, posts: 4, uniqueMedia: 4,
         impressions: 96402, points: 96402,
         projectedPoints: 96402, verifiedPoints: 30500 },
-      { player: "Sehaj", designation: "", posts: 3, uniqueMedia: 3,
+      { player: "Sehaj", designation: "", verified: false, posts: 3, uniqueMedia: 3,
         impressions: 64310, points: 64310,
         projectedPoints: 64310, verifiedPoints: 0 },
-      { player: "Manas Ranjan", designation: "Frontend Developer", posts: 3, uniqueMedia: 3,
+      { player: "Manas Ranjan", designation: "Frontend Developer", verified: true, posts: 3, uniqueMedia: 3,
         impressions: 51987, points: 51987,
         projectedPoints: 51987, verifiedPoints: 51987 },
-      { player: "Priya Sharma", designation: "", posts: 2, uniqueMedia: 2,
+      { player: "Priya Sharma", designation: "", verified: false, posts: 2, uniqueMedia: 2,
         impressions: 31255, points: 31255,
         projectedPoints: 31255, verifiedPoints: 0 }
     ];
@@ -132,14 +134,14 @@
       current: 1,
       byWeek: {
         "1": [
-          { player: "Jatin Gulati", designation: "COO", posts: 2, impressions: 51320, points: 51320 },
-          { player: "Ashutosh", designation: "CBO", posts: 2, impressions: 44870, points: 44870 },
-          { player: "Manas Ranjan", designation: "Frontend Developer", posts: 1, impressions: 18437, points: 18437 },
-          { player: "Sehaj", designation: "", posts: 1, impressions: 12004, points: 12004 }
+          { player: "Jatin Gulati", designation: "COO", verified: true, posts: 2, impressions: 51320, points: 51320 },
+          { player: "Ashutosh", designation: "CBO", verified: true, posts: 2, impressions: 44870, points: 44870 },
+          { player: "Manas Ranjan", designation: "Frontend Developer", verified: true, posts: 1, impressions: 18437, points: 18437 },
+          { player: "Sehaj", designation: "", verified: false, posts: 1, impressions: 12004, points: 12004 }
         ],
         "2": [
-          { player: "Lagan Garg", designation: "Backend Developer", posts: 2, impressions: 30500, points: 30500 },
-          { player: "Priya Sharma", designation: "", posts: 1, impressions: 12755, points: 12755 }
+          { player: "Lagan Garg", designation: "Backend Developer", verified: false, posts: 2, impressions: 30500, points: 30500 },
+          { player: "Priya Sharma", designation: "", verified: false, posts: 1, impressions: 12755, points: 12755 }
         ]
       }
     };
@@ -160,6 +162,7 @@
       return {
         name: String(p.player || "").trim(),
         designation: String(p.designation || "").trim(),
+        verified: !!p.verified,
         impressions: impressions,
         points: points || 0
       };
@@ -187,7 +190,7 @@
     if (state.view === "all") return d.players;
     var list = (d.weeks && d.weeks.byWeek && d.weeks.byWeek[String(state.view)]) || [];
     return list.map(function (p) {
-      return { name: p.player, designation: p.designation,
+      return { name: p.player, designation: p.designation, verified: !!p.verified,
                impressions: p.impressions, points: p.points };
     }).sort(function (a, b) {
       return b.points - a.points || (b.impressions || 0) - (a.impressions || 0) ||
@@ -195,15 +198,26 @@
     });
   }
 
+  /* admin-verified tick — same seal as the form/admin, inline SVG (no emoji).
+     Rendered ONLY for players the Control Room verified; others get nothing. */
+  var TICK_SVG = '<svg class="pcl-vbadge pcl-vbadge--sm" viewBox="0 0 24 24" ' +
+    'role="img" aria-label="Admin verified">' +
+    '<circle cx="12" cy="12" r="10.5" fill="var(--pcl-primary, #ed3b00)"/>' +
+    '<circle cx="12" cy="12" r="10.5" fill="none" stroke="#fffdf6" stroke-width="1.4"/>' +
+    '<circle cx="12" cy="12" r="7.7" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>' +
+    '<path d="M7.6 12.3l3 3.1 5.9-6.3" fill="none" stroke="#fff" stroke-width="2.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
   function rowHtml(p, i) {
     var rankCls = i === 0 ? " is-r1" : i === 1 ? " is-r2" : i === 2 ? " is-r3" : "";
     var desig = p.designation
       ? esc(p.designation)
       : '<span class="pcl-desig-blank">—</span>';
+    var tick = p.verified ? TICK_SVG : "";
     return '<div class="pcl-row' + rankCls + '">' +
       '<div class="pcl-cell pcl-cell--rank"><span class="pcl-rank">' +
         '<span class="pcl-rankchip">' + pad2(i + 1) + '</span></span></div>' +
-      '<div class="pcl-cell pcl-cell--name"><span class="pcl-name">' + esc(p.name) + '</span></div>' +
+      '<div class="pcl-cell pcl-cell--name"><span class="pcl-name">' + esc(p.name) + tick + '</span></div>' +
       '<div class="pcl-cell pcl-cell--desig"><span class="pcl-desig">' + desig + '</span></div>' +
       '<div class="pcl-cell pcl-cell--imp"><span class="pcl-num">' + fmt(p.impressions) + '</span></div>' +
       '<div class="pcl-cell pcl-cell--pts"><span class="pcl-num">' + fmt(p.points) + '</span></div>' +

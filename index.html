@@ -15,13 +15,13 @@
           window.matchMedia("(prefers-color-scheme: dark)").matches;
         document.documentElement.setAttribute(
           "data-pcl-theme", saved || (sysDark ? "dark" : "light"));
-        // "sf" = SF Pro / system sans (default) · "vt" = VT323 pixel terminal
-        // (the original arcade face). Legacy stored value "px" was the old
-        // pixel alternate — it maps onto "vt" so nobody loses their pick.
+        // "sf" = SF Pro / system sans (default) · "og" = the OG arcade faces
+        // (Press Start 2P + Silkscreen headings, plain sans data). Legacy
+        // stored values ("vt"/"px") map onto "og" so nobody loses their pick.
         var font = "sf";
         try {
           font = localStorage.getItem("pcl_font") || "sf";
-          if (font !== "sf" && font !== "vt") font = "vt";
+          if (font !== "sf") font = "og";
         } catch (e) { /* ok */ }
         document.documentElement.setAttribute("data-pcl-font", font);
       } catch (e) { /* keep defaults */ }
@@ -55,7 +55,7 @@
         </span>
       </div>
       <button id="pclFontToggle" class="pcl-toggle pcl-toggle--font" type="button"
-              aria-label="Toggle reading font" title="Toggle reading font"
+              aria-label="Toggle OG arcade font" title="Toggle OG arcade font"
               aria-pressed="false">
         <span class="pcl-font-glyph" aria-hidden="true">Aa</span>
       </button>
@@ -95,12 +95,26 @@
                 <img id="photoThumbImg" alt="Player photo" />
               </span>
             </button>
+            <span class="pcl-vbadge-slot" id="photoVerifyBadge" hidden
+                  aria-live="polite"></span>
             <p class="pcl-err" id="photoErr">Upload your photo.</p>
           </div>
           <div class="pcl-field" data-field="fullName">
             <label class="pcl-label" for="fullName">Full name <span class="pcl-req-star">*</span></label>
             <input class="pcl-input" id="fullName" name="fullName"
                    type="text" placeholder="e.g. Priya" />
+            <p class="pcl-err">Required</p>
+          </div>
+          <div class="pcl-field" data-field="playerDesig">
+            <label class="pcl-label" for="playerDesig">Designation <span class="pcl-req-star">*</span></label>
+            <div class="pcl-acwrap">
+              <input class="pcl-input" id="playerDesig" name="playerDesig"
+                     type="text" placeholder="e.g. Shorts Editor" autocomplete="off"
+                     role="combobox" aria-expanded="false"
+                     aria-autocomplete="list" aria-controls="desigAc" />
+              <div class="pcl-ac" id="desigAc" role="listbox" hidden></div>
+            </div>
+            <p class="pcl-hint pcl-desig-hint">First time only — we reuse it on every entry.</p>
             <p class="pcl-err">Required</p>
           </div>
           <div class="pcl-field" data-field="reportingManager">
@@ -115,8 +129,7 @@
             <p class="pcl-err">Required</p>
           </div>
           <p class="pcl-photo-caption"><span class="pcl-photostate" id="photoState"
-              hidden></span><span class="pcl-photo-alt" id="photoAlt">Only for the
-              first time &mdash; until the admin approves it.</span></p>
+              hidden></span><span class="pcl-photo-alt" id="photoAlt" hidden></span></p>
         </div>
       </section>
 

@@ -95,6 +95,16 @@
     return s === "" ? "" : Number(s);
   }
 
+  /* admin-verified tick — inline SVG (no emoji), shared with the form and
+     the leaderboard. ONLY verified players carry it; unverified = nothing. */
+  var TICK_SVG = '<svg class="pcl-vbadge pcl-vbadge--sm" viewBox="0 0 24 24" ' +
+    'role="img" aria-label="Admin verified">' +
+    '<circle cx="12" cy="12" r="10.5" fill="var(--pcl-primary, #ed3b00)"/>' +
+    '<circle cx="12" cy="12" r="10.5" fill="none" stroke="#fffdf6" stroke-width="1.4"/>' +
+    '<circle cx="12" cy="12" r="7.7" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>' +
+    '<path d="M7.6 12.3l3 3.1 5.9-6.3" fill="none" stroke="#fff" stroke-width="2.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
   var FORMAT_SHORT = {
     "Instagram Reel": "IG REEL",
     "Instagram Post / Carousel": "IG POST",
@@ -117,14 +127,14 @@
   var fontBtn = $("pclFontToggle");
   if (fontBtn) {
     fontBtn.setAttribute("aria-pressed",
-      String(document.documentElement.getAttribute("data-pcl-font") === "vt"));
-    fontBtn.setAttribute("title", "Toggle pixel font (VT323)");
-    fontBtn.setAttribute("aria-label", "Toggle pixel font (VT323)");
+      String(document.documentElement.getAttribute("data-pcl-font") === "og"));
+    fontBtn.setAttribute("title", "Toggle OG arcade font");
+    fontBtn.setAttribute("aria-label", "Toggle OG arcade font");
     fontBtn.addEventListener("click", function () {
-      var next = document.documentElement.getAttribute("data-pcl-font") === "vt"
-        ? "sf" : "vt";
+      var next = document.documentElement.getAttribute("data-pcl-font") === "og"
+        ? "sf" : "og";
       document.documentElement.setAttribute("data-pcl-font", next);
-      fontBtn.setAttribute("aria-pressed", String(next === "vt"));
+      fontBtn.setAttribute("aria-pressed", String(next === "og"));
       try { localStorage.setItem("pcl_font", next); } catch (e) { /* ok */ }
     });
   }
@@ -183,6 +193,7 @@
      MOCK MODE — full offline demo of every surface (no backend touched)
      ========================================================================== */
   var mockEdits = {};   // sheet row → {ocrCount, crossCheck, verifiedCount}
+  var MOCK_VERIFIED = {};  // normName → bool (mock identity verification)
 
   function mockSvg(seed, big) {
     // tiny pixel analytics placeholder — deterministic per seed
@@ -279,17 +290,23 @@
   }
 
   var MOCK_PLAYERS = [
-    { player: "Priya Sharma", manager: "Rahul", submissions: 2, posts: 3, uniqueMedia: 3,
+    { player: "Priya Sharma", manager: "Rahul", designation: "Content", verified: true,
+      submissions: 2, posts: 3, uniqueMedia: 3,
       formatRatio: { "Instagram Reel": 2, "YouTube Long-Form": 1 }, projectedPoints: 48950, verifiedPoints: 9612 },
-    { player: "Rohit Kharal", manager: "Sneha", submissions: 1, posts: 1, uniqueMedia: 1,
+    { player: "Rohit Kharal", manager: "Sneha", designation: "Shorts Editor", verified: true,
+      submissions: 1, posts: 1, uniqueMedia: 1,
       formatRatio: { "Instagram Reel": 1 }, projectedPoints: 23000, verifiedPoints: 11508 },
-    { player: "Arjun Verma", manager: "Sneha", submissions: 2, posts: 4, uniqueMedia: 3,
+    { player: "Arjun Verma", manager: "Sneha", designation: "", verified: false,
+      submissions: 2, posts: 4, uniqueMedia: 3,
       formatRatio: { "Instagram Reel": 3, "YouTube Shorts": 1 }, projectedPoints: 151625, verifiedPoints: 0 },
-    { player: "Sneha Rao", manager: "Rahul", submissions: 1, posts: 1, uniqueMedia: 1,
+    { player: "Sneha Rao", manager: "Rahul", designation: "HR", verified: false,
+      submissions: 1, posts: 1, uniqueMedia: 1,
       formatRatio: { "LinkedIn Post": 1 }, projectedPoints: 4300, verifiedPoints: 3120 },
-    { player: "Dev Patel", manager: "Sneha", submissions: 1, posts: 1, uniqueMedia: 1,
+    { player: "Dev Patel", manager: "Sneha", designation: "", verified: false,
+      submissions: 1, posts: 1, uniqueMedia: 1,
       formatRatio: { "YouTube Shorts": 1 }, projectedPoints: 15938, verifiedPoints: 0 },
-    { player: "Ishita Nair", manager: "Rahul", submissions: 1, posts: 1, uniqueMedia: 1,
+    { player: "Ishita Nair", manager: "Rahul", designation: "Graphics Designer", verified: false,
+      submissions: 1, posts: 1, uniqueMedia: 1,
       formatRatio: { "Instagram Post / Carousel": 1 }, projectedPoints: 8100, verifiedPoints: 0 }
   ];
 
@@ -317,11 +334,16 @@
                           (r.collabStatus === "CONFIRMED" ? 2 : 1)) : "";
           }
         });
+        var mockPlayers = JSON.parse(JSON.stringify(MOCK_PLAYERS));
+        mockPlayers.forEach(function (p) {
+          var v = MOCK_VERIFIED[String(p.player || "").toLowerCase()];
+          if (v !== undefined) p.verified = v;
+        });
         resolve({
           ok: true, generatedAt: new Date().toISOString(),
           totals: { totalSubmissions: 8, totalPosts: rows.length, uniqueMedia: 9,
                     lastSubmissionAt: rows[0].ts },
-          players: JSON.parse(JSON.stringify(MOCK_PLAYERS)),
+          players: mockPlayers,
           rows: rows,
           log: mockLog
         });
@@ -396,6 +418,20 @@
               verifiedCount: u.verifiedCount
             };
           });
+          if (body.action === "adminPlayerVerify") {
+            (body.players || []).forEach(function (p) {
+              MOCK_VERIFIED[String(p.name || "").toLowerCase()] = !!p.verified;
+            });
+            mockLog.unshift({ ts: new Date().toISOString(),
+              operator: body.operator || "unnamed",
+              action: (body.players || []).some(function (p) { return p.verified; })
+                ? "VERIFY-ID" : "UNVERIFY-ID",
+              target: (body.players || []).map(function (p) { return p.name; }).join(", ") || "—",
+              detail: "identity " + ((body.players || []).some(function (p) { return p.verified; })
+                ? "VERIFIED (tick on)" : "unverified (tick off)") });
+            resolve({ ok: true, updated: (body.players || []).length });
+            return;
+          }
           mockLog.unshift({ ts: new Date().toISOString(),
             operator: body.operator || "unnamed", action: "VERIFY",
             target: (body.updates || []).length + " row(s)",
@@ -421,6 +457,7 @@
     key: "",
     rows: [],
     players: [],
+    pmap: {},            // name → {designation, verified}
     totals: null,
     generatedAt: null,
     log: [],             // audit catalogue (newest first)
@@ -539,11 +576,24 @@
       return r;
     });
     state.players = out.players || [];
+    /* identity map — verified tick + designation per player, read by the
+       feed rows and the REPORTS player table */
+    state.pmap = {};
+    state.players.forEach(function (p) {
+      state.pmap[String(p.player || "").toLowerCase()] = {
+        designation: String(p.designation || ""),
+        verified: !!p.verified
+      };
+    });
     state.totals = out.totals || null;
     state.generatedAt = out.generatedAt || null;
     if (Array.isArray(out.log)) state.log = out.log;
     else if (MOCK) state.log = mockLog;
     renderAll();
+  }
+
+  function pmapOf(name) {
+    return state.pmap && state.pmap[String(name || "").toLowerCase()] || null;
   }
 
   function loadAll(silent) {
@@ -648,6 +698,8 @@
       ? '<img class="pcl-avatar" src="https://drive.google.com/thumbnail?id=' +
         encodeURIComponent(r.photoId) + '&sz=w80" alt="" loading="lazy" />'
       : "";
+    var ident = pmapOf(r.name);
+    var tick = ident && ident.verified ? TICK_SVG : "";
     var tags = '<span class="pcl-fr-tags">' +
       (r.type === "UPDATE" ? '<span class="pcl-tag pcl-tag--upd">UPD·S' + esc(r.snap) + "</span>"
                            : '<span class="pcl-tag pcl-tag--new">NEW</span>') +
@@ -658,8 +710,9 @@
       '<span class="fr-shot">' + thumb + "</span>" +
       '<span class="fr-who">' + avatar +
         '<span class="pcl-fr-whotext"><p class="pcl-fr-name"><span class="pcl-fr-nametext">' +
-        esc(r.name) + "</span>" + tags + "</p>" +
+        esc(r.name) + tick + "</span>" + tags + "</p>" +
         '<p class="pcl-fr-sub">' + esc(fmtTS(r.ts)) + " IST · " + esc(r.manager || "–") +
+        (ident && ident.designation ? ' · ' + esc(ident.designation) : "") +
         (r.collabWith ? ' · <b>⇄ ' + esc(r.collabWith) + "</b>" : "") + "</p></span>" +
       "</span>" +
       '<span class="fr-post">' +
@@ -694,7 +747,45 @@
     $("feedEmpty").textContent = state.rows.length
       ? "Nothing matches these filters."
       : "Ledger is empty — submissions will appear here.";
+    renderQuickChips();
   }
+
+  /* quick status chips — counts first, filters second. A non-technical
+     panellist lands on the FEED and instantly sees what needs a human. */
+  var QUICK_DEFS = [
+    { key: "all",         label: "ALL" },
+    { key: "PENDING OCR", label: "NEEDS REVIEW" },
+    { key: "BOOST?",      label: "BOOST SUSPECT" },
+    { key: "MISMATCH",    label: "MISMATCH" },
+    { key: "VERIFIED",    label: "DONE" }
+  ];
+  function renderQuickChips() {
+    var box = $("quickChips");
+    if (!box) return;
+    box.innerHTML = QUICK_DEFS.map(function (d) {
+      var n = 0;
+      state.rows.forEach(function (r) {
+        var v = displayOf(r);
+        if (d.key === "all") n++;
+        else if (d.key === "VERIFIED") { if (v.verified !== "") n++; }
+        else if (v.check === d.key) n++;
+      });
+      var active = state.filters.status === d.key ? " is-active" : "";
+      var tone = d.key === "BOOST?" || d.key === "MISMATCH" ? " pcl-qchip--hot" :
+                 (d.key === "PENDING OCR" && n ? " pcl-qchip--todo" : "");
+      return '<button type="button" class="pcl-qchip' + active + tone +
+        '" data-qfilter="' + d.key + '">' + d.label +
+        ' <b>' + n + "</b></button>";
+    }).join("");
+  }
+  $("quickChips").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-qfilter]");
+    if (!b) return;
+    state.filters.status = b.getAttribute("data-qfilter");
+    var st = $("fStatus");
+    if (st) st.value = state.filters.status;   // keep the dropdown in step
+    renderFeed();
+  });
 
   /* keep staged values / dirty markers without a full re-render */
   function renderFeedRowState(rowNo) {
@@ -1111,7 +1202,9 @@
       "<th class='num'>PROJECTED</th><th class='num'>VERIFIED</th><th>LEADER</th>" +
       "</tr></thead><tbody>" + wRows + "</tbody>";
 
-    /* player table — verified points lead, projected breaks ties */
+    /* player table — verified points lead, projected breaks ties.
+       Identity columns: designation + the verified tick with a one-click
+       VERIFY / CLEAR action (writes adminPlayerVerify to the ledger). */
     var players = state.players.slice().sort(function (a, b) {
       return (b.verifiedPoints - a.verifiedPoints) ||
              (b.projectedPoints - a.projectedPoints);
@@ -1120,20 +1213,56 @@
       var mix = Object.keys(p.formatRatio || {}).map(function (f) {
         return "<b>" + p.formatRatio[f] + "×</b> " + esc(fmtShort(f));
       }).join(" · ") || "–";
+      var ident = pmapOf(p.player);
+      var ver = !!(ident ? ident.verified : p.verified);
+      var desig = (ident && ident.designation) || p.designation || "";
       return "<tr><td>" + esc(p.player) +
         '<br /><span class="pcl-muted-cell">mgr ' + esc(p.manager || "–") + "</span></td>" +
+        '<td class="pcl-desigcell">' + (desig ? esc(desig) :
+          '<span class="pcl-muted-cell">—</span>') +
+        (ver ? TICK_SVG : "") + "</td>" +
         '<td class="num">' + p.submissions + "</td>" +
         '<td class="num">' + p.posts + "</td>" +
         '<td class="num">' + p.uniqueMedia + "</td>" +
         '<td class="pcl-fmtcell">' + mix + "</td>" +
         '<td class="num">' + fmt(p.projectedPoints) + "</td>" +
-        '<td class="num">' + fmt(p.verifiedPoints) + "</td></tr>";
+        '<td class="num">' + fmt(p.verifiedPoints) + "</td>" +
+        '<td><button type="button" class="pcl-abtn pcl-abtn--small pcl-pvbtn' +
+          (ver ? " is-on" : "") + '" data-pv-name="' + esc(p.player) +
+          '" data-pv-to="' + (ver ? "0" : "1") + '">' +
+          (ver ? "CLEAR TICK" : "VERIFY ID") + "</button></td></tr>";
     }).join("");
     $("playerTable").innerHTML = "<thead><tr>" +
-      "<th>PLAYER</th><th class='num'>SUBS</th><th class='num'>POSTS</th><th class='num'>UNIQUE</th>" +
-      "<th>FORMAT MIX</th><th class='num'>PROJECTED</th><th class='num'>VERIFIED</th>" +
-      "</tr></thead><tbody>" + (pRows || '<tr><td colspan="7" class="pcl-muted-cell">No players yet.</td></tr>') + "</tbody>";
+      "<th>PLAYER</th><th>DESIGNATION</th><th class='num'>SUBS</th><th class='num'>POSTS</th><th class='num'>UNIQUE</th>" +
+      "<th>FORMAT MIX</th><th class='num'>PROJECTED</th><th class='num'>VERIFIED</th><th>IDENTITY</th>" +
+      "</tr></thead><tbody>" + (pRows || '<tr><td colspan="9" class="pcl-muted-cell">No players yet.</td></tr>') + "</tbody>";
   }
+
+  /* one-click identity verification — the admin confirms the player's
+     photo + designation; the tick appears on form, feed and leaderboard */
+  $("playerTable").addEventListener("click", function (ev) {
+    var btn = ev.target.closest("[data-pv-name]");
+    if (!btn) return;
+    var name = btn.getAttribute("data-pv-name");
+    var to = btn.getAttribute("data-pv-to") === "1";
+    btn.disabled = true;
+    btn.textContent = "SAVING…";
+    gasPost({ action: "adminPlayerVerify", adminKey: state.key,
+              operator: operatorName(), players: [{ name: name, verified: to }] })
+      .then(function (out) {
+        if (!out || out.ok === false) {
+          throw new Error((out && (out.error || (out.errors && out.errors[0] &&
+            out.errors[0].error))) || "Write failed");
+        }
+        toast(to ? "Identity verified — tick is live for " + name
+                 : "Tick cleared for " + name);
+        return loadAll(true);
+      })
+      .catch(function (err) {
+        toast(err.message || "Save failed — nothing was written", true);
+        btn.disabled = false;
+      });
+  });
 
   /* ============================================================================
      CSV EXPORT — full ledger, client-side

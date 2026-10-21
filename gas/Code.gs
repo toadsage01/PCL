@@ -98,8 +98,10 @@ var MAX_FILE_MB = 5;                  // mirrors js/gas-endpoint.js
 var SEASON_START_ISO = '2026-10-19T11:00:00+05:30';
 var LEAGUE_WEEKS = 10;
 
-/** Public leaderboard — Full Name → Designation (the job title shown in the
- *  board's Designation column). Names not listed here render as '—'. */
+/** Public leaderboard fallback — Full Name → Designation (the job title shown
+ *  in the board's Designation column). The REAL source is the ledger's
+ *  'Player Designation' column (written by the form, verified in the Control
+ *  Room); PLAYER_META only fills gaps for names never submitted. */
 var PLAYER_META = {};
 
 /** Canonical ledger columns — order matters, created on first run.
@@ -115,8 +117,17 @@ var HEADERS = [
   'OCR Count', 'Cross-Check', 'Verified Count', 'Verified Points',
   'Raw JSON',
   'Player Photo',
-  'Collab With', 'Collab Status'
+  'Collab With', 'Collab Status',
+  'Player Designation', 'Player Verified'
 ];
+
+/** Player identity (per PLAYER, not per post — the same value repeats on
+ *  every row the player owns):
+ *  Player Designation — the job title from the form's first-time designation
+ *          field; auto-reused from the ledger when a resubmission omits it.
+ *  Player Verified    — 'VERIFIED' once the Control Room confirms the
+ *          player's photo + designation (insta-style tick everywhere); ''
+ *          means unverified, and unverified players get NO badge at all. */
 
 /** Collab-post lifecycle (rulebook §7, 50:50 split):
  *  ''        plain post — the link belongs to this player
@@ -168,6 +179,7 @@ function doPost(e) {
 
     // Admin console write-back (key-gated) — everything else is a submission
     if (payload && payload.action === 'adminVerify') return adminVerify_(payload);
+    if (payload && payload.action === 'adminPlayerVerify') return adminPlayerVerify_(payload);
     if (payload && payload.action === 'adminLogin') return adminLogin_(payload);
 
     var id = payload.submissionId || Utilities.getUuid();
@@ -183,16 +195,23 @@ function doPost(e) {
     // Identity (shared by every post in this submission)
     var fullName = str_(d.fullName);
     var manager = str_(d.reportingManager);
+    var who = normName_(fullName);
+    var designation = str_(d.playerDesignation).trim();
+      // first-time field — a returning player's entry may omit it; the
+      // designation already on file for this name is picked up further down
+      // (needs the ledger index, which is built right after this block)
     var week = str_(d.challengeWeek);
     var challengeUrl = str_(d.challengeUrl);
     var notes = str_(d.additionalNotes);
-    var who = normName_(fullName);
 
     var sheet = getSheet_();
 
     // One read pass over the ledger → everything the checks need:
     // media/URL ownership, snapshot counters and the retried-submission guard
     var index = ledgerIndex_(sheet);
+
+    // designation fallback — reuse what's already on file for this player
+    if (!designation && index.desigByName[who]) designation = index.desigByName[who];
 
     // Idempotency: a retry after a lost response must never append twice
     if (index.subIds[id]) {
@@ -322,6 +341,10 @@ function doPost(e) {
       row['Player Photo'] = photoUrl;
       row['Collab With'] = b.partner;
       row['Collab Status'] = b.status;
+      row['Player Designation'] = designation;
+      row['Player Verified'] = index.verifiedByName[who] ? 'VERIFIED' : '';
+        // carry the player's existing verification onto new rows so a single
+        // read pass always sees it (the Control Room can flip it any time)
 
       sheet.appendRow(HEADERS.map(function (h) { return row[h]; }));
       written++;
@@ -448,6 +471,8 @@ function collect_() {
         players[name] = {
           player: name,
           manager: str_(r[c['Reporting Manager']]),
+          designation: '',
+          verified: false,
           submissions: {},
           posts: 0,
           media: {},
@@ -457,6 +482,11 @@ function collect_() {
         };
       }
       var pl = players[name];
+      // identity columns repeat on every row — last non-empty value wins
+      var dg = c['Player Designation'] !== undefined ? str_(r[c['Player Designation']]) : '';
+      if (dg) pl.designation = dg;
+      var pv = c['Player Verified'] !== undefined ? str_(r[c['Player Verified']]) : '';
+      if (pv) pl.verified = pv.toUpperCase() === 'VERIFIED';
       if (sid) pl.submissions[sid] = true;
       pl.posts++;
       if (mid) pl.media[mid] = true;   // unique media never double-counts
@@ -530,6 +560,11 @@ function collect_() {
   });
   var dedup = {};                      // player → deduped season sums
   var wk = {};                         // week → player → weekly roll-up
+  var desigLookup = {}, verLookup = {};   // identity for board buckets
+  Object.keys(players).forEach(function (n) {
+    desigLookup[n] = players[n].designation || PLAYER_META[n] || '';
+    verLookup[n] = !!players[n].verified;
+  });
   Object.keys(latestByMedia).forEach(function (k) {
     var r = latestByMedia[k];
     if (!players[r.name]) return;      // defensive — name keyed the roll-up
@@ -576,7 +611,8 @@ function collect_() {
       var bucket = wk[w] || (wk[w] = {});
       var wp = bucket[row.name] ||
         (bucket[row.name] = { player: row.name,
-                              designation: PLAYER_META[row.name] || '',
+                              designation: desigLookup[row.name] || '',
+                              verified: verLookup[row.name] || false,
                               posts: 0, impressions: 0, points: 0 });
       wp.posts++;
       wp.impressions += views;
@@ -592,7 +628,8 @@ function collect_() {
     return {
       player: pl.player,
       manager: pl.manager,
-      designation: PLAYER_META[k] || '',
+      designation: pl.designation || PLAYER_META[k] || '',
+      verified: !!pl.verified,
       submissions: Object.keys(pl.submissions).length,
       posts: pl.posts,
       uniqueMedia: Object.keys(pl.media).length,
@@ -682,7 +719,7 @@ function urlKey_(url) {
  *  subIds — every Submission ID seen (retried-submission guard);
  *  byKey  — Media ID / URL → [{row, name, snapshot, collabWith, status}]. */
 function ledgerIndex_(sheet) {
-  var out = { byKey: {}, subIds: {} };
+  var out = { byKey: {}, subIds: {}, desigByName: {}, verifiedByName: {} };
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return out;
   var vals = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
@@ -691,6 +728,15 @@ function ledgerIndex_(sheet) {
   vals.forEach(function (r, i) {
     var sid = str_(r[c['Submission ID']]);
     if (sid) out.subIds[sid] = true;
+    // player identity roll-up (rows are oldest → newest, so the last
+    // non-empty value wins = the player's CURRENT designation/verification)
+    var who = normName_(r[c['Full Name']]);
+    if (who) {
+      var dg = c['Player Designation'] !== undefined ? str_(r[c['Player Designation']]) : '';
+      if (dg) out.desigByName[who] = dg;
+      var pv = c['Player Verified'] !== undefined ? str_(r[c['Player Verified']]) : '';
+      if (pv) out.verifiedByName[who] = pv.toUpperCase() === 'VERIFIED';
+    }
     var mid = str_(r[c['Media ID']]);
     var key = mid || urlKey_(r[c['Post URL']]);
     if (!key) return;
@@ -792,6 +838,59 @@ function adminVerify_(payload) {
       ' · VERIFIED: ' + oldVals[2] + '→' + (vcount === '' ? '—' : vcount) +
       ' · VPTS: ' + oldVals[3] + '→' + (vpoints === '' ? '—' : vpoints) +
       (split === 2 ? ' · COLLAB ½' : ''));
+  });
+
+  return json_({ ok: errors.length === 0, updated: updated,
+                 errors: errors, error: errors.length
+                   ? errors[0].error : undefined });
+}
+
+/** Admin IDENTITY verification — flips a PLAYER's verified tick (photo +
+ *  designation confirmed by a human). {action:'adminPlayerVerify', adminKey,
+ *  operator, players:[{name:'…', verified:true|false}]}. Writes the
+ *  'Player Verified' column on EVERY row of that player (a single read pass
+ *  then always carries the flag) and catalogues the change. */
+function adminPlayerVerify_(payload) {
+  var err = checkAdmin_(payload.adminKey);
+  if (err) return json_({ ok: false, error: err });
+
+  var list = Array.isArray(payload.players) ? payload.players : [];
+  if (!list.length) return json_({ ok: false, error: 'No players in request' });
+
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return json_({ ok: false, error: 'Ledger is empty' });
+
+  var nameCol = HEADERS.indexOf('Full Name') + 1;
+  var verCol = HEADERS.indexOf('Player Verified') + 1;
+  var vals = sheet.getRange(2, nameCol, lastRow - 1, 1).getValues();
+
+  // bucket sheet rows per requested player (case/whitespace tolerant)
+  var wanted = {};
+  list.forEach(function (p) {
+    var n = normName_(p.name);
+    if (n) wanted[n] = { name: str_(p.name), verified: !!p.verified, rows: [] };
+  });
+  for (var i = 0; i < vals.length; i++) {
+    var w = wanted[normName_(vals[i][0])];
+    if (w) w.rows.push(i + 2);
+  }
+
+  var updated = 0, errors = [];
+  Object.keys(wanted).forEach(function (n) {
+    var w = wanted[n];
+    if (!w.rows.length) {
+      errors.push({ name: w.name, error: 'No ledger rows for this player yet' });
+      return;
+    }
+    var val = w.verified ? 'VERIFIED' : '';
+    w.rows.forEach(function (row) {
+      sheet.getRange(row, verCol).setValue(val);
+      updated++;
+    });
+    logAdmin_(payload.operator, w.verified ? 'VERIFY-ID' : 'UNVERIFY-ID',
+      w.name + ' · ' + w.rows.length + ' row(s)',
+      'identity ' + (w.verified ? 'VERIFIED (tick on)' : 'unverified (tick off)'));
   });
 
   return json_({ ok: errors.length === 0, updated: updated,
@@ -922,28 +1021,66 @@ function slugify_(s) {
 }
 
 /** Public lookup: the form types a name → JSONP returns the photo on file
- *  (if any) so the player sees it instead of re-uploading. No key needed —
- *  the leaderboard is public anyway. */
+ *  (if any) so the player sees it instead of re-uploading. Also carries the
+ *  player's designation + verified tick so the form can prefill the
+ *  first-time fields for returning players. No key needed — the leaderboard
+ *  is public anyway. */
 function playerPhotoEndpoint_(p) {
   var nameSlug = slugify_(p.name);
   if (!nameSlug) {
     return reply_(p, { ok: false, error: 'Type your full name first.' });
   }
   try {
+    var profile = playerProfile_(p.name);   // designation + verified from ledger
     var folder = getPhotoFolder_(getDriveFolder_());
     var f = findPhotoByPrefix_(folder, nameSlug);
-    if (!f) return reply_(p, { ok: false, error: 'no photo on file' });
-    var id = f.getId();
-    return reply_(p, {
+    if (!f && !profile.found) {
+      return reply_(p, { ok: false, error: 'no photo on file' });
+    }
+    var out = {
       ok: true,
-      name: f.getName(),
-      url: f.getUrl(),
-      fileId: id,
-      thumb: 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400'
-    });
+      designation: profile.designation,
+      verified: profile.verified
+    };
+    if (f) {
+      var id = f.getId();
+      out.name = f.getName();
+      out.url = f.getUrl();
+      out.fileId = id;
+      out.thumb = 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400';
+    }
+    return reply_(p, out);
   } catch (err) {
     return reply_(p, { ok: false, error: String(err) });
   }
+}
+
+/** Latest non-empty designation + verified flag for one player, straight
+ *  from the ledger (three columns, one read pass — cheap per keystroke). */
+function playerProfile_(name) {
+  var who = normName_(name);
+  var out = { found: false, designation: '', verified: false };
+  if (!who) return out;
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return out;
+  var nameCol = HEADERS.indexOf('Full Name') + 1;
+  var desigCol = HEADERS.indexOf('Player Designation') + 1;
+  var verCol = HEADERS.indexOf('Player Verified') + 1;
+  var names = sheet.getRange(2, nameCol, lastRow - 1, 1).getValues();
+  var rest = sheet.getRange(2, Math.min(desigCol, verCol), lastRow - 1,
+                            Math.abs(verCol - desigCol) + 1).getValues();
+  var dOff = desigCol - Math.min(desigCol, verCol);
+  var vOff = verCol - Math.min(desigCol, verCol);
+  for (var i = 0; i < names.length; i++) {
+    if (normName_(names[i][0]) !== who) continue;
+    out.found = true;
+    var dg = str_(rest[i][dOff]);
+    if (dg) out.designation = dg;
+    var pv = str_(rest[i][vOff]);
+    if (pv) out.verified = pv.toUpperCase() === 'VERIFIED';
+  }
+  return out;
 }
 
 /** ---------- OCR (free, via Drive) ---------- */
@@ -1088,6 +1225,53 @@ function getDriveFolder_() {
   var it = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
   return it.hasNext() ? it.next()
                       : DriveApp.createFolder(DRIVE_FOLDER_NAME);
+}
+
+/** ---------- NON-TECHNICAL GUIDE ("START HERE" tab) ----------
+ *  Run ONCE from the script editor (or after any HEADERS change):
+ *  buildAdminGuide() — creates/refreshes a plain-language tab in the league
+ *  spreadsheet so a non-technical panellist can find anything without
+ *  reading code: what every column means, who writes it, what to do next. */
+function buildAdminGuide() {
+  var GUIDE = [
+    ['COLUMN', 'WHO FILLS IT', 'WHAT IT MEANS / WHAT TO DO'],
+    ['Timestamp', 'Form (automatic)', 'When the entry landed. Newest first in the Control Room feed.'],
+    ['Submission ID', 'Form (automatic)', 'One ID per submission — a retried entry never appends twice.'],
+    ['Entry Type', 'Form (automatic)', 'NEW = first report of this post · UPDATE = a newer count for the same post.'],
+    ['Snapshot #', 'Form (automatic)', 'Which report this is for the post (S1 = first, S2 = second…).'],
+    ['Full Name', 'Player', 'The player as they typed it — the key for photos, designation, points.'],
+    ['Reporting Manager', 'Player', 'Who they report to — used for identity checks.'],
+    ['Content Type', '(retired)', 'Old column, kept so column letters never shift. Ignore it.'],
+    ['Platform / Format / Multiplier', 'Form (automatic)', 'Detected from the link itself. Multiplier: YT video ×2, Reels/Shorts ×1.25, IG/LI posts ×1.'],
+    ['Post URL / Media ID', 'Form (automatic)', 'The post link and its unique fingerprint — the dedup key.'],
+    ['Weekly Challenge / Challenge URL / Notes', 'Player (optional)', 'Filled only when entering the weekly challenge.'],
+    ['Claimed Views/Impressions', 'Player', 'The number the player typed. Points = this × multiplier (rounded up).'],
+    ['Projected Points', 'Form (automatic)', 'Claimed × multiplier. Becomes official only after verification.'],
+    ['Screenshot File / Screenshot Link', 'Form (automatic)', 'The analytics screenshot in Drive — click the link to open it.'],
+    ['OCR Count', 'SCAN button / admin', 'Machine-read number from the screenshot. Start here when verifying.'],
+    ['Cross-Check', 'Admin', 'PENDING OCR → MATCH / MISMATCH / BOOST? (BOOST? = suspected fake views).'],
+    ['Verified Count', 'Admin', 'What the screenshot REALLY shows. This is the number the league trusts.'],
+    ['Verified Points', 'Form→admin (automatic)', 'Verified Count × multiplier — written for you, never edit by hand.'],
+    ['Player Photo', 'Form (automatic)', 'One photo per player, reused on every entry.'],
+    ['Collab With / Collab Status', 'Form (automatic)', 'COLLAB pairs. CONFIRMED = both players submitted the same link → points split 50:50.'],
+    ['Player Designation', 'Player (first time)', 'Job title shown on the leaderboard. Reused automatically afterwards.'],
+    ['Player Verified', 'Admin', 'VERIFIED = photo + designation checked → tick badge shows everywhere. Empty = no badge.'],
+    ['', '', ''],
+    ['DAILY FLOW', '', '1. FEED tab: newest entries.  2. SCAN + compare screenshot.  3. Type Verified Count.'],
+    ['', '', '4. Set Cross-Check.  5. SAVE CHANGES (sticky bar).  6. REPORTS → Players → VERIFY ID for new players.'],
+    ['', '', 'Tie-break order: Verified Points > Projected Points. Suspicious jumps → AUDIT tab → FLAG BOOST?']
+  ];
+  var ss = getSpreadsheet_();
+  var sh = ss.getSheetByName('START HERE');
+  if (!sh) sh = ss.insertSheet('START HERE', 0);
+  sh.clear();
+  sh.getRange(1, 1, GUIDE.length, 3).setValues(GUIDE);
+  sh.setFrozenRows(1);
+  sh.setColumnWidth(1, 230);
+  sh.setColumnWidth(2, 190);
+  sh.setColumnWidth(3, 620);
+  sh.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#ed3b00').setFontColor('#ffffff');
+  return 'START HERE tab created/refreshed.';
 }
 
 /** ---------- HELPERS ---------- */

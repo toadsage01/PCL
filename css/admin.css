@@ -481,3 +481,83 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
 .pcl-logtag--verify { background: #b97900; }
 html[data-pcl-theme="dark"] .pcl-logtag--verify { background: #a06e00; }
 .pcl-logdetail { font-size: 13px; line-height: 1.5; }
+
+/* ============================================================================
+   IDENTITY + QUICK CHIPS + SF READABILITY (Season 2 additions)
+   ---------------------------------------------------------------------------- */
+/* ---- verified tick inside feed names / tables -------------------------------- */
+.pcl-fr-name .pcl-vbadge--sm { width: 15px; height: 15px; vertical-align: -2px; }
+.pcl-desigcell { font-size: 14px; }
+.pcl-desigcell .pcl-vbadge--sm { margin-left: 6px; }
+
+/* one-click identity verification */
+.pcl-pvbtn.is-on { color: var(--pcl-ok); border-color: var(--pcl-ok); }
+.pcl-pvbtn.is-on:hover { color: var(--pcl-error); border-color: var(--pcl-error); }
+
+/* ---- quick status chips — "what needs me?" at a glance ------------------------ */
+.pcl-quickchips {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin: 0 0 12px;
+}
+.pcl-qchip {
+  font-family: var(--pcl-font-title); font-weight: 700; font-size: 10px;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--pcl-text); background: var(--pcl-surface-2);
+  border: 2px solid var(--pcl-line); box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 7px 10px 6px; cursor: pointer;
+  transition: background .12s steps(2), border-color .12s steps(2),
+              box-shadow .12s steps(2), transform .12s steps(2);
+}
+.pcl-qchip b {
+  margin-left: 3px; padding: 1px 5px 0;
+  background: var(--pcl-surface); border: 2px solid var(--pcl-line-soft);
+  color: var(--pcl-muted); font-variant-numeric: tabular-nums;
+}
+.pcl-qchip:hover { border-color: var(--pcl-primary); color: var(--pcl-primary); }
+.pcl-qchip:active { transform: translate(2px, 2px); box-shadow: none; }
+.pcl-qchip.is-active {
+  color: #fff; background: linear-gradient(90deg, var(--pcl-primary), var(--pcl-primary-hi));
+  border-color: var(--pcl-primary-deep); box-shadow: 2px 2px 0 var(--pcl-hard);
+}
+.pcl-qchip.is-active b { color: var(--pcl-primary); background: #fff; border-color: transparent; }
+.pcl-qchip--todo { border-color: var(--pcl-gold); }
+.pcl-qchip--hot { border-color: var(--pcl-error); color: var(--pcl-error); }
+.pcl-qchip--hot b { color: var(--pcl-error); border-color: var(--pcl-error-soft); }
+
+/* ---- SF Pro readability pass (default mode only — og restores base values) ---- */
+html:not([data-pcl-font="og"]) .pcl-abtn { font-size: 11.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-abtn--small { font-size: 10.5px; }
+html:not([data-pcl-font="og"]) .pcl-sync { font-size: 10.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-feedhead { font-size: 10.5px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-thumbbox.is-missing { font-size: 10px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-fr-name { font-size: 13.5px; letter-spacing: 0.2px; }
+html:not([data-pcl-font="og"]) .pcl-tag { font-size: 10px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-fr-fmt { font-size: 10.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .fr-claimed small,
+html:not([data-pcl-font="og"]) .fr-ocr small { font-size: 9.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .fr-status .pcl-select { font-size: 12.5px; }
+html:not([data-pcl-font="og"]) .pcl-audit-id { font-size: 12.5px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-watch { font-size: 10px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-snap-label { font-size: 9.5px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-snap-count { font-size: 14.5px; }
+html:not([data-pcl-font="og"]) .pcl-delta { font-size: 11px; letter-spacing: 0.2px; }
+html:not([data-pcl-font="og"]) .pcl-card-label { font-size: 10.5px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-card-num { font-size: 18px; }
+html:not([data-pcl-font="og"]) .pcl-card-num small { font-size: 10px; }
+html:not([data-pcl-font="og"]) .pcl-table th { font-size: 10.5px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-table .pcl-fmtcell { font-size: 10.5px; }
+html:not([data-pcl-font="og"]) .pcl-rv-num { font-size: 10.5px; letter-spacing: 0.6px; }
+html:not([data-pcl-font="og"]) .pcl-rv-player { font-size: 16.5px; }
+html:not([data-pcl-font="og"]) .pcl-rv-statlabel { font-size: 9.5px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-rv-shotline a { font-size: 11px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-toast { font-size: 11.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-dirty-text { font-size: 12.5px; letter-spacing: 0.6px; }
+html:not([data-pcl-font="og"]) .pcl-logtag { font-size: 10.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-qchip { font-size: 11px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-gate-note code { font-size: 12px; }
+
+@media (max-width: 760px) {
+  html:not([data-pcl-font="og"]) .pcl-dirty-text { font-size: 11px; }
+  .pcl-quickchips { gap: 6px; }
+  .pcl-qchip { padding: 6px 8px 5px; font-size: 10px; }
+}

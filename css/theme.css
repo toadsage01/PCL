@@ -62,9 +62,9 @@
 /* ---- Brand tokens: LIGHT — "SUNSET CABINET" -------------------------------- */
 :root,
 html[data-pcl-theme="light"] {
-  --pcl-font-display: "Press Start 2P", "Silkscreen", monospace;
-  --pcl-font-title: "Silkscreen", "Press Start 2P", monospace;
-  --pcl-font-body: "Pixelify Sans", "Segoe UI", system-ui, sans-serif;
+  --pcl-font-display: var(--pcl-font-sans);
+  --pcl-font-title: var(--pcl-font-sans);
+  --pcl-font-body: var(--pcl-font-sans);
 
   --pcl-bg-1: #fff3dc;
   --pcl-bg-2: #ffe7bd;
@@ -163,55 +163,46 @@ html[data-pcl-theme="dark"] {
   color-scheme: dark;
 }
 
-/* ---- Reading-font toggle (html[data-pcl-font]) ------------------------------
-   "sf"  = SF Pro / system sans — the DEFAULT everywhere (form, leaderboard,
-           Control Room): -apple-system renders SF Pro on Apple devices and
-           hands off to Segoe UI / Roboto elsewhere. Zero download, always crisp.
-   "vt"  = VT323 terminal face — the original arcade reading font, one Aa tap
-           away. Tall CRT glyphs run one size up to keep the rhythm.
-   Titles/labels (Silkscreen) and display headings (Press Start 2P) are the
-   identity skeleton and stay the same in both modes. Set BEFORE first paint
-   by the inline head script (localStorage "pcl_font"). */
-:root,
-html[data-pcl-font="sf"] {
-  --pcl-font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+/* ---- Reading-font toggle (html[data-pcl-font]) ----------------------------
+   "sf" = SF Pro everywhere — the DEFAULT on all three portals (form,
+          leaderboard, Control Room), titles and headers included. SF Pro is
+          Apple-licensed, so the stack hands off gracefully: real SF Pro on
+          Apple devices, Segoe UI / Roboto (its visual siblings) elsewhere.
+          Zero download, always crisp.
+   "og" = the OG arcade faces — Press Start 2P (display) + Silkscreen
+          (titles/labels), ONE Aa tap away on every portal. Numbers, body
+          copy and other hard-to-read metrics keep the simple basic sans
+          (per spec: pixel identity on the skeleton, readability on data).
+   Set BEFORE first paint by the inline head script (localStorage
+   "pcl_font"; legacy "vt"/"px" values map onto "og"). */
+:root {
+  --pcl-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
-html[data-pcl-font="vt"] {
-  --pcl-font-body: "VT323", "Pixelify Sans", "Segoe UI", system-ui, monospace;
-}
-/* SF Pro reading mode: a step THICKER than default (management asked for the
-   sans face) — weight 500 on copy + a small SOLID drop shadow so the crisp
-   sans sits inside the pixel design. Deliberately lighter than VT323's ink.
-   Headers/titles (Silkscreen + Press Start 2P) and text on orange bars keep
-   their own faces and shadows — they never switch. */
+:root,
 html[data-pcl-font="sf"] {
-  --pcl-sf-shadow: rgba(20, 35, 95, 0.16);
+  --pcl-font-display: var(--pcl-font-sans);
+  --pcl-font-title: var(--pcl-font-sans);
+  --pcl-font-body: var(--pcl-font-sans);
 }
+html[data-pcl-font="og"] {
+  --pcl-font-display: "Press Start 2P", "Silkscreen", monospace;
+  --pcl-font-title: "Silkscreen", "Press Start 2P", monospace;
+  --pcl-font-body: var(--pcl-font-sans);
+}
+/* SF Pro reading mode: a step THICKER than the pixel faces needed — weight
+   500 on copy + a small SOLID drop shadow so the crisp sans sits inside the
+   pixel design (the og faces keep their own ink and shadows). */
+:root { --pcl-sf-shadow: rgba(20, 35, 95, 0.16); }
 html[data-pcl-theme="dark"] { --pcl-sf-shadow: rgba(2, 4, 20, 0.55); }
-html[data-pcl-font="sf"] body {
+body {
   font-weight: 500;
   text-shadow: 1px 1px 0 var(--pcl-sf-shadow);
 }
-html[data-pcl-font="sf"] .pcl-input,
-html[data-pcl-font="sf"] .pcl-chipinput { font-weight: 500; }
-html[data-pcl-font="sf"] .pcl-input::placeholder,
-html[data-pcl-font="sf"] .pcl-chipinput::placeholder { font-weight: 400; }
-
-/* VT323 is narrow — reading surfaces step up one size to keep the rhythm */
-html[data-pcl-font="vt"] body { font-size: 19px; font-weight: 400; }
-html[data-pcl-font="vt"] .pcl-form-note,
-html[data-pcl-font="vt"] .pcl-hint { font-size: 18.5px; }
-html[data-pcl-font="vt"] .pcl-empty { font-size: 19px; }
-html[data-pcl-font="vt"] .pcl-input { font-size: 19px; }
-html[data-pcl-font="vt"] .pcl-chipinput { font-size: 19px; }
-html[data-pcl-font="vt"] .pcl-views { font-size: 18px; }
-html[data-pcl-font="vt"] .pcl-post-link,
-html[data-pcl-font="vt"] .pcl-vlink,
-html[data-pcl-font="vt"] .pcl-lb-line { font-size: 18px; }
-html[data-pcl-font="vt"] .pcl-done-note { font-size: 19px; }
-html[data-pcl-font="vt"] .pcl-modal-body { font-size: 18.5px; }
-html[data-pcl-font="vt"] .pcl-modal-body .pcl-rb-p { font-size: 18.5px; }
+.pcl-input,
+.pcl-chipinput { font-weight: 500; }
+.pcl-input::placeholder,
+.pcl-chipinput::placeholder { font-weight: 400; }
 
 /* ---- Page shell ------------------------------------------------------------- */
 * { box-sizing: border-box; }
@@ -997,7 +988,8 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 
 /* screenshot button — a compact SQUARE well that fits the row (no wide
    rectangle): dashed + open-folder glyph when empty, solid orange + a
-   thumbnail filling the square once attached */
+   thumbnail filling the square once attached. Mobile expands it to a
+   full-width well with a text label (see the media queries below). */
 .pcl-shotbtn {
   display: inline-flex;
   align-items: center;
@@ -1012,6 +1004,7 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   transition: border-color 0.1s steps(2), box-shadow 0.1s steps(2),
               color 0.1s steps(2);
 }
+.pcl-shotbtn-label { display: none; }   /* desktop keeps the pure square */
 .pcl-shotbtn:hover { border-color: var(--pcl-primary); color: var(--pcl-text); }
 .pcl-shotbtn.is-set {
   border-style: solid;
@@ -1433,17 +1426,42 @@ html[data-pcl-theme="dark"] .pcl-input::placeholder {
   .pcl-grid2 { grid-template-columns: 1fr; }
 
   .pcl-post {
-    grid-template-columns: 22px minmax(0, 1fr) 44px 44px;
+    grid-template-columns: 24px minmax(0, 1fr) 48px;
     grid-template-areas:
-      "num main shot collab"
-      "views views views views";
-    gap: 8px 8px;
+      "num  main  collab"
+      "views views views"
+      "shot  shot  shot";
+    gap: 10px 8px;
+    padding: 14px 0 16px;
   }
-  .pcl-post-num { grid-area: num; }
+  .pcl-post-num { grid-area: num; align-self: start; padding-top: 3px; }
   .pcl-post-main { grid-area: main; }
   .pcl-cell--views { grid-area: views; }
   .pcl-cell--shot { grid-area: shot; }
   .pcl-collabrow { grid-area: collab; }
+
+  /* Post Details on the phone: the row becomes a CARD — line 1 identity
+     (# + link + badge + collab circle), line 2 a full-width views input,
+     line 3 a full-width screenshot well with a real label + touch target */
+  .pcl-views { font-size: 16px; padding: 12px 12px 11px; }  /* 16px = iOS won't zoom */
+  .pcl-shotbtn {
+    width: 100%;
+    height: 54px;
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+  }
+  .pcl-shotbtn .pcl-folder-ico { width: 26px; height: 21px; }
+  .pcl-shotbtn-label {
+    display: inline;
+    font-family: var(--pcl-font-title);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
+  .pcl-shotbtn.is-set { height: 110px; }
+  .pcl-post .pcl-err { margin-top: 6px; }
 
   .pcl-btn--primary { width: 100%; justify-content: center; }
 
@@ -1525,10 +1543,18 @@ button.pcl-board-link {
 .pcl-playergrid {
   display: grid;
   grid-template-columns: 84px 1fr 1fr;
+  grid-template-areas:
+    "photo name  manager"
+    "photo desig desig"
+    "cap   cap   cap";
   gap: 10px 16px;
   align-items: start;
 }
-.pcl-photofield { margin: 0; }
+.pcl-photofield { grid-area: photo; margin: 0; position: relative; }
+.pcl-playergrid .pcl-field[data-field="fullName"] { grid-area: name; }
+.pcl-playergrid .pcl-field[data-field="playerDesig"] { grid-area: desig; }
+.pcl-playergrid .pcl-field[data-field="reportingManager"] { grid-area: manager; }
+.pcl-desig-hint { font-size: 12.5px; margin: 5px 2px 0; }
 .pcl-photo-tile {
   width: 84px;
   height: 84px;
@@ -1577,7 +1603,7 @@ button.pcl-board-link {
   object-fit: cover;
 }
 .pcl-photo-caption {
-  grid-column: 1 / -1;
+  grid-area: cap;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -1599,6 +1625,42 @@ button.pcl-board-link {
   color: var(--pcl-cyan);
 }
 html[data-pcl-theme="light"] .pcl-photostate { color: #0b7fa8; }
+
+/* ---- Admin-verified tick + identity fades ----------------------------------
+   The tick is an inline SVG (orange disc, white hand-drawn-style tick) that
+   the form, the Control Room and the leaderboard all share. ONLY verified
+   players get it — unverified means NOTHING shows. The fade classes are
+   applied by the identity gate when a borrowed browser's fields stop
+   matching who the photo/designation belong to. */
+.pcl-vbadge-slot {
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+  display: block;
+  line-height: 0;
+  z-index: 2;
+}
+.pcl-vbadge-slot[hidden] { display: none; }
+.pcl-vbadge-slot .pcl-vbadge {
+  position: static;
+  width: 30px;
+  height: 30px;
+  display: block;
+  filter: drop-shadow(2px 2px 0 var(--pcl-hard));
+}
+.pcl-vbadge--sm {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  vertical-align: -3px;
+  filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.3));
+}
+.pcl-photo-tile.is-fading,
+.pcl-input.is-fading {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.24s steps(4), transform 0.24s steps(4);
+}
 
 /* Windows-open-folder glyph — the shared upload icon (photo tile + SHOT wells) */
 .pcl-px-folder { display: block; line-height: 0; flex: 0 0 auto; }
@@ -2035,14 +2097,26 @@ html[data-pcl-theme="light"] .pcl-wk-pts { color: #a06e00; }
   .pcl-infobtn { width: 42px; }
   .pcl-photo-tile { width: 96px; height: 96px; }
   .pcl-photo-tile .pcl-folder-ico { width: 30px; height: 25px; }
+  .pcl-vbadge-slot { right: -2px; bottom: -2px; }
+  .pcl-vbadge-slot .pcl-vbadge { width: 32px; height: 32px; }
 
   /* photo avatar moves ABOVE the name fields, centred horizontally; the
      READY/alt caption line centres too (placed late in the file so it wins
      over the base .pcl-playergrid) */
-  .pcl-playergrid { grid-template-columns: 1fr; justify-items: center; }
+  .pcl-playergrid {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    grid-template-areas:
+      "photo"
+      "name"
+      "desig"
+      "manager"
+      "cap";
+  }
   .pcl-photofield { justify-self: center; }
   .pcl-photo-caption { justify-content: center; text-align: center; }
   .pcl-playergrid .pcl-field[data-field="fullName"],
+  .pcl-playergrid .pcl-field[data-field="playerDesig"],
   .pcl-playergrid .pcl-field[data-field="reportingManager"] { justify-self: stretch; }
   .pcl-collabpop { left: auto; right: 0; }
 
@@ -2061,4 +2135,65 @@ html[data-pcl-theme="light"] .pcl-wk-pts { color: #a06e00; }
   .pcl-toggle--font { order: 1; margin-right: 2px; }
   .pcl-toggle { order: 2; margin-right: 0; }
   .pcl-header-text { order: 3; flex: 1 1 100%; }
+}
+
+/* ============================================================================
+   SF PRO READABILITY PASS (default mode only)
+   ----------------------------------------------------------------------------
+   The pixel faces were designed at 7.5-13px with wide letter-spacing; the
+   sans needs slightly larger sizes and near-normal tracking to carry the
+   same hierarchy without turning into grey dust. Every rule here is
+   guarded with html:not([data-pcl-font="og"]) so flipping the Aa toggle to
+   the OG arcade faces restores the original pixel-tuned values from the
+   base rules above — one switch, two complete looks, zero duplication.
+   ========================================================================== */
+html:not([data-pcl-font="og"]) .pcl-season { font-size: 12px; letter-spacing: 1px; }
+html:not([data-pcl-font="og"]) .pcl-header-text .pcl-kicker { font-size: 13px; letter-spacing: 1.1px; }
+html:not([data-pcl-font="og"]) .pcl-header-text .pcl-insert { font-size: 13.5px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-board-link { font-size: 12.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-footer { font-size: 13px; letter-spacing: 0.5px; }
+
+html:not([data-pcl-font="og"]) .pcl-panel-title { font-size: 15px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-opt { font-size: 11px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-label { font-size: 13.5px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-err { font-size: 12.5px; letter-spacing: 0.2px; }
+html:not([data-pcl-font="og"]) .pcl-hint { letter-spacing: 0; }
+
+html:not([data-pcl-font="og"]) .pcl-chip { font-size: 13px; letter-spacing: 0.2px; }
+html:not([data-pcl-font="og"]) .pcl-count { font-size: 12.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-vbtn { font-size: 12px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-fmt,
+html:not([data-pcl-font="og"]) .pcl-fmtbrand { font-size: 12px; letter-spacing: 0.2px; }
+html:not([data-pcl-font="og"]) .pcl-addbtn { font-size: 12px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-post-num { font-size: 13.5px; }
+html:not([data-pcl-font="og"]) .pcl-vnum { font-size: 12.5px; }
+html:not([data-pcl-font="og"]) .pcl-vshot { font-size: 12px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-collab-title { font-size: 12px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-collab-half { font-size: 10.5px; }
+html:not([data-pcl-font="og"]) .pcl-collab-toggle { font-size: 12px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-photostate { font-size: 12px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-savestate { font-size: 12.5px; letter-spacing: 0.3px; }
+
+html:not([data-pcl-font="og"]) .pcl-btn--primary { font-size: 14.5px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-lb-nav { font-size: 12px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-done h3 { font-size: 24px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-done-sub { font-size: 15px; letter-spacing: 1px; }
+html:not([data-pcl-font="og"]) .pcl-done-xp { font-size: 14.5px; }
+html:not([data-pcl-font="og"]) .pcl-modal-title { font-size: 17px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-modal-sub { font-size: 13px; letter-spacing: 0.6px; }
+html:not([data-pcl-font="og"]) .pcl-rb-h { font-size: 13.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-rb-table th { font-size: 12px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-rb-formula { font-size: 13.5px; letter-spacing: 0.2px; }
+html:not([data-pcl-font="og"]) .pcl-wk-name { font-size: 14px; letter-spacing: 0.2px; }
+html:not([data-pcl-font="og"]) .pcl-wk-tag { font-size: 11px; letter-spacing: 0.5px; }
+html:not([data-pcl-font="og"]) .pcl-wk-date { font-size: 12px; letter-spacing: 0.3px; }
+html:not([data-pcl-font="og"]) .pcl-wk-pts { font-size: 12px; letter-spacing: 0.3px; }
+
+@media (max-width: 620px) {
+  html:not([data-pcl-font="og"]) .pcl-season { font-size: 11px; letter-spacing: 0.8px; }
+  html:not([data-pcl-font="og"]) .pcl-header-text .pcl-kicker { font-size: 12px; letter-spacing: 0.7px; }
+  html:not([data-pcl-font="og"]) .pcl-header-text .pcl-insert { font-size: 12.5px; }
+  html:not([data-pcl-font="og"]) .pcl-panel-title { font-size: 14px; }
+  html:not([data-pcl-font="og"]) .pcl-footer { font-size: 12px; letter-spacing: 0.4px; }
+  html:not([data-pcl-font="og"]) .pcl-board-link { font-size: 11.5px; }
 }

@@ -91,15 +91,15 @@
   var fontBtn = $("pclFontToggle");
   if (fontBtn) {
     fontBtn.setAttribute("aria-pressed",
-      String(document.documentElement.getAttribute("data-pcl-font") === "vt"));
-    fontBtn.setAttribute("title", "Toggle pixel font (VT323)");
-    fontBtn.setAttribute("aria-label", "Toggle pixel font (VT323)");
+      String(document.documentElement.getAttribute("data-pcl-font") === "og"));
+    fontBtn.setAttribute("title", "Toggle OG arcade font");
+    fontBtn.setAttribute("aria-label", "Toggle OG arcade font");
     fontBtn.addEventListener("click", function () {
       var next =
-        document.documentElement.getAttribute("data-pcl-font") === "vt"
-          ? "sf" : "vt";
+        document.documentElement.getAttribute("data-pcl-font") === "og"
+          ? "sf" : "og";
       document.documentElement.setAttribute("data-pcl-font", next);
-      fontBtn.setAttribute("aria-pressed", String(next === "vt"));
+      fontBtn.setAttribute("aria-pressed", String(next === "og"));
       try { localStorage.setItem(FONT_KEY, next); } catch (e) { /* ok */ }
     });
   }
@@ -187,6 +187,18 @@
     '<circle cx="16.8" cy="9.4" r="2.5" opacity="0.72"/>' +
     '<path d="M15.5 13.6c2.9-.2 5.4 1.6 6 4.8h-5c-.15-1.9-.9-3.6-2-4.8z" ' +
     'opacity="0.72"/></svg>';
+  /* admin-verified tick — insta-style circle in PCL colours (orange disc,
+     white tick, thin inner ring). ONLY players the Control Room verified
+     get it; unverified players get nothing at all. An inline SVG, not an
+     emoji — it inherits the theme variables on every portal. */
+  var TICK_SVG = '<svg class="pcl-vbadge" viewBox="0 0 24 24" role="img" ' +
+    'aria-label="Admin verified">' +
+    '<circle cx="12" cy="12" r="10.5" fill="var(--pcl-primary, #ed3b00)"/>' +
+    '<circle cx="12" cy="12" r="10.5" fill="none" stroke="#fffdf6" stroke-width="1.4"/>' +
+    '<circle cx="12" cy="12" r="7.7" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>' +
+    '<path d="M7.6 12.3l3 3.1 5.9-6.3" fill="none" stroke="#fff" stroke-width="2.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var TICK_SVG_SM = TICK_SVG.replace('pcl-vbadge"', 'pcl-vbadge pcl-vbadge--sm"');
 
   function classifyUrl(raw) {
     var tok = String(raw || "").trim().replace(/[)\]}>,.;]+$/, "");
@@ -353,6 +365,7 @@
   var form = $("pclForm");
   var fullName = $("fullName");
   var manager = $("reportingManager");
+  var desig = $("playerDesig");
   var chipBox = $("chipBox");
   var chipList = $("chipList");
   var linkInput = $("linkInput");
@@ -607,7 +620,8 @@
         '<img class="pcl-thumb" src="' + p.shot.content + '" alt="" /></button>'
       : '<button type="button" class="pcl-shotbtn" data-act="shot" data-id="' +
         esc(p.id) + '" title="Attach analytics screenshot" ' +
-        'aria-label="Attach analytics screenshot">' + FOLDER_SVG + "</button>";
+        'aria-label="Attach analytics screenshot">' + FOLDER_SVG +
+        '<span class="pcl-shotbtn-label">ATTACH SCREENSHOT</span></button>';
     var cellShot = '<div class="pcl-cell pcl-cell--shot' +
       (p.errShotMsg ? " is-error" : "") + '">' + btn +
       '<p class="pcl-err">' + esc(p.errShotMsg || "Required") + "</p></div>";
@@ -1079,11 +1093,21 @@
   }
 
   /* ============================================================================
-     PLAYER PHOTO — mandatory, one per player. The backend stores it as
-     "<name>__<manager>" in a Drive folder; typing a name that already has a
-     photo pulls it back up (JSONP) so nobody uploads twice.
+     PLAYER PHOTO + DESIGNATION — identity-gated. The backend stores one
+     photo ("<name>__<manager>") + one designation per player; typing a name
+     that is already on file pulls both back up (JSONP) so nobody uploads
+     twice. THE SHARED-BROWSER RULE: the photo belongs to the identity it
+     was uploaded/matched under — the moment the name or manager no longer
+     matches (a second player clearing the fields on a borrowed machine),
+     the photo FADES out instead of posing as theirs. It fades straight back
+     in when the identity matches again, so entrants with no reporting
+     manager are never penalised: only the NAME has to come back.
      ========================================================================== */
-  var photoState = { file: null, existing: null };   // file: {name,type,content}
+  var photoState = { file: null, existing: null,
+                     fileOwner: "", matchedName: "", verified: false };
+  var photoShown = false;              // visual gate — identity-checked
+  var desigOwner = "";                 // normId(name) the designation belongs to
+  var desigLocked = false;             // true = auto-filled from the ledger
   var photoBtn = $("photoBtn");
   var photoInput = $("photoInput");
   var photoThumb = $("photoThumb");
@@ -1091,30 +1115,96 @@
   var photoStateEl = $("photoState");
   var photoFolderIcon = $("photoFolderIcon");
   var photoAlt = $("photoAlt");
-  var PHOTO_ALT_NEW = "Only for the first time — until the admin approves it.";
   var PHOTO_ALT_REUSE = "Photo on file — reused for this entry.";
+  /* the badge slot carries the seal markup once; renderPhoto only toggles it */
+  var badgeSlot = $("photoVerifyBadge");
+  if (badgeSlot && !badgeSlot.innerHTML) badgeSlot.innerHTML = TICK_SVG;
+
+  function normId(s) {
+    return String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  function setPhotoAlt(text) {
+    photoAlt.textContent = text || "";
+    photoAlt.hidden = !text;
+  }
 
   function renderPhoto() {
-    var src = photoState.file ? photoState.file.content
-              : (photoState.existing ? photoState.existing.thumb : "");
+    var src = photoShown && photoState.file ? photoState.file.content
+              : (photoShown && photoState.existing ? photoState.existing.thumb : "");
     photoThumb.hidden = !src;
-    if (src) photoThumbImg.src = src;
+    if (src) {
+      photoThumbImg.src = src;
+      var who = fullName.value.trim();
+      photoThumbImg.alt = who ? "Profile photo of " + who : "Profile photo";
+    }
     photoFolderIcon.hidden = !!src;
     photoBtn.classList.toggle("is-set", !!src);
-    if (photoState.file) {
-      photoStateEl.hidden = false;
-      photoStateEl.textContent = "READY ✓";
-      photoAlt.textContent = PHOTO_ALT_NEW;
-    } else if (photoState.existing) {
-      photoStateEl.hidden = false;
-      photoStateEl.textContent = "ON FILE ✓";
-      photoAlt.textContent = PHOTO_ALT_REUSE;
-    } else {
+    var badge = $("photoVerifyBadge");
+    if (badge) badge.hidden = !(photoShown && photoState.verified);
+    if (!src) {
       photoStateEl.hidden = true;
       photoStateEl.textContent = "";
-      photoAlt.textContent = PHOTO_ALT_NEW;
+      setPhotoAlt("");
+    } else if (photoState.file) {
+      photoStateEl.hidden = false;
+      photoStateEl.textContent = "READY ✓";
+      setPhotoAlt("");
+    } else {
+      photoStateEl.hidden = false;
+      photoStateEl.textContent = "ON FILE ✓";
+      setPhotoAlt(PHOTO_ALT_REUSE);
     }
     noteDraft();
+  }
+
+  /* the identity test: a photo on state is only WANTED while the typed name
+     still matches who it belongs to (manager empty = faded too — clearing
+     the manager is one of the fade events, and it returns on its own) */
+  function photoWanted() {
+    var n = normId(fullName.value);
+    if (!n) return false;
+    if (photoState.file) return photoState.fileOwner === n;
+    if (photoState.existing) return photoState.matchedName === n;
+    return false;
+  }
+  var fadeTimer = null;
+  function refreshPhoto() {
+    var want = photoWanted() && manager.value.trim() !== "";
+    if (want === photoShown) return;
+    clearTimeout(fadeTimer);
+    if (want) {
+      photoShown = true;
+      photoBtn.classList.remove("is-fading");
+      renderPhoto();
+    } else {
+      photoBtn.classList.add("is-fading");
+      fadeTimer = setTimeout(function () {
+        photoShown = false;
+        photoBtn.classList.remove("is-fading");
+        renderPhoto();
+      }, 260);
+    }
+  }
+
+  /* the designation rides the same identity: when the name settles on a
+     DIFFERENT player, the field fades and releases what the previous
+     player left (auto-filled or not) — no borrowed designations */
+  var desigSettle = null;
+  function desigIdentityCheck() {
+    var n = normId(fullName.value);
+    if (n === desigOwner) { clearTimeout(desigSettle); return; }
+    clearTimeout(desigSettle);
+    desigSettle = setTimeout(function () {
+      if (normId(fullName.value) === desigOwner) return;   // settled back
+      desig.classList.add("is-fading");
+      setTimeout(function () {
+        desig.classList.remove("is-fading");
+        desig.value = "";
+        desigOwner = normId(fullName.value);
+        desigLocked = false;
+      }, 240);
+    }, 900);
   }
 
   photoBtn.addEventListener("click", function () { photoInput.click(); });
@@ -1224,9 +1314,10 @@
         type: "image/jpeg",
         content: out.toDataURL("image/jpeg", 0.85)
       };
+      photoState.fileOwner = normId(fullName.value);
       clearFieldErr("playerPhoto");
       close();
-      renderPhoto();
+      refreshPhoto();
       noteDraft();
     }
 
@@ -1292,21 +1383,39 @@
     return { open: open, close: close };
   })();
 
-  /* name typed → look up an existing photo (debounced; needs a backend) */
+  /* name typed → fade whatever no longer matches + look up the identity
+     (debounced; needs a backend). Manager edits fade/clear the photo too. */
   var nameTimer = null;
   fullName.addEventListener("input", function () {
+    refreshPhoto();
+    desigIdentityCheck();
     clearTimeout(nameTimer);
     nameTimer = setTimeout(lookupPhoto, 600);
+  });
+  manager.addEventListener("input", refreshPhoto);
+  desig.addEventListener("input", function () {
+    desigLocked = false;
+    desigOwner = normId(fullName.value);
   });
   function lookupPhoto() {
     var name = fullName.value.trim();
     if (name.length < 2 || !cfg.gasWebAppUrl) return;
     jsonpGet({ action: "playerPhoto", name: name })
       .then(function (out) {
-        if (!out || out.ok !== true || !out.url) return;
-        photoState.existing = { url: out.url, thumb: out.thumb || out.url };
-        renderPhoto();
-        clearFieldErr("playerPhoto");
+        if (!out || out.ok !== true) return;
+        if (normId(fullName.value) !== normId(name)) return;   // stale answer
+        if (out.url) {
+          photoState.existing = { url: out.url, thumb: out.thumb || out.url };
+          photoState.matchedName = normId(name);
+        }
+        photoState.verified = !!out.verified;
+        if (out.designation && (!desig.value.trim() || desigLocked)) {
+          desig.value = out.designation;
+          desigLocked = true;
+          desigOwner = normId(name);
+        }
+        if (out.url) clearFieldErr("playerPhoto");
+        refreshPhoto();
       })
       .catch(function () { /* no photo / offline — field stays as-is */ });
   }
@@ -1400,6 +1509,7 @@
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         v: 1, at: Date.now(),
         fullName: fullName.value, manager: manager.value,
+        desig: desig.value,
         links: linkInput.value,
         posts: posts.map(function (p) {
           return { id: p.id, url: p.url, format: p.format, mediaId: p.mediaId,
@@ -1424,12 +1534,15 @@
     try { raw = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); }
     catch (e) { return; }
     if (!raw || raw.v !== 1) return;
-    var texty = [raw.fullName, raw.manager, raw.links, raw.week,
+    var texty = [raw.fullName, raw.manager, raw.desig, raw.links, raw.week,
                  raw.challengeUrl, raw.notes].join("");
     if (!texty && !(raw.posts && raw.posts.length)) return;
 
     fullName.value = String(raw.fullName || "");
     manager.value = String(raw.manager || "");
+    desig.value = String(raw.desig || "");
+    desigOwner = normId(raw.fullName || "");
+    desigLocked = !!desig.value.trim();   // draft text yields to a new identity
     linkInput.value = String(raw.links || "");
     var oldPosts = raw.posts || [];
     posts = oldPosts.map(function (p) {
@@ -1461,7 +1574,11 @@
 
     /* media comes back asynchronously from IndexedDB */
     idbGet("photo").then(function (f) {
-      if (f && f.content) { photoState.file = f; renderPhoto(); }
+      if (f && f.content) {
+        photoState.file = f;
+        photoState.fileOwner = normId(raw.fullName || "");
+        refreshPhoto();
+      }
     });
     oldPosts.forEach(function (p) {
       if (!p.hasShot && !p.shotMeta) return;
@@ -1480,6 +1597,7 @@
       }
     }, 3200);
     if (fullName.value.trim().length >= 2) lookupPhoto();
+    refreshPhoto();
   }
   /* every keystroke/change anywhere in the form queues a draft save */
   form.addEventListener("input", noteDraft, true);
@@ -1496,12 +1614,29 @@
     "Deepanshum Srivastava", "Tanishq Shukla", "Shubham Rai", "Vishal Chib",
     "Ashutosh Gupta"];
 
-  var ManagerAc = (function () {
-    var box = $("managerAc");
-    if (!box || !manager) return { close: function () {} };
+  /* designation suggestions — the league's departments + the common titles
+     (rulebook §8). Free text always wins: the list assists, never locks. */
+  var DESIGNATIONS = ["Content", "Video Editor", "Shorts Editor",
+    "Long-Form Video Editor", "Graphics Designer", "Thumbnail Designer",
+    "QC & YT Management", "PAVE Tutor", "PAVE Content", "Social Media",
+    "Marketing", "HR", "Administration", "IT", "CBO", "COO"];
+
+  /* ============================================================================
+     AUTOCOMPLETE ENGINE — one factory, two boxes (reporting manager +
+     designation). One letter is enough; case doesn't lock; word-start
+     matches rank first, then contains, then initials ("vs" → Vikram Singh).
+     THE TAP RULE (was a bug): clicking/tapping an option now fills the field
+     IMMEDIATELY. The old flow dispatched a synthetic input event that
+     re-ran update() and re-opened the list over the just-filled value — it
+     looked like the tap did nothing until you clicked elsewhere. The
+     suppress flag + a touchstart claim fix desktop and mobile alike.
+     ============================================================================ */
+  function makeAutocomplete(input, box, list, noneMsg) {
+    if (!box || !input) return { close: function () {} };
     var openState = false;
     var sel = -1;
     var opts = [];
+    var suppress = false;          // the synthetic input event must not re-open
 
     function score(name, q) {
       var n = name.toLowerCase();
@@ -1527,50 +1662,54 @@
       openState = false; sel = -1; opts = [];
       box.hidden = true;
       box.innerHTML = "";
-      manager.setAttribute("aria-expanded", "false");
+      input.setAttribute("aria-expanded", "false");
     }
     function choose(name) {
-      manager.value = name;
+      input.value = name;
       close();
-      var f = manager.closest(".pcl-field");
+      suppress = true;                 // fill FIRST, keep the list closed
+      var f = input.closest(".pcl-field");
       if (f) f.classList.remove("is-error");
-      manager.dispatchEvent(new Event("input", { bubbles: true }));
-      manager.focus();
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      suppress = false;
+      input.focus();
     }
     function markSel() {
       Array.prototype.forEach.call(box.querySelectorAll(".pcl-ac-opt"),
         function (el, i) { el.classList.toggle("is-sel", i === sel); });
     }
     function update() {
-      var q = manager.value.trim().toLowerCase().replace(/\s+/g, " ");
+      if (suppress) return;
+      var q = input.value.trim().toLowerCase().replace(/\s+/g, " ");
       if (!q) { close(); return; }
-      var list = MANAGERS.map(function (n) { return { name: n, s: score(n, q) }; })
+      var matches = list.map(function (n) { return { name: n, s: score(n, q) }; })
         .filter(function (x) { return x.s >= 0; })
         .sort(function (a, b) { return a.s - b.s || a.name.length - b.name.length; })
         .slice(0, 6);
-      manager.setAttribute("aria-expanded", "true");
-      if (!list.length) {
+      input.setAttribute("aria-expanded", "true");
+      if (!matches.length) {
         opts = [];
-        box.innerHTML = '<div class="pcl-ac-none">No match — keep the name as typed.</div>';
+        box.innerHTML = '<div class="pcl-ac-none">' + esc(noneMsg) + "</div>";
         box.hidden = false;
         openState = true;
         sel = -1;
         return;
       }
-      opts = list.map(function (x) { return x.name; });
-      box.innerHTML = list.map(function (x, i) {
+      opts = matches.map(function (x) { return x.name; });
+      box.innerHTML = matches.map(function (x, i) {
         return '<button type="button" class="pcl-ac-opt" role="option" id="pclAcOpt' +
-          i + '" data-name="' + esc(x.name) + '">' + hl(x.name, q) + "</button>";
+          i + "-" + Math.floor(Math.random() * 1e5) + '" data-name="' + esc(x.name) +
+          '">' + hl(x.name, q) + "</button>";
       }).join("") +
-        '<div class="pcl-ac-none">Not on the list? Keep the name as typed.</div>';
+        '<div class="pcl-ac-none">' + esc(noneMsg) + "</div>";
       box.hidden = false;
       openState = true;
-      sel = 0;          // top match pre-highlighted → Enter takes it (no "vikrm" typos)
+      sel = 0;          // top match pre-highlighted → Enter takes it (no typos)
       markSel();
     }
 
-    manager.addEventListener("input", update);
-    manager.addEventListener("keydown", function (ev) {
+    input.addEventListener("input", update);
+    input.addEventListener("keydown", function (ev) {
       if (!openState) return;
       if (ev.key === "ArrowDown" && opts.length) {
         ev.preventDefault();
@@ -1588,16 +1727,23 @@
         close();
       }
     });
-    box.addEventListener("mousedown", function (ev) {
+    function pickFromEvent(ev) {
       var b = ev.target.closest(".pcl-ac-opt");
-      if (b) {
-        ev.preventDefault();              // mousedown beats the input blur
-        choose(b.getAttribute("data-name"));
-      }
-    });
-    manager.addEventListener("blur", function () { setTimeout(close, 140); });
+      if (!b) return false;
+      ev.preventDefault();                // claim the press BEFORE the blur
+      choose(b.getAttribute("data-name"));
+      return true;
+    }
+    box.addEventListener("mousedown", pickFromEvent);
+    box.addEventListener("touchstart", pickFromEvent, { passive: false });
+    input.addEventListener("blur", function () { setTimeout(close, 140); });
     return { close: close };
-  })();
+  }
+
+  var ManagerAc = makeAutocomplete(manager, $("managerAc"), MANAGERS,
+    "No match — keep the name as typed.");
+  var DesigAc = makeAutocomplete(desig, $("desigAc"), DESIGNATIONS,
+    "Free text is fine — keep it as typed.");
 
   /* ============================================================================
      VALIDATION — red well + "Required" below; navy restores on input.
@@ -1620,7 +1766,7 @@
     if (e && f.__defaultErr) e.textContent = f.__defaultErr;
   }
 
-  [fullName, manager, challengeUrl].forEach(function (inp) {
+  [fullName, manager, desig, challengeUrl].forEach(function (inp) {
     inp.addEventListener("input", function () {
       var f = inp.closest(".pcl-field");
       if (f) f.classList.remove("is-error");
@@ -1647,7 +1793,8 @@
 
     if (!fullName.value.trim()) bad("fullName");
     if (!manager.value.trim()) bad("reportingManager");
-    if (!photoState.file && !photoState.existing) {
+    if (!desig.value.trim()) bad("playerDesig");
+    if (!photoShown && !photoState.file) {
       bad("playerPhoto", "Upload your photo.");
     }
     if (!posts.length) bad("postLinks", "Paste at least one post link.");
@@ -1691,11 +1838,12 @@
     var data = {
       fullName: fullName.value.trim(),
       reportingManager: manager.value.trim(),
+      playerDesignation: desig.value.trim(),
       playerPhoto: photoState.file
         ? [{ name: photoState.file.name, type: photoState.file.type,
             content: photoState.file.content }]
         : [],
-      playerPhotoReused: !photoState.file && !!photoState.existing,
+      playerPhotoReused: !photoState.file && photoShown && !!photoState.existing,
       postDetails: posts.map(function (p) {
         var n = Number(String(p.views).replace(/[^\d]/g, ""));
         return {
@@ -1814,7 +1962,7 @@
   form.addEventListener("submit", function (ev) {
     ev.preventDefault();
     if (linkInput.value.trim()) commitLinks();   // never lose typed links
-    ["fullName", "reportingManager", "playerPhoto", "postLinks",
+    ["fullName", "reportingManager", "playerDesig", "playerPhoto", "postLinks",
      "challengeWeek", "challengeUrl"].forEach(clearFieldErr);
     posts.forEach(function (p) {
       p.errViews = false; p.errShotMsg = ""; p.errCollab = false;
@@ -1848,6 +1996,7 @@
     undoLinks: undoLinks,
     redoLinks: redoLinks,
     MANAGERS: MANAGERS,
+    DESIGNATIONS: DESIGNATIONS,
     saveDraft: saveDraft,
     restoreDraft: restoreDraft,
     clearDraft: clearDraft
