@@ -741,6 +741,34 @@
     });
   }
 
+  /* payload-safe image copy — ≤maxEdge JPEG; a phone screenshot drops from
+     ~2.7 MB of base64 to ~200 KB, which is the difference between a save
+     that lands in 3 s and one that trips every timeout on the wire.
+     Resolves the ORIGINAL unchanged when decoding fails (never blocks). */
+  function shrinkImageData_(imgObj, maxEdge, quality) {
+    return new Promise(function (res) {
+      if (!imgObj || !imgObj.content ||
+          String(imgObj.content).indexOf("data:image") !== 0) { res(imgObj); return; }
+      var img = new Image();
+      img.onload = function () {
+        var w = img.naturalWidth, h = img.naturalHeight;
+        if (!w || !h) { res(imgObj); return; }
+        var sc = Math.min(1, (maxEdge || 1600) / Math.max(w, h));
+        var cv = document.createElement("canvas");
+        cv.width = Math.max(1, Math.round(w * sc));
+        cv.height = Math.max(1, Math.round(h * sc));
+        var ctx = cv.getContext("2d");
+        ctx.fillStyle = "#ffffff";       // JPEG has no alpha channel
+        ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(img, 0, 0, cv.width, cv.height);
+        res({ name: imgObj.name, type: "image/jpeg",
+              content: cv.toDataURL("image/jpeg", quality || 0.85) });
+      };
+      img.onerror = function () { res(imgObj); };
+      img.src = imgObj.content;
+    });
+  }
+
   function viewsNum_(p) {
     return Number(String(p.views).replace(/[^\d]/g, "")) || 0;
   }
@@ -1122,10 +1150,16 @@
     }
     var fr = new FileReader();
     fr.onload = function () {
-      p.shot = { name: file.name, type: file.type, content: fr.result };
-      p.errShotMsg = "";
-      renderRows();
-      runOcr_(p, file);            // read the screenshot while the player moves on
+      var raw = { name: file.name, type: file.type, content: fr.result };
+      /* store the shrunk copy, NOT the raw multi-MB original — payload size
+         is what decides whether the save lands in seconds or trips every
+         timeout on the wire (the OCR still reads the untouched file) */
+      shrinkImageData_(raw, 1600, 0.85).then(function (small) {
+        p.shot = small || raw;
+        p.errShotMsg = "";
+        renderRows();
+        runOcr_(p, file);          // read the screenshot while the player moves on
+      });
     };
     fr.onerror = function () { flagShot(p, "Could not read file"); };
     fr.readAsDataURL(file);
@@ -1990,7 +2024,14 @@
       if (!p.hasShot && !p.shotMeta) return;
       idbGet("shot:" + p.id).then(function (s) {
         var pp = postById(p.id);
-        if (pp && s && s.content) { pp.shot = s; renderRows(); }
+        if (pp && s && s.content) {
+          /* drafts saved before the payload diet carry RAW multi-MB shots —
+             shrink on the way back in so an old draft can't blow the save */
+          shrinkImageData_(s, 1600, 0.85).then(function (sm) {
+            pp.shot = sm || s;
+            renderRows();
+          });
+        }
       });
     });
 
@@ -2474,7 +2515,10 @@
   /* POST JSON with a timeout; the response body is parsed EVEN on HTTP 4xx/5xx
      so backend rejection reasons reach the player instead of a generic error.
      simple: true → no Content-Type header (GAS /exec is CORS-readable only
-     for simple requests — the classic Apps Script workaround). */
+     for simple requests — the classic Apps Script workaround).
+     A non-JSON body (proxy error page, gateway 504 text, HTML 404) is NEVER
+     treated as success — it throws like a network drop so the transport
+     chain falls through instead of showing ENTRY LOGGED for a lost save. */
   function postJson(url, payload, opts) {
     var o = opts || {};
     var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -2495,11 +2539,62 @@
           err.server = true;
           throw err;
         }
-        return out || { ok: true };
+        if (out) return out;
+        var bad = new Error("Non-JSON answer (HTTP " + res.status + ")");
+        bad.network = true;
+        throw bad;
       });
     }, function (e) {
       clearTimeout(timer);
       throw e;
+    });
+  }
+
+  /* direct /exec transport. A simple POST reaches Apps Script, but the 302
+     to googleusercontent carries no CORS headers — the browser can never
+     read the answer even when the save LANDED (this fake-failure is what
+     "SAVE FAILED — CHECK CONNECTION" screenshots were made of). So after
+     any throw we don't believe the failure: we confirm through the JSONP
+     subcheck action, which keys on the same Submission ID the backend
+     dedupes with — found:true is proof the row is safely in the ledger. */
+  function sendDirectWithVerify_(payload, attempt) {
+    saveState.textContent = attempt > 0 ? "SAVING… (RETRY " + attempt + ")" : "SAVING…";
+    return postJson(cfg.gasWebAppUrl, payload, { simple: true, timeoutMs: 30000 })
+      .then(function (out) {
+        if (out && out.ok) return out;
+        throw new Error("Backend did not accept the entry.");
+      })
+      .catch(function () {
+        return verifySubmission_(payload.submissionId, 4, 1500)
+          .then(function (found) {
+            if (found) return { ok: true, verified: true };
+            if (attempt < 1) return sendDirectWithVerify_(payload, attempt + 1);
+            var err = new Error("The save could not be confirmed.");
+            err.network = true;
+            throw err;
+          }, function () {
+            /* subcheck gave no verdict (backend predates the action) —
+               an unverifiable save is, honestly, a failed save */
+            var err = new Error("The save could not be confirmed.");
+            err.network = true;
+            throw err;
+          });
+      });
+  }
+
+  /* poll subcheck until the submissionId shows up — the sheet write can
+     still be in flight when the CORS throw fires. true = found,
+     false = checked-out; rejects only when the endpoint has no verdict. */
+  function verifySubmission_(sid, tries, gapMs) {
+    return jsonpGet({ action: "subcheck", id: sid }).then(function (out) {
+      if (!out || typeof out.found !== "boolean") throw new Error("no-verdict");
+      if (out.found) return true;
+      if (tries <= 1) return false;
+      return new Promise(function (res, rej) {
+        setTimeout(function () {
+          verifySubmission_(sid, tries - 1, gapMs).then(res, rej);
+        }, gapMs);
+      });
     });
   }
 
@@ -2511,27 +2606,27 @@
 
     /* transport chain:
        1. /api/submit (Vercel) when configured — same-origin, URL stays secret.
-          12s timeout: a healthy GAS round-trip (photo + screenshots included)
-          lands well inside it; a hanging route falls through fast.
+          30 s: with the payload diet (≤1600px shots) a healthy round-trip
+          lands inside 3–8 s, but a big queue on slow hotel Wi-Fi deserved
+          headroom — the abort fired on healthy saves before this.
        2. direct simple POST to the GAS /exec URL — survives a missing env
-          var, a sleeping function or a deploy hiccup, so a healthy Wi-Fi
-          connection never shows a phantom "check connection"
+          var, a sleeping function or a deploy hiccup. The 302 answer can
+          never be READ (no CORS headers) so every send is confirmed via
+          the JSONP subcheck endpoint instead of trusted blindly.
        A server REJECTION (duplicate link, unconfirmed collab…) stops the
        chain and shows its real message; only true network failures fall
        through to the next transport. The backend keys on submissionId, so
        a retry after a lost response can never append the entry twice. */
     var chain;
     if (cfg.submitViaApi) {
-      chain = postJson("/api/submit", payload, { timeoutMs: 12000 })
+      chain = postJson("/api/submit", payload, { timeoutMs: 30000 })
         .catch(function (err) {
           if (err && err.server) throw err;         // real reason — show it
           if (!cfg.gasWebAppUrl) throw err;         // nothing to fall back to
-          return postJson(cfg.gasWebAppUrl, payload,
-                          { simple: true, timeoutMs: 30000 });
+          return sendDirectWithVerify_(payload, 0);
         });
     } else if (cfg.gasWebAppUrl) {
-      chain = postJson(cfg.gasWebAppUrl, payload,
-                       { simple: true, timeoutMs: 30000 });
+      chain = sendDirectWithVerify_(payload, 0);
     } else {
       chain = new Promise(function (resolve) {
         setTimeout(function () {

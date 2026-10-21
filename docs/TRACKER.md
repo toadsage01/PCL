@@ -286,7 +286,46 @@ The form now **reads the numbers itself** so participants don't have to:
 
 ---
 
-## C · OPEN — before the deadline (owner + cost)
+## A4 · DONE — SAVE FAILED root-cause fix (23 Oct morning)
+
+The "SAVE FAILED — CHECK CONNECTION" screenshots had **three stacked
+causes**, none of which were the user's Wi-Fi:
+
+1. **Payload bomb**: per-post screenshots went into the JSON payload as
+   RAW base64 (a phone screenshot = 2–3 MB → the wire saw ~800 KB+). The
+   /api/submit leg aborted client-side at **12 s** while GAS was still
+   writing Drive blobs. Fix: every screenshot is now canvas-shrunk to
+   ≤1600px JPEG q0.85 **on attach** (and again on old-draft restore) —
+   E2E-verified 1.65 MB PNG → 130 KB JPEG, full payload 133 KB. The pfp
+   was already diet-safe (512px cropper export).
+2. **Vercel function ceiling**: Hobby functions default to a 10 s kill —
+   `api/submit.js` now declares `maxDuration = 60`, guards >4.4 MB with a
+   readable 413, and answers an upstream failure in **plain text** so the
+   frontend treats it as a network drop and falls through the chain
+   (a JSON `{ok:false}` would read as a hard rejection and stop it).
+3. **The GAS 302 trap (the big one)**: a direct POST to `/exec` always
+   ends in a 302 to googleusercontent that carries **no CORS headers** —
+   the browser can never read the answer even when the save landed, so
+   every direct send looked like a failure. Fix: the form no longer
+   trusts the throw — after any direct-leg failure it **verifies through
+   a new JSONP `action=subcheck`** (keys on the same Submission ID the
+   backend dedupes with): found → ENTRY LOGGED; really-not-found → one
+   automatic retry, then an honest SAVE FAILED. `postJson` also stopped
+   treating non-JSON bodies (gateway 504 text, HTML 404) as success.
+   Leg-1 timeout raised 12 s → 30 s.
+
+- Tests: doPost harness 17–17d (subcheck found/absent/empty/fallthrough),
+  `scripts/save_e2e.sh` + `scripts/fixture_save.js` browser E2E against a
+  fixture that reproduces the REAL wire per port — leg1 healthy → ENTRY
+  LOGGED, leg2 302+CORS → ENTRY LOGGED via subcheck (exactly one send, no
+  duplicate), leg2 connection-destroyed → honest SAVE FAILED
+  (`/download/save-e2e-1..3.png`).
+- **Deployment note**: `subcheck` lives in `gas/Code.gs` and goes live
+  with the same **C1 paste + New version** that carries everything else —
+  no extra step. Until then the Vercel leg already works alone (probed
+  2.4 s round-trip), and backend dedupe makes any manual retry safe.
+
+---
 
 | # | Item | Owner | Blocking? | Notes |
 |---|---|---|---|---|

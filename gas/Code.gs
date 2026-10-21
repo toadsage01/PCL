@@ -444,6 +444,7 @@ function doGet(e) {
   try {
     if (p.action === 'ledger') return ledgerEndpoint_(p);
     if (p.action === 'ocr')    return ocrEndpoint_(p);
+    if (p.action === 'subcheck') return subcheckEndpoint_(p);
     if (p.action === 'playerPhoto') return playerPhotoEndpoint_(p);
     return statsEndpoint_(p);
   } catch (err) {
@@ -497,6 +498,28 @@ function ocrEndpoint_(p) {
   var claimed = Number(String(p.claimed || '').replace(/[^\d.]/g, '')) || 0;
   var out = ocrSuggest_(p.fileId, claimed);
   return reply_(p, out);
+}
+
+/** Submission confirmation — the browser's direct /exec leg can never read
+ *  the 302 answer (no CORS headers on googleusercontent), so after sending
+ *  it confirms through this JSONP action instead. Keys on the same
+ *  Submission ID doPost uses for dedupe, so found:true is proof the entry
+ *  is safely in the ledger. Public but harmless: a yes/no for an
+ *  unguessable id, nothing else is exposed. */
+function subcheckEndpoint_(p) {
+  var id = String(p.id || '').trim();
+  if (!id) return reply_(p, { ok: true, found: false });
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  var found = false;
+  if (lastRow > 1) {
+    // column 2 = Submission ID
+    var ids = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (str_(ids[i][0]) === id) { found = true; break; }
+    }
+  }
+  return reply_(p, { ok: true, found: found });
 }
 
 /** ---------- SEASON CLOCK ---------- */
