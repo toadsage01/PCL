@@ -536,7 +536,9 @@
         id: c.mediaId, url: c.url, format: c.format, mediaId: c.mediaId,
         views: "", shot: null, errViews: false, errShotMsg: "",
         collab: false, collabWith: "", errCollab: false,
-        ctype: "PRAPER"
+        ctype: "PRAPER",
+        ocrN: 0, ocrSolid: false, ocrAll: [], ocrStatus: "",
+        autoN: 0, ytTried: false
       });
       added++;
     });
@@ -544,6 +546,7 @@
     renderChips();
     renderRows();
     renderDetailsHead();
+    posts.forEach(ytAutoRead_);   // YouTube links self-read their view count
     dups.forEach(addDupChip);
     lastInputSnap = snapLinks();
     if (added > 0 || chipErrors.length > 0) clearFieldErr("postLinks");
@@ -606,6 +609,267 @@
   });
 
   /* ============================================================================
+     AUTO-COUNT — the form reads the numbers so participants don't have to.
+       · YOUTUBE — the league's public Data API key (the same key the backend
+         sync leg uses) returns the OFFICIAL viewCount the moment a yt_ link
+         lands. A YouTube post needs nothing typed, nothing screenshotted.
+       · OCR — the attached analytics screenshot is read client-side by
+         Tesseract.js (lazy-loaded from CDN on first attach); views /
+         impressions / plays numbers are extracted from the text and offered
+         to the views field. The best read travels with the payload
+         (ocrCount) so the admin console sees a machine-read on arrival —
+         the reviewer's SCAN button can still re-read it server-side.
+     Neither leg ever overwrites a typed value: empty field + a solid read →
+     silent auto-fill with an AUTO tag; filled field → tap-to-use chip
+     (or a MATCHES ✓ tag when they agree).
+     ========================================================================== */
+  var OCR_LIB_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+  var ocrLibPromise = null;
+  var OCR_KW_PRIORITY = ["views", "impressions", "plays", "replays",
+                         "accounts reached", "accounts engaged", "members reached"];
+
+  function loadOcrLib_() {
+    if (window.Tesseract) return Promise.resolve();
+    if (ocrLibPromise) return ocrLibPromise;
+    ocrLibPromise = new Promise(function (res, rej) {
+      var s = document.createElement("script");
+      s.src = OCR_LIB_URL;
+      s.async = true;
+      s.onload = function () { res(); };
+      s.onerror = function () { rej(new Error("OCR lib failed to load")); };
+      document.head.appendChild(s);
+    }).catch(function (err) { ocrLibPromise = null; throw err; });
+    return ocrLibPromise;
+  }
+
+  /* "1,234" → 1234 · "12.5K" → 12500 · "1.2M" → 1200000 · "12.345" (dot
+     thousands) → 12345 */
+  function km_(s) {
+    var m = String(s).match(/^\s*([\d][\d,\.\s]*?)\s*([KkMm])?\s*$/);
+    if (!m) return 0;
+    var raw = m[1].replace(/[,\s]/g, "");
+    if (!m[2] && /^\d{1,3}(\.\d{3})+$/.test(raw)) raw = raw.replace(/\./g, "");
+    var n = Number(raw);
+    if (!isFinite(n)) return 0;
+    if (m[2] === "K" || m[2] === "k") n *= 1e3;
+    else if (m[2] === "M" || m[2] === "m") n *= 1e6;
+    return n;
+  }
+
+  /* keyword-anchored candidates — solid=true when a metric word anchors
+     them. Real analytics layouts come in three shapes, each with its own
+     anchor (guards stop caption bleed like "Impressions\n7-day window"):
+       · INLINE            "12,345 views" · "1,204 impressions"   (reA/reB1)
+       · WORD ABOVE NUMBER "Accounts reached\n9K" · LI tables    (reB2)
+       · NUMBER ABOVE WORD IG/Studio hero: "8,741\nPlays\n…"     (reC)      */
+  function parseCounts_(text) {
+    var t = String(text || ""), out = [], m, seen = {}, anchors = 0;
+    function push(n, kw) {
+      n = Math.round(n);
+      if (!isFinite(n) || n <= 0 || n >= 1e10 || seen[n]) return;
+      seen[n] = 1;
+      out.push({ n: n, kw: kw, solid: true });
+    }
+    /* number BEFORE keyword, same line — [ \t] never crosses newlines, so
+       "9K\nPlays 2,100" cannot read 9K as a play count */
+    var reA = /([\d][\d,. \t]*[KkMm]?)[ \t]*(views|impressions|plays|replays)(?![\w-])/ig;
+    while ((m = reA.exec(t))) { anchors += 1; push(km_(m[1]), m[2].toLowerCase()); }
+    /* keyword BEFORE number, same line ("Impressions 8,741", "views: 1,204") */
+    var reB1 = /(views|impressions|plays|replays|accounts reached|accounts engaged|members reached)[ \t]*:?[ \t]+([\d][\d,. \t]*[KkMm]?)(?![\w-])/ig;
+    while ((m = reB1.exec(t))) { anchors += 1; push(km_(m[2]), m[1].toLowerCase()); }
+    /* keyword ALONE on its line, number alone on the next (analytics tables
+       + "Accounts reached" stacked labels); (?![\w-]) rejects "7-day" */
+    var reB2 = /(^|\n)[ \t]*(accounts reached|accounts engaged|members reached|impressions)[ \t]*:?[ \t]*(?:[ \t]*\n)+[ \t]*([\d][\d,. \t]*[KkMm]?)(?![\w-])/ig;
+    while ((m = reB2.exec(t))) { anchors += 1; push(km_(m[3]), m[2].toLowerCase()); }
+    /* number ALONE on its line, metric word on the next — the IG/Studio hero
+       layout ("8,741\nPlays"); the word must NOT carry its own number
+       ("Plays 2,100" would mean the word belongs to the next row) */
+    var reC = /(^|\n)[ \t]*([\d][\d,. \t]*[KkMm]?)(?:[ \t]*\n)+[ \t]*(views|impressions|plays|replays|accounts reached|accounts engaged|members reached)(?![\w-])(?![ \t]*:?[\d])/ig;
+    while ((m = reC.exec(t))) { anchors += 1; push(km_(m[2]), m[3].toLowerCase()); }
+    if (!anchors) {            // garbled keywords — bare numbers, chip-only
+      var bs = {}, reN = /(\d{2,9})/g;
+      while ((m = reN.exec(t))) {
+        var n = Number(m[1]);
+        if (n > 9 && n < 1e9 && !bs[n]) { bs[n] = 1; out.push({ n: n, kw: "", solid: false }); }
+      }
+    }
+    return out;
+  }
+
+  function pickCount_(cands, claimed) {
+    var pool = cands.filter(function (c) { return c.solid; });
+    if (!pool.length) pool = cands;
+    if (!pool.length) return { n: 0, solid: false };
+    if (claimed > 0) {
+      var best = pool.reduce(function (a, b) {
+        return Math.abs(b.n - claimed) < Math.abs(a.n - claimed) ? b : a;
+      });
+      return { n: best.n, solid: best.solid };
+    }
+    for (var i = 0; i < OCR_KW_PRIORITY.length; i++) {
+      var hit = pool.filter(function (c) { return c.kw === OCR_KW_PRIORITY[i]; });
+      if (hit.length) {
+        return { n: Math.max.apply(null, hit.map(function (c) { return c.n; })),
+                 solid: true };
+      }
+    }
+    return { n: Math.max.apply(null, pool.map(function (c) { return c.n; })),
+             solid: false };
+  }
+
+  /* shrink huge screenshots before recognition (speed; accuracy unaffected
+     for UI text down to 2000px on the long edge) */
+  function downscaleForOcr_(file) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          var w = img.naturalWidth, h = img.naturalHeight;
+          var sc = Math.min(1, 2000 / Math.max(w, h));
+          if (sc >= 1) { res(fr.result); return; }
+          var cv = document.createElement("canvas");
+          cv.width = Math.round(w * sc); cv.height = Math.round(h * sc);
+          cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+          res(cv.toDataURL("image/jpeg", 0.92));
+        };
+        img.onerror = function () { rej(new Error("image decode failed")); };
+        img.src = fr.result;
+      };
+      fr.onerror = function () { rej(new Error("file read failed")); };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function viewsNum_(p) {
+    return Number(String(p.views).replace(/[^\d]/g, "")) || 0;
+  }
+
+  /* the best live suggestion for a post — YT (official) beats OCR */
+  function sugOf_(p) {
+    if (p.autoN > 0) return { n: p.autoN, label: "YOUTUBE", solid: true };
+    if (p.ocrN > 0) return { n: p.ocrN, label: "OCR", solid: !!p.ocrSolid };
+    return null;
+  }
+
+  function sugHtml_(p) {
+    if (p.ocrStatus === "working") {
+      return '<span class="pcl-sugtag is-work">OCR READING…</span>';
+    }
+    if (p.ocrStatus === "fail") {
+      return '<span class="pcl-sugtag is-warn">OCR unavailable — type it</span>';
+    }
+    var s = sugOf_(p);
+    if (!s) return "";                       // "none" stays silent
+    var claimed = viewsNum_(p);
+    if (!claimed) {
+      if (s.solid) {
+        return '<span class="pcl-sugtag is-auto">AUTO · ' + s.label + " " +
+          s.n.toLocaleString("en-US") + "</span>";
+      }
+      return '<button type="button" class="pcl-sugchip" data-act="usesug"' +
+        ' data-id="' + esc(p.id) + '" title="Use the number the screenshot' +
+        ' seems to show">' + s.label + " READS " + s.n.toLocaleString("en-US") +
+        " — USE</button>";
+    }
+    if (claimed === s.n && p.sugFilled) {   // machine-filled — keep saying so
+      return '<span class="pcl-sugtag is-auto">AUTO · ' + s.label + " " +
+        s.n.toLocaleString("en-US") + "</span>";
+    }
+    if (claimed === s.n) {
+      return '<span class="pcl-sugtag is-ok">✓ ' + s.label + " MATCHES</span>";
+    }
+    return '<button type="button" class="pcl-sugchip" data-act="usesug"' +
+      ' data-id="' + esc(p.id) + '" title="Swap in the machine-read number">' +
+      s.label + " READS " + s.n.toLocaleString("en-US") + " — USE</button>";
+  }
+
+  function patchSug_(p) {
+    if (!postRows) return;
+    var el = postRows.querySelector('.pcl-sug[data-id="' + p.id + '"]');
+    if (el) el.innerHTML = sugHtml_(p);
+  }
+
+  function applySug_(p, s) {
+    p.views = s.n.toLocaleString("en-US");
+    p.errViews = false;
+    p.sugFilled = s.label;    // the machine supplied this value, not the human
+    if (postRows) {
+      var inp = postRows.querySelector('.pcl-views[data-id="' + p.id + '"]');
+      if (inp) {
+        inp.value = p.views;
+        var cell = inp.closest(".pcl-cell");
+        if (cell) cell.classList.remove("is-error");
+      }
+    }
+    patchSug_(p);
+  }
+
+  function sugLanded_(p) {
+    var s = sugOf_(p);
+    if (s && s.solid && !viewsNum_(p)) applySug_(p, s);
+    else patchSug_(p);
+  }
+
+  function syncSuggestions_() {
+    if (viewMode !== "edit") return;
+    posts.forEach(function (p) {
+      var s = sugOf_(p);
+      if (s && s.solid && !viewsNum_(p)) applySug_(p, s);
+      else patchSug_(p);
+    });
+  }
+
+  /* YouTube leg — official count straight off the league's public key */
+  function ytAutoRead_(p) {
+    if (p.ytTried || String(p.mediaId).indexOf("yt_") !== 0) return;
+    p.ytTried = true;
+    var vid = String(p.mediaId).slice(3);
+    var key = String(cfg.ytApiKey || "");
+    if (!key || !vid || typeof window.fetch !== "function") return;
+    fetch("https://www.googleapis.com/youtube/v3/videos?part=statistics&id=" +
+          vid + "&key=" + key)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var it = d && d.items && d.items[0];
+        var v = it && it.statistics && Number(it.statistics.viewCount);
+        if (!v) return;
+        p.autoN = v;
+        sugLanded_(p);
+      })
+      .catch(function () { /* silent — the manual field still works */ });
+  }
+
+  /* OCR leg — runs once per attached screenshot; replaces a previous read */
+  function runOcr_(p, file) {
+    p.ocrN = 0; p.ocrSolid = false; p.ocrAll = []; p.ocrStatus = "";
+    if (!file || !/^image\/(png|jpe?g|webp)$/i.test(file.type)) return;
+    p.ocrStatus = "working";
+    patchSug_(p);
+    loadOcrLib_()
+      .then(function () { return downscaleForOcr_(file); })
+      .then(function (img) {
+        return window.Tesseract.recognize(img, "eng", {});
+      })
+      .then(function (res) {
+        var text = (res && res.data && res.data.text) || "";
+        if (window.console && console.log) {
+          console.log("[PCL OCR]", JSON.stringify(text).slice(0, 400));
+        }
+        var cands = parseCounts_(text);
+        p.ocrAll = cands;
+        var picked = pickCount_(cands, viewsNum_(p));
+        p.ocrN = picked.n; p.ocrSolid = picked.solid;
+        p.ocrStatus = cands.length ? "done" : "none";
+        sugLanded_(p);
+      })
+      .catch(function () {
+        p.ocrN = 0; p.ocrSolid = false; p.ocrStatus = "fail";
+        sugLanded_(p);
+      });
+  }
+
+  /* ============================================================================
      POST DETAILS — EDIT / VIEW rows
      ========================================================================== */
   function fmtHtml(fmt) {
@@ -630,7 +894,8 @@
       '<input class="pcl-input pcl-views" data-id="' + esc(p.id) +
       '" type="text" inputmode="numeric" placeholder="Views / impressions"' +
       ' value="' + esc(p.views) + '" aria-label="Views or impressions — post ' + n +
-      '" /><p class="pcl-err">Required</p></div>';
+      '" /><span class="pcl-sug" data-id="' + esc(p.id) + '">' + sugHtml_(p) +
+      '</span><p class="pcl-err">Required</p></div>';
     var btn = p.shot
       ? '<button type="button" class="pcl-shotbtn is-set" data-act="shot" data-id="' +
         esc(p.id) + '" title="Screenshot attached — click to replace" ' +
@@ -739,6 +1004,7 @@
     postRows.innerHTML = posts.map(viewMode === "edit" ? editRowHtml : viewRowHtml)
                               .join("");
     bindCollabAcs();
+    syncSuggestions_();
     noteDraft();
   }
 
@@ -762,6 +1028,8 @@
       if (!p) return;
       p.views = input.value.replace(/[^\d,.\s]/g, "").slice(0, 18);
       if (p.views !== input.value) input.value = p.views;
+      p.sugFilled = "";    // a human edited — the value is theirs now
+      patchSug_(p);        // claim changed → the MATCHES ✓ / USE chip refreshes
       if (p.errViews) {
         p.errViews = false;
         var cell = input.closest(".pcl-cell");
@@ -796,6 +1064,10 @@
     } else if (act === "shot") {
       pendingShotFor = id;
       shotInput.click();
+    } else if (act === "usesug") {
+      var sp = postById(id);
+      var sg = sp && sugOf_(sp);
+      if (sg) applySug_(sp, sg);   // tap the chip → machine-read becomes the claim
     } else if (act === "collab") {
       var p = postById(id);
       if (!p) return;
@@ -853,6 +1125,7 @@
       p.shot = { name: file.name, type: file.type, content: fr.result };
       p.errShotMsg = "";
       renderRows();
+      runOcr_(p, file);            // read the screenshot while the player moves on
     };
     fr.onerror = function () { flagShot(p, "Could not read file"); };
     fr.readAsDataURL(file);
@@ -2178,6 +2451,7 @@
           link: p.url,
           format: p.format,
           viewsImpressions: n > 0 ? n : "",
+          ocrCount: p.ocrN > 0 ? p.ocrN : "",
           analyticsScreenshot: p.shot
             ? [{ name: p.shot.name, type: p.shot.type, content: p.shot.content }]
             : [],

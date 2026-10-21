@@ -628,6 +628,68 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
 }
 .pcl-field.is-error .pcl-err,
 .pcl-cell.is-error .pcl-err { display: block; }
+
+/* ---- Auto-count tags (OCR / YouTube) ----------------------------------------
+   The form reads the number itself: YouTube via the official Data API key,
+   screenshots via client-side Tesseract. Tags are machine → human, so they
+   always stay in the readable sans stack (never the OG arcade font). */
+.pcl-sug {
+  display: block;
+  min-height: 0;
+  margin: 4px 2px 0;
+  font-family: var(--pcl-font-sans);
+}
+.pcl-sug:empty { display: none; }
+.pcl-sugtag,
+.pcl-sugchip {
+  display: inline-block;
+  font-family: var(--pcl-font-sans);
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.7px;
+  padding: 4px 7px;
+  border-radius: 4px;
+}
+.pcl-sugtag.is-auto {              /* solid read auto-filled the field */
+  color: #ffffff;
+  background: #1d9e57;             /* the same green as the verified ticks */
+  box-shadow: 2px 2px 0 rgba(20, 35, 95, 0.25);
+}
+.pcl-sugtag.is-ok {                /* typed value agrees with the machine */
+  color: #12633a;
+  background: rgba(29, 158, 87, 0.14);
+  border: 1px solid rgba(29, 158, 87, 0.55);
+}
+.pcl-sugtag.is-work {              /* Tesseract is on it */
+  color: var(--pcl-muted);
+  border: 1px dashed var(--pcl-line);
+  animation: pcl-sug-pulse 1.1s ease-in-out infinite;
+}
+.pcl-sugtag.is-warn {              /* OCR lib blocked / crashed — type it */
+  color: var(--pcl-status);
+  border: 1px dashed var(--pcl-status);
+}
+@keyframes pcl-sug-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.pcl-sugchip {                     /* tap to adopt the machine-read number */
+  cursor: pointer;
+  color: #ffffff;
+  background: var(--pcl-primary);
+  border: 2px solid var(--pcl-primary-deep);
+  box-shadow: 3px 3px 0 rgba(20, 35, 95, 0.3);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.pcl-sugchip:hover { background: var(--pcl-primary-hi); }
+.pcl-sugchip:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 rgba(20, 35, 95, 0.3);
+}
+html[data-pcl-theme="dark"] .pcl-sugtag.is-ok { color: #4ade9b; }
+html[data-pcl-theme="dark"] .pcl-sugtag.is-warn { color: #ffbf47; }
+html[data-pcl-theme="dark"] .pcl-sugchip { box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45); }
 .pcl-field.is-error .pcl-input {
   border-color: var(--pcl-error);
   box-shadow: 4px 4px 0 var(--pcl-error-soft), 0 0 12px var(--pcl-error-soft);

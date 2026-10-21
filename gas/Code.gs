@@ -399,7 +399,11 @@ function doPost(e) {
       row['Screenshot File'] = shot ? shot.name
         : 'REJECTED — over ' + MAX_FILE_MB + ' MB cap';
       row['Screenshot Link'] = shot ? shot.url : '';
-      row['OCR Count'] = '';               // filled by the OCR pass
+      // OCR Count: machine-read of the screenshot. The form's client-side
+      // Tesseract pass fills it at ingest; the console's SCAN button can
+      // re-read it server-side (Drive OCR) whenever the reviewer wants a
+      // second opinion — a SCAN always overwrites the ingested value.
+      row['OCR Count'] = numOrBlank_(b.p.ocrCount);
       row['Cross-Check'] = CHECK_PENDING;  // PENDING → MATCH / MISMATCH / BOOST?
       row['Verified Count'] = '';          // filled after cross-verification
       row['Verified Points'] = '';         // final leaderboard points

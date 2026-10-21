@@ -20,5 +20,11 @@ window.PCL_CONFIG = {
   maxFileMB: 5,
 
   // Accepted upload types for the analytics screenshot input.
-  fileTypes: "image/png, image/jpeg, image/webp"
+  fileTypes: "image/png, image/jpeg, image/webp",
+
+  // YouTube Data API v3 key (public, unrestricted — same key the GAS sync
+  // leg uses). Lets the form read the OFFICIAL view count the moment a
+  // YouTube link lands, so YouTube posts need nothing typed at all.
+  // Leave "" to disable the client-side auto-read.
+  ytApiKey: "AIzaSyChPgXr6U4MICfIPtdobUFTQHp_uS9veog"
 };

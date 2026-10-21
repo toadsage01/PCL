@@ -254,6 +254,38 @@ deadline (with owner) · D) post-deadline / continuous ops. If an item has a
 
 ---
 
+## A3 · DONE — OCR + YouTube auto-read (23 Oct morning)
+
+The form now **reads the numbers itself** so participants don't have to:
+
+- **YouTube auto-read (client)**: the moment a `yt_` link lands, the form
+  calls the YouTube Data API v3 (public league key, `gas-endpoint.js →
+  ytApiKey`) and auto-fills the official view count with a green
+  **AUTO · YOUTUBE** tag. A YouTube post needs nothing typed and nothing
+  screenshotted. The key was health-tested against `videos.list` /
+  `channels.list` (HTTP 200, live counts) — see `scripts/yt_api_test.sh`.
+- **OCR on every screenshot (client)**: attaching an analytics screenshot
+  lazy-loads **Tesseract.js v5** from CDN, downscales to ≤2000px and reads
+  the text. Number extraction understands the three real layouts — inline
+  ("12,345 views"), label-above-number ("Accounts reached ⏎ 9K"), and
+  number-above-label (IG/Studio hero "8,741 ⏎ Plays") — plus K/M suffixes
+  and dot-thousands, with guards against caption bleed ("7-day window").
+  Solid reads auto-fill under a green **AUTO · OCR** tag; uncertain reads
+  show a tap-to-use **"OCR READS x — USE"** chip; a human edit always wins
+  (the tag flips to ✓ MATCHES or a USE chip, never overwrites).
+- **Ledger integration**: the machine read travels in the payload
+  (`postDetails[].ocrCount`) and lands in the **OCR Count** column at
+  ingest — the console sees a machine-read on every row before touching
+  SCAN; the reviewer's SCAN (Drive OCR server-side) still overwrites.
+- Tests: `scripts/test_ocr_parse.js` (34 assertions, real Tesseract output
+  shapes), doPost harness 16/16b (ingest + garbage-tolerant), browser E2E
+  (`scripts/ocr_e2e.sh`): YT 445,681,251 auto-filled live · IG screenshot
+  → 8,741 · LI screenshot → 1,204 · USE chip round-trip — zero console
+  errors (`/download/ocr-e2e-*.png`).
+
+
+---
+
 ## C · OPEN — before the deadline (owner + cost)
 
 | # | Item | Owner | Blocking? | Notes |
