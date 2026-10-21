@@ -94,8 +94,8 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
 .pcl-feedpanel { padding: 6px 14px 10px; }
 .pcl-feedrow {
   display: grid;
-  grid-template-columns: 56px minmax(150px, 1.15fr) minmax(210px, 1.7fr)
-                         96px 96px 118px 138px;
+  grid-template-columns: minmax(150px, 1.1fr) minmax(250px, 1.9fr)
+                         96px 96px 116px 136px;
   gap: 10px; align-items: center;
   padding: 11px 2px 12px;
   border-bottom: 2px dashed var(--pcl-line-soft);
@@ -108,11 +108,11 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
   font-family: var(--pcl-font-title); font-weight: 700; font-size: 9px;
   letter-spacing: 1.2px; color: var(--pcl-muted); text-transform: uppercase;
 }
+.pcl-feedrow:not(.pcl-feedhead):hover { background: var(--pcl-surface-2); }
 
-/* shot thumb */
-.fr-shot { width: 56px; }
+/* shot thumb — sits INSIDE the post cell, right next to the media url */
 .pcl-thumbbox {
-  width: 52px; height: 44px; display: block; padding: 0; cursor: pointer;
+  width: 52px; height: 44px; flex: 0 0 auto; display: block; padding: 0; cursor: pointer;
   background: var(--pcl-input-bg);
   border: 3px solid var(--pcl-input-border);
   overflow: hidden; position: relative;
@@ -133,12 +133,17 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
 /* who cell */
 .fr-who { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .pcl-fr-whotext { min-width: 0; flex: 1; }
+/* round pfp — everywhere, no exceptions */
 .pcl-avatar {
   width: 26px; height: 26px; flex: 0 0 auto;
-  object-fit: cover;
+  object-fit: cover; border-radius: 50%;
   border: 2px solid var(--pcl-input-border);
   box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
   background: var(--pcl-surface-2);
+}
+.pcl-avatarbtn {
+  padding: 0; border: 0; background: none; cursor: zoom-in;
+  line-height: 0; flex: 0 0 auto; border-radius: 50%;
 }
 .pcl-fr-name {
   font-family: var(--pcl-font-title); font-weight: 700; font-size: 12px;
@@ -171,8 +176,9 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
   border-color: var(--pcl-primary-deep);
 }
 
-/* post cell */
-.fr-post { min-width: 0; }
+/* post cell — evidence thumb + media link on one line */
+.fr-post { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.pcl-fr-posttext { min-width: 0; flex: 1; }
 .pcl-fr-link {
   display: block; font-size: 14.5px; color: var(--pcl-text);
   text-decoration: none; line-height: 1.4;
@@ -198,10 +204,6 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
   color: var(--pcl-muted); font-weight: 400; margin-bottom: 2px;
 }
 .fr-ocr { color: var(--pcl-muted); }
-.pcl-fr-mediaid {
-  display: block; font-size: 9.5px; color: var(--pcl-muted);
-  text-align: right; margin-top: 3px; font-family: var(--pcl-font-body);
-}
 
 /* verified input + status select live inside the row */
 .fr-verified .pcl-input, .fr-status .pcl-select {
@@ -238,6 +240,16 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
   white-space: nowrap;
 }
 .pcl-dirty-actions { display: flex; gap: 8px; }
+
+/* the footer is a SOLID island: opaque background (the deepest body gradient
+   tone — seamless) + its own lane. While the capsule is open the body also
+   grows extra space below the footer, so the two can never overlap. */
+footer.pcl-footer {
+  background: var(--pcl-bg-3);
+  border-top: 3px solid var(--pcl-line);
+  position: relative; z-index: 1;
+}
+body.pcl-dirty-open { padding-bottom: 96px; }
 
 /* ---- AUDIT — snapshot timelines ---------------------------------------------------- */
 .pcl-auditcard {
@@ -436,15 +448,14 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
 @media (max-width: 760px) {
   .pcl-feedhead { display: none; }
   .pcl-feedrow {
-    grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
-      "shot who    who"
-      "shot post   post"
-      "num  num    num"
-      "ver  status status";
+      "who    who"
+      "post   post"
+      "num    num"
+      "ver    status";
     gap: 8px 10px; padding: 12px 2px;
   }
-  .fr-shot { grid-area: shot; width: 56px; }
   .fr-who { grid-area: who; }
   .fr-post { grid-area: post; }
   .fr-claimed, .fr-ocr {
@@ -454,7 +465,6 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
   .fr-claimed small, .fr-ocr small { display: inline; margin: 0 4px 0 0; }
   .fr-claimed { padding-right: 0; }
   .fr-ocr { display: none; }
-  .pcl-fr-mediaid { display: none; }
   .fr-verified { grid-area: ver; }
   .fr-status { grid-area: status; }
   .pcl-adminbar-right { margin-left: 0; width: 100%; }
@@ -560,4 +570,201 @@ html:not([data-pcl-font="og"]) .pcl-gate-note code { font-size: 12px; }
   html:not([data-pcl-font="og"]) .pcl-dirty-text { font-size: 11px; }
   .pcl-quickchips { gap: 6px; }
   .pcl-qchip { padding: 6px 8px 5px; font-size: 10px; }
+}
+
+/* ============================================================================
+   PLAYERS TAB — all-participants list view (Season 2 round 3)
+   ---------------------------------------------------------------------------- */
+/* filter bar: search + the two sort filters (points group + A–Z) */
+.pcl-playerbar {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.pcl-playerbar .pcl-fsearch { flex: 1 1 240px; width: auto; }
+.pcl-sortgroup {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 4px; border: 2px dashed transparent; border-radius: 0;
+}
+.pcl-sortgroup.is-active {
+  border-color: var(--pcl-line-soft);
+  background: var(--pcl-surface-2);
+}
+.pcl-sortbtn {
+  font-family: var(--pcl-font-title); font-weight: 700; font-size: 10px;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--pcl-text); background: var(--pcl-surface-2);
+  border: 2px solid var(--pcl-line); box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 7px 10px 6px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: background .12s steps(2), border-color .12s steps(2),
+              color .12s steps(2), box-shadow .12s steps(2);
+}
+.pcl-sortbtn:hover { border-color: var(--pcl-primary); color: var(--pcl-primary); }
+.pcl-sortbtn:active { transform: translate(2px, 2px); box-shadow: none; }
+.pcl-sortbtn.is-active {
+  color: #fff;
+  background: linear-gradient(90deg, var(--pcl-primary), var(--pcl-primary-hi));
+  border-color: var(--pcl-primary-deep);
+}
+.pcl-sortarrs { display: inline-flex; align-items: center; gap: 4px; }
+/* both arrows ALWAYS visible — the lit one shows which side is presenting */
+.pcl-arr { width: 0; height: 0; border-left: 4px solid transparent;
+           border-right: 4px solid transparent; opacity: .35; }
+.pcl-arr--up { border-bottom: 6px solid currentColor; }
+.pcl-arr--down { border-top: 6px solid currentColor; }
+.pcl-sortbtn[data-dir="asc"] .pcl-arr--up,
+.pcl-sortbtn[data-dir="desc"] .pcl-arr--down {
+  opacity: 1; filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.9));
+}
+.pcl-subchip {
+  font-family: var(--pcl-font-title); font-weight: 700; font-size: 9px;
+  letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--pcl-muted); background: var(--pcl-surface);
+  border: 2px solid var(--pcl-line-soft);
+  padding: 5px 8px 4px; cursor: pointer;
+  transition: border-color .12s steps(2), color .12s steps(2);
+}
+.pcl-subchip:hover { border-color: var(--pcl-primary); color: var(--pcl-primary); }
+.pcl-subchip.is-active {
+  color: var(--pcl-primary); border-color: var(--pcl-primary);
+  background: var(--pcl-surface);
+  box-shadow: inset 0 -3px 0 var(--pcl-primary);
+}
+
+/* participant card */
+.pcl-plist { display: block; }
+.pcl-pcard {
+  display: grid; align-items: center; gap: 8px 14px;
+  grid-template-columns: 26px 56px minmax(150px, 1.25fr) minmax(0, 1.6fr) auto;
+  grid-template-areas: "rank av id stats act";
+  padding: 13px 2px 14px;
+  border-bottom: 2px dashed var(--pcl-line-soft);
+}
+.pcl-pcard:last-child { border-bottom: none; }
+.pcl-prank {
+  grid-area: rank; font-family: var(--pcl-font-title); font-weight: 700;
+  font-size: 10px; color: var(--pcl-muted); text-align: center;
+}
+.pcl-pavatarbtn {
+  grid-area: av; padding: 0; border: 0; background: none;
+  cursor: zoom-in; line-height: 0; border-radius: 50%;
+}
+.pcl-pavatar {
+  width: 48px; height: 48px; display: block; object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  background: var(--pcl-surface-2);
+}
+.pcl-pavatar--letter {
+  display: grid; place-items: center; cursor: default;
+  font-family: var(--pcl-font-display); font-size: 16px;
+  color: var(--pcl-primary);
+}
+.pcl-pid { grid-area: id; min-width: 0; }
+.pcl-pname {
+  font-family: var(--pcl-font-title); font-weight: 700; font-size: 13px;
+  letter-spacing: .3px; margin: 0 0 3px;
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+}
+.pcl-pnametext {
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pcl-pname .pcl-vbadge--sm { width: 15px; height: 15px; flex: 0 0 auto; }
+.pcl-psub {
+  font-size: 12.5px; color: var(--pcl-muted); margin: 0; line-height: 1.5;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pcl-pmix b { color: var(--pcl-text); }
+.pcl-pstats {
+  grid-area: stats; display: flex; gap: 4px 18px; flex-wrap: wrap;
+  justify-content: flex-end; align-items: baseline;
+}
+.pcl-pstat { text-align: right; min-width: 56px; }
+.pcl-pstat small {
+  display: block; font-family: var(--pcl-font-title); font-size: 8px;
+  letter-spacing: 1px; color: var(--pcl-muted); text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.pcl-pstat b {
+  font-family: var(--pcl-font-display); font-size: 14.5px;
+  color: var(--pcl-text); font-variant-numeric: tabular-nums;
+  text-shadow: 1px 1px 0 var(--pcl-hard);
+}
+.pcl-pstat--lead b { color: var(--pcl-primary); }
+.pcl-pact {
+  grid-area: act; display: flex; flex-direction: column;
+  align-items: flex-end; gap: 7px; min-width: 0;
+}
+.pcl-plink {
+  font-size: 12.5px; color: var(--pcl-cyan); text-decoration: none;
+  max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: block;
+}
+html[data-pcl-theme="light"] .pcl-plink { color: #0b7fa8; }
+.pcl-plink b { font-family: var(--pcl-font-title); font-size: 9.5px; letter-spacing: .5px; }
+.pcl-plink:hover { color: var(--pcl-primary); }
+.pcl-plink.is-none { color: var(--pcl-muted); cursor: default; }
+
+@media (max-width: 1100px) {
+  .pcl-pcard {
+    grid-template-columns: 26px 56px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rank av id act"
+      "rank av stats stats";
+  }
+  .pcl-pstats { justify-content: flex-start; }
+  .pcl-pact { align-items: flex-end; }
+}
+@media (max-width: 700px) {
+  .pcl-pcard {
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-areas:
+      "av  id"
+      "av  act"
+      "stats stats";
+  }
+  .pcl-prank { display: none; }
+  .pcl-pstats { justify-content: flex-start; gap: 4px 14px; }
+  .pcl-pstat { text-align: left; min-width: 72px; }
+  .pcl-pact { flex-direction: row; align-items: center; justify-content: space-between; }
+  .pcl-plink { max-width: 55%; }
+}
+
+/* ---- photo lightbox (avatars) — a lighter popup than the review modal ---- */
+.pcl-photolb-card {
+  position: relative; z-index: 2; margin: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-panel-border);
+  box-shadow: 8px 8px 0 var(--pcl-hard), 0 0 30px var(--pcl-glow-soft);
+  padding: 16px; max-width: min(440px, 92vw);
+}
+.pcl-photolb-img {
+  width: min(360px, 76vw); aspect-ratio: 1; object-fit: cover;
+  border-radius: 50%;                       /* round here too — it's a pfp */
+  border: 3px solid var(--pcl-input-border);
+  background: var(--pcl-input-bg);
+}
+.pcl-photolb-line {
+  font-family: var(--pcl-font-title); font-size: 10px; letter-spacing: 1px;
+  color: var(--pcl-muted); text-transform: uppercase; text-align: center;
+  margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pcl-photolb .pcl-lb-close { top: -14px; right: -14px; }
+
+/* ---- SF Pro readability pass for the new surfaces ---- */
+html:not([data-pcl-font="og"]) .pcl-sortbtn { font-size: 11.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-subchip { font-size: 10.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-prank { font-size: 11px; }
+html:not([data-pcl-font="og"]) .pcl-pname { font-size: 14.5px; letter-spacing: 0.2px; }
+html:not([data-pcl-font="og"]) .pcl-psub { font-size: 13px; }
+html:not([data-pcl-font="og"]) .pcl-pstat small { font-size: 9.5px; letter-spacing: 0.4px; }
+html:not([data-pcl-font="og"]) .pcl-pstat b { font-size: 16px; }
+html:not([data-pcl-font="og"]) .pcl-plink { font-size: 13.5px; }
+html:not([data-pcl-font="og"]) .pcl-plink b { font-size: 10.5px; }
+html:not([data-pcl-font="og"]) .pcl-pavatar--letter { font-size: 17px; }
+html:not([data-pcl-font="og"]) .pcl-photolb-line { font-size: 11.5px; letter-spacing: 0.4px; }
+
+@media (max-width: 760px) {
+  .pcl-playerbar .pcl-fsearch { flex-basis: 100%; }
 }

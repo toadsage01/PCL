@@ -187,6 +187,12 @@
     '<circle cx="16.8" cy="9.4" r="2.5" opacity="0.72"/>' +
     '<path d="M15.5 13.6c2.9-.2 5.4 1.6 6 4.8h-5c-.15-1.9-.9-3.6-2-4.8z" ' +
     'opacity="0.72"/></svg>';
+  /* magnifier — the EXPAND affordance for any picture on file (pfp tile
+     corner + attached-shot corner). Click = zoom, not replace. */
+  var MAG_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round">' +
+    '<circle cx="6.8" cy="6.8" r="4.2"/>' +
+    '<line x1="10.2" y1="10.2" x2="14" y2="14"/></svg>';
   /* admin-verified tick — insta-style circle in PCL colours (orange disc,
      white tick, thin inner ring). ONLY players the Control Room verified
      get it; unverified players get nothing at all. An inline SVG, not an
@@ -622,8 +628,15 @@
         esc(p.id) + '" title="Attach analytics screenshot" ' +
         'aria-label="Attach analytics screenshot">' + FOLDER_SVG +
         '<span class="pcl-shotbtn-label">ATTACH SCREENSHOT</span></button>';
+    /* attached shots get their own EXPAND chip — the square stays
+       replace-on-click, the corner magnifier zooms without conflict */
+    var expand = p.shot
+      ? '<button type="button" class="pcl-expand" data-act="expand" data-id="' +
+        esc(p.id) + '" title="Expand screenshot" aria-label="Expand screenshot">' +
+        MAG_SVG + "</button>"
+      : "";
     var cellShot = '<div class="pcl-cell pcl-cell--shot' +
-      (p.errShotMsg ? " is-error" : "") + '">' + btn +
+      (p.errShotMsg ? " is-error" : "") + '">' + btn + expand +
       '<p class="pcl-err">' + esc(p.errShotMsg || "Required") + "</p></div>";
     var collab = '<div class="pcl-collabrow">' +
       '<button type="button" class="pcl-collab-btn' + (p.collab ? " is-on" : "") +
@@ -729,6 +742,8 @@
     var id = btn.getAttribute("data-id");
     if (act === "photo") {
       Lightbox.openFor(id);
+    } else if (act === "expand") {
+      Lightbox.openFor(id);
     } else if (act === "shot") {
       pendingShotFor = id;
       shotInput.click();
@@ -796,6 +811,7 @@
     var line = $("pclLbLine");
     var strip = $("pclLbStrip");
     var idx = -1;
+    var single = false;          // one-image mode (pfp expand) — no strip/arrows
     var lastFocus = null;
 
     function shots() {
@@ -835,17 +851,37 @@
       list.forEach(function (p, i) { if (p.id === id) at = i; });
       if (at === -1) return;
       idx = at;
+      single = false;
+      root.classList.remove("is-single");
       lastFocus = document.activeElement;
       root.hidden = false;
       render();
       root.querySelector(".pcl-lb-close").focus();
     }
+    /* single-image mode — used by the pfp expand chip: same floating window,
+       but no thumbnail strip and no prev/next (nothing to step through) */
+    function openSingle(src, alt) {
+      if (!src) return;
+      single = true;
+      idx = -1;
+      root.classList.add("is-single");
+      lastFocus = document.activeElement;
+      img.src = src;
+      img.alt = alt || "Image";
+      line.textContent = "";
+      strip.innerHTML = "";
+      root.hidden = false;
+      root.querySelector(".pcl-lb-close").focus();
+    }
     function close() {
       root.hidden = true;
       idx = -1;
+      single = false;
+      root.classList.remove("is-single");
       if (lastFocus && lastFocus.focus) lastFocus.focus();
     }
     function step(d) {
+      if (single) return;
       var list = shots();
       if (!list.length) return;
       idx = (idx + d + list.length) % list.length;   // wrap both ways
@@ -864,11 +900,11 @@
     document.addEventListener("keydown", function (ev) {
       if (root.hidden) return;
       if (ev.key === "Escape") close();
-      else if (ev.key === "ArrowLeft") step(-1);
-      else if (ev.key === "ArrowRight") step(1);
+      else if (!single && ev.key === "ArrowLeft") step(-1);
+      else if (!single && ev.key === "ArrowRight") step(1);
     });
 
-    return { openFor: openFor, close: close };
+    return { openFor: openFor, openSingle: openSingle, close: close };
   })();
 
   /* ============================================================================
@@ -1140,6 +1176,9 @@
     }
     photoFolderIcon.hidden = !!src;
     photoBtn.classList.toggle("is-set", !!src);
+    /* the corner magnifier only exists while there is something to zoom */
+    var px = $("photoExpand");
+    if (px) px.hidden = !src;
     var badge = $("photoVerifyBadge");
     if (badge) badge.hidden = !(photoShown && photoState.verified);
     if (!src) {
@@ -1208,6 +1247,15 @@
   }
 
   photoBtn.addEventListener("click", function () { photoInput.click(); });
+  /* pfp expand — the tile itself stays upload/replace; this corner chip zooms */
+  var photoExpandBtn = $("photoExpand");
+  if (photoExpandBtn) {
+    photoExpandBtn.addEventListener("click", function () {
+      var src = photoState.file ? photoState.file.content
+                : (photoState.existing ? photoState.existing.thumb : "");
+      if (src) Lightbox.openSingle(src, photoThumbImg.alt || "Player photo");
+    });
+  }
   photoInput.addEventListener("change", function () {
     var file = photoInput.files && photoInput.files[0];
     photoInput.value = "";             // allow re-picking the same file

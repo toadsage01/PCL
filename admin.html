@@ -101,12 +101,14 @@
         <div class="pcl-viewtoggle pcl-tabs" id="tabs" role="tablist">
           <button type="button" class="pcl-vbtn is-active" data-tab="feed"
                   role="tab">FEED</button>
-          <button type="button" class="pcl-vbtn" data-tab="audit"
-                  role="tab">AUDIT</button>
+          <button type="button" class="pcl-vbtn" data-tab="players"
+                  role="tab">PLAYERS</button>
           <button type="button" class="pcl-vbtn" data-tab="reports"
                   role="tab">REPORTS</button>
+          <button type="button" class="pcl-vbtn" data-tab="audit"
+                  role="tab">AUDIT</button>
           <button type="button" class="pcl-vbtn" data-tab="log"
-                  role="tab">LOG</button>
+                  role="tab">ADMIN LOG</button>
         </div>
         <div class="pcl-adminbar-right">
           <span class="pcl-sync" id="syncInfo">&hellip;</span>
@@ -132,9 +134,8 @@
 
         <div class="pcl-panel pcl-feedpanel">
           <div class="pcl-feedrow pcl-feedhead" aria-hidden="true">
-            <span class="fh-shot">SHOT</span>
             <span class="fh-who">PLAYER</span>
-            <span class="fh-post">POST</span>
+            <span class="fh-post">POST + SHOT</span>
             <span class="fh-claimed">CLAIMED</span>
             <span class="fh-ocr">OCR</span>
             <span class="fh-verified">VERIFIED</span>
@@ -145,7 +146,44 @@
         </div>
       </section>
 
-      <!-- ============ TAB 2 · BOOST AUDIT =============================== -->
+      <!-- ============ TAB 2 · ALL PARTICIPANTS =========================== -->
+      <section id="tabPlayers" class="pcl-tab" hidden>
+        <div class="pcl-filterbar pcl-playerbar">
+          <input class="pcl-input pcl-fsearch" id="pSearch" type="search"
+                 placeholder="Search participant or manager&hellip;"
+                 aria-label="Search participants" />
+          <div class="pcl-sortgroup" id="pointsGroup" role="group"
+               aria-label="Sort participants by points">
+            <button type="button" class="pcl-sortbtn" id="sortPoints"
+                    aria-pressed="true" title="Sort by points — click again to flip high / low">
+              <span class="pcl-sortlabel">POINTS</span>
+              <span class="pcl-sortarrs" aria-hidden="true">
+                <span class="pcl-arr pcl-arr--up"></span><span class="pcl-arr pcl-arr--down"></span>
+              </span>
+            </button>
+            <button type="button" class="pcl-subchip" data-metric="points"
+                    title="Rank by league points">POINTS</button>
+            <button type="button" class="pcl-subchip" data-metric="views"
+                    title="Rank by total views across their posts">VIEWS</button>
+            <button type="button" class="pcl-subchip" data-metric="apps"
+                    title="Rank by number of applications (submissions)">APPS</button>
+          </div>
+          <button type="button" class="pcl-sortbtn" id="sortAlpha"
+                  aria-pressed="false" title="Sort alphabetically — click again to flip A–Z / Z–A">
+            <span class="pcl-sortlabel">A&ndash;Z</span>
+            <span class="pcl-sortarrs" aria-hidden="true">
+              <span class="pcl-arr pcl-arr--up"></span><span class="pcl-arr pcl-arr--down"></span>
+            </span>
+          </button>
+        </div>
+        <div class="pcl-panel pcl-feedpanel">
+          <div id="playersList" class="pcl-plist"></div>
+          <p class="pcl-empty" id="playersEmpty" hidden>No participants yet —
+            the roster fills in as entries land.</p>
+        </div>
+      </section>
+
+      <!-- ============ TAB 4 · BOOST AUDIT =============================== -->
       <section id="tabAudit" class="pcl-tab" hidden>
         <div class="pcl-panel">
           <h2 class="pcl-panel-title">Boost Audit</h2>
@@ -160,10 +198,10 @@
         </div>
       </section>
 
-      <!-- ============ TAB 4 · AUDIT LOG ================================== -->
+      <!-- ============ TAB 5 · ADMIN LOG ================================== -->
       <section id="tabLog" class="pcl-tab" hidden>
         <div class="pcl-panel">
-          <h2 class="pcl-panel-title">Audit Catalogue</h2>
+          <h2 class="pcl-panel-title">Admin Log</h2>
           <p class="pcl-hint">Who entered the Control Room and exactly what they
             changed — every gate unlock and every saved review write lands here
             automatically with the operator's name and old → new values.</p>
@@ -187,12 +225,6 @@
           </div>
         </div>
 
-        <div class="pcl-panel">
-          <h2 class="pcl-panel-title">Players</h2>
-          <div class="pcl-scrollx">
-            <table class="pcl-table" id="playerTable"></table>
-          </div>
-        </div>
       </section>
     </div>
 

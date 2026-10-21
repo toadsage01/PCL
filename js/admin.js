@@ -212,6 +212,16 @@
     return "data:image/svg+xml," + encodeURIComponent(svg);
   }
 
+  function mockAvatar(letter, tone) {
+    // round-pfp stand-in for mock mode — proves the circular path offline
+    var bg = ["#ed3b00", "#33409f", "#1d9e57"][tone % 3];
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96">' +
+      '<rect width="96" height="96" fill="' + bg + '"/>' +
+      '<text x="48" y="62" font-family="monospace" font-size="42" fill="#fff" ' +
+      'text-anchor="middle">' + letter + "</text></svg>";
+    return "data:image/svg+xml," + encodeURIComponent(svg);
+  }
+
   function mockRows() {
     var t = Date.now(), H = 3600000, D = 24 * H;
     function row(o) { return o; }
@@ -280,6 +290,11 @@
       r.fileId = "1MockFileId" + i + "xxxxxxxxxx";
       r.thumb = mockSvg(i + 3);
       r.projected = Math.ceil(Number(r.claimed) * Number(r.mult));
+      // mock pfps — same photoData path the real ledger gets from Drive
+      var tone = { "priya sharma": 0, "rohit kharal": 1, "arjun verma": 2 }[String(r.name || "").toLowerCase()];
+      if (tone !== undefined) {
+        r.photoData = mockAvatar(r.name.charAt(0).toUpperCase(), tone);
+      }
       // collab-confirmed rows split their verified points 50:50 (server rule)
       r.verifiedPoints = r.verified !== ""
         ? Math.ceil(Number(r.verified) * Number(r.mult) /
@@ -463,6 +478,11 @@
     log: [],             // audit catalogue (newest first)
     pending: {},          // sheet row → {ocrCount?, crossCheck?, verifiedCount?}
     filters: { q: "", week: "all", format: "all", status: "all", type: "all" },
+    pq: "",               // participants tab search
+    /* participants list ordering — two filters, each flips direction on
+       re-click: POINTS starts highest-first, A–Z starts A→Z. The points
+       filter carries toggleable sub-metrics (points / views / apps). */
+    psort: { mode: "points", metric: "points", pdir: "desc", adir: "asc" },
     tab: "feed"
   };
 
@@ -623,12 +643,61 @@
   function renderAll() {
     buildFilterOptions();
     renderFeed();
+    renderPlayers();
     renderAudit();
     renderReports();
     renderLog();
     syncDirtyBar();
     setSync();
   }
+
+  /* ============================================================================
+     PHOTO LIGHTBOX — every picture is expandable. Admin shots already open
+     the review modal; avatars (round pfps) open this simple viewer instead,
+     so not everything lives in the same popup design.
+     ========================================================================== */
+  var PhotoLb = (function () {
+    var root = null;
+    function ensure() {
+      if (root) return root;
+      root = document.createElement("div");
+      root.className = "pcl-lightbox pcl-photolb";
+      root.hidden = true;
+      root.setAttribute("role", "dialog");
+      root.setAttribute("aria-modal", "true");
+      root.setAttribute("aria-label", "Player photo");
+      root.innerHTML = '<div class="pcl-lb-back" data-act="close"></div>' +
+        '<figure class="pcl-photolb-card">' +
+          '<img class="pcl-photolb-img" alt="Player photo" />' +
+          '<figcaption class="pcl-photolb-line"></figcaption>' +
+          '<button type="button" class="pcl-lb-close" data-act="close" aria-label="Close">' +
+            '<span class="pcl-px-x" aria-hidden="true"></span></button>' +
+        "</figure>";
+      document.body.appendChild(root);
+      root.addEventListener("click", function (ev) {
+        if (ev.target.closest('[data-act="close"]')) close();
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (root && !root.hidden && ev.key === "Escape") close();
+      });
+      return root;
+    }
+    function open(src, name) {
+      if (!src) return;
+      var r = ensure();
+      r.querySelector(".pcl-photolb-img").src = src;
+      r.querySelector(".pcl-photolb-line").textContent =
+        name ? "Player photo · " + name : "Player photo";
+      r.hidden = false;
+      document.body.style.overflow = "hidden";
+    }
+    function close() {
+      if (!root) return;
+      root.hidden = true;
+      document.body.style.overflow = "";
+    }
+    return { open: open, close: close };
+  })();
 
   /* ============================================================================
      FILTERS + FEED
@@ -689,25 +758,32 @@
   function feedRowHtml(r, idx) {
     var d = displayOf(r);
     var dirty = !!state.pending[r.row];
+    /* shot thumb lives NEXT TO the media url (same block) — reviewer sees
+       the claim and its evidence side by side; click opens the review */
     var thumb = r.thumb
       ? '<button type="button" class="pcl-thumbbox" data-act="open" data-i="' + idx +
         '" title="Open review"><img src="' + esc(r.thumb) + '" alt="Analytics screenshot" loading="lazy" /></button>'
       : '<button type="button" class="pcl-thumbbox is-missing" data-act="open" data-i="' + idx +
         '" title="Open review">NO SHOT</button>';
-    var avatar = r.photoId
-      ? '<img class="pcl-avatar" src="https://drive.google.com/thumbnail?id=' +
-        encodeURIComponent(r.photoId) + '&sz=w80" alt="" loading="lazy" />'
+    /* round pfp everywhere + click-to-expand (photoData = direct src,
+       photoId = Drive file → thumbnail urls) */
+    var avSrc = r.photoData || (r.photoId
+      ? "https://drive.google.com/thumbnail?id=" + encodeURIComponent(r.photoId) + "&sz=w80" : "");
+    var avBig = r.photoData || (r.photoId
+      ? "https://drive.google.com/thumbnail?id=" + encodeURIComponent(r.photoId) + "&sz=w800" : "");
+    var avatar = avSrc
+      ? '<button type="button" class="pcl-avatarbtn" data-photo="' + esc(avBig) +
+        '" data-name="' + esc(r.name) + '" title="Expand photo">' +
+        '<img class="pcl-avatar" src="' + esc(avSrc) + '" alt="" loading="lazy" /></button>'
       : "";
     var ident = pmapOf(r.name);
     var tick = ident && ident.verified ? TICK_SVG : "";
     var tags = '<span class="pcl-fr-tags">' +
-      (r.type === "UPDATE" ? '<span class="pcl-tag pcl-tag--upd">UPD·S' + esc(r.snap) + "</span>"
-                           : '<span class="pcl-tag pcl-tag--new">NEW</span>') +
+      (r.type === "UPDATE" ? "" : '<span class="pcl-tag pcl-tag--new">NEW</span>') +
       collabBadgeHtml(r) +
       (dirty ? '<span class="pcl-tag pcl-tag--dirty">STAGED</span>' : "") +
       "</span>";
     return '<div class="pcl-feedrow' + (dirty ? " is-dirty" : "") + '" data-row="' + r.row + '">' +
-      '<span class="fr-shot">' + thumb + "</span>" +
       '<span class="fr-who">' + avatar +
         '<span class="pcl-fr-whotext"><p class="pcl-fr-name"><span class="pcl-fr-nametext">' +
         esc(r.name) + tick + "</span>" + tags + "</p>" +
@@ -715,17 +791,18 @@
         (ident && ident.designation ? ' · ' + esc(ident.designation) : "") +
         (r.collabWith ? ' · <b>⇄ ' + esc(r.collabWith) + "</b>" : "") + "</p></span>" +
       "</span>" +
-      '<span class="fr-post">' +
-        '<a class="pcl-fr-link" href="' + esc(r.url) + '" target="_blank" rel="noopener">' +
-          esc(shortLink(r.url)) + "</a>" +
-        '<span class="pcl-fr-fmt"><b>' + esc(fmtShort(r.format)) + "</b> " + esc(multOf(r.mult)) +
-          ' <span class="pcl-fr-id">· ' + esc(mediaTail(r.mediaId)) + "</span>" +
-          (r.weekNum ? ' <span class="pcl-fr-id">· W' + r.weekNum + "</span>" : "") +
+      '<span class="fr-post">' + thumb +
+        '<span class="pcl-fr-posttext">' +
+          '<a class="pcl-fr-link" href="' + esc(r.url) + '" target="_blank" rel="noopener">' +
+            esc(shortLink(r.url)) + "</a>" +
+          '<span class="pcl-fr-fmt"><b>' + esc(fmtShort(r.format)) + "</b> " + esc(multOf(r.mult)) +
+            ' <span class="pcl-fr-id">· ' + esc(mediaTail(r.mediaId)) + "</span>" +
+            (r.weekNum ? ' <span class="pcl-fr-id">· W' + r.weekNum + "</span>" : "") +
+          "</span>" +
         "</span>" +
       "</span>" +
       '<span class="fr-claimed"><small>CLAIMED</small>' + fmt(r.claimed) + "</span>" +
-      '<span class="fr-ocr"><small>OCR</small>' + (d.ocr === "" ? "–" : fmt(d.ocr)) +
-        '<span class="pcl-fr-mediaid">' + esc(r.mediaId || "") + "</span></span>" +
+      '<span class="fr-ocr"><small>OCR</small>' + (d.ocr === "" ? "–" : fmt(d.ocr)) + "</span>" +
       '<span class="fr-verified"><input class="pcl-input" type="text" inputmode="numeric"' +
         ' data-edit="verified" data-row="' + r.row + '" value="' + esc(d.verified) +
         '" placeholder="–" aria-label="Verified count for row ' + r.row + '" /></span>' +
@@ -799,7 +876,7 @@
     var tags = el.querySelector(".pcl-fr-tags");
     if (tags) {
       var html = r.type === "UPDATE"
-        ? '<span class="pcl-tag pcl-tag--upd">UPD·S' + esc(r.snap) + "</span>"
+        ? ""
         : '<span class="pcl-tag pcl-tag--new">NEW</span>';
       html += collabBadgeHtml(r);
       if (dirty) html += '<span class="pcl-tag pcl-tag--dirty">STAGED</span>';
@@ -830,6 +907,11 @@
     if (r) stage(r, { crossCheck: sel.value });
   });
   $("feedRows").addEventListener("click", function (ev) {
+    var av = ev.target.closest("[data-photo]");
+    if (av) {
+      PhotoLb.open(av.getAttribute("data-photo"), av.getAttribute("data-name"));
+      return;
+    }
     var btn = ev.target.closest('[data-act="open"]');
     if (!btn) return;
     openReview(Number(btn.getAttribute("data-i")));
@@ -867,6 +949,10 @@
     var n = pendingCount();
     $("dirtyBar").hidden = n === 0;
     $("dirtyText").textContent = n + " UNSAVED " + (n === 1 ? "ROW" : "ROWS");
+    /* reserve a footer-free lane for the sticky capsule — with the class on,
+       the page grows extra scroll space below the footer so the capsule can
+       never sit on top of the footer text */
+    document.body.classList.toggle("pcl-dirty-open", n > 0);
     renderAudit();  // audit cards carry staged flags too
   }
 
@@ -965,7 +1051,8 @@
     if (r.shotUrl) { link.href = r.shotUrl; link.style.display = ""; }
     else link.style.display = "none";
 
-    $("rvNum").textContent = "#" + (idx + 1) + " / " + total + " · LEDGER ROW " + r.row;
+    $("rvNum").textContent = "#" + (idx + 1) + " / " + total + " · LEDGER ROW " + r.row +
+      (r.mediaId ? " · " + r.mediaId : "");
     $("rvPlayer").textContent = r.name + " · " + (r.manager || "–");
     $("rvMeta").textContent = fmtShort(r.format) + " " + multOf(r.mult) +
       " · " + (r.type === "UPDATE" ? "UPDATE SNAPSHOT S" + r.snap : "FIRST REPORT") +
@@ -1135,6 +1222,217 @@
   });
 
   /* ============================================================================
+     PLAYERS — the ALL PARTICIPANTS list view (tab 2). Built for a
+     non-technical panellist: one card per participant, big readable numbers,
+     two filters only. Each filter flips direction on re-click — POINTS opens
+     highest-first, A–Z opens A→Z — and BOTH direction arrows stay visible
+     with the live one lit, so the active sort is never a guess. The points
+     filter carries toggleable sub-metrics: POINTS / VIEWS / APPS (views =
+     latest claimed count per unique post; apps = number of applications).
+     ========================================================================== */
+  function playerAgg() {
+    var map = {};
+    function blank(name) {
+      return { name: name || "", manager: "", apps: 0, posts: 0, uniqueMedia: 0,
+               ppts: 0, vpts: 0, views: 0, photoId: "",
+               lastTs: "", lastUrl: "", lastFormat: "", formatRatio: {} };
+    }
+    state.players.forEach(function (p) {
+      var a = map[String(p.player || "").toLowerCase()] = blank(p.player);
+      a.manager = p.manager || "";
+      a.apps = Number(p.submissions) || 0;
+      a.posts = Number(p.posts) || 0;
+      a.uniqueMedia = Number(p.uniqueMedia) || 0;
+      a.ppts = Number(p.projectedPoints) || 0;
+      a.vpts = Number(p.verifiedPoints) || 0;
+      a.formatRatio = p.formatRatio || {};
+    });
+    state.rows.forEach(function (r) {
+      var a = map[String(r.name || "").toLowerCase()];
+      if (a && r.photoData && !a.photoData) a.photoData = r.photoData;
+    });
+    /* views: sum the LATEST snapshot's claimed count per unique media —
+       plain row sums would double-count every UPDATE re-report */
+    var latestByMedia = {};
+    state.rows.forEach(function (r) {
+      var k = String(r.name || "").toLowerCase() + "|" + String(r.mediaId || r.id || r.url || "");
+      var prev = latestByMedia[k];
+      if (!prev || String(r.ts).localeCompare(String(prev.ts)) > 0) latestByMedia[k] = r;
+    });
+    Object.keys(latestByMedia).forEach(function (k) {
+      var r = latestByMedia[k];
+      var a = map[String(r.name || "").toLowerCase()];
+      if (!a) { a = map[String(r.name || "").toLowerCase()] = blank(r.name); }
+      a.views += Number(r.claimed) || 0;
+      var isNewer = !a.lastTs || String(r.ts).localeCompare(String(a.lastTs)) > 0;
+      if (isNewer) { a.lastTs = r.ts; a.lastUrl = r.url || ""; a.lastFormat = r.format || ""; }
+      if (r.photoId && (isNewer || !a.photoId)) a.photoId = r.photoId;
+    });
+    return Object.keys(map).map(function (k) { return map[k]; });
+  }
+
+  function mixShort(a) {
+    var keys = Object.keys(a.formatRatio || {});
+    if (!keys.length) return "";
+    return keys.slice(0, 2).map(function (f) {
+      return "<b>" + a.formatRatio[f] + "×</b> " + esc(fmtShort(f));
+    }).join(" · ") + (keys.length > 2 ? " +" + (keys.length - 2) : "");
+  }
+
+  function pstat(label, val, lead) {
+    return '<div class="pcl-pstat' + (lead ? " pcl-pstat--lead" : "") + '">' +
+      "<small>" + label + "</small><b>" + val + "</b></div>";
+  }
+
+  function playerCardHtml(a, idx) {
+    var ident = pmapOf(a.name);
+    var ver = !!(ident ? ident.verified : false);
+    var tick = ver ? TICK_SVG : "";
+    var desig = (ident && ident.designation) || "";
+    var rank = idx + 1;
+    var avatar = a.photoData || a.photoId
+      ? '<button type="button" class="pcl-pavatarbtn" data-photo="' +
+        esc(a.photoData || ("https://drive.google.com/thumbnail?id=" +
+          encodeURIComponent(a.photoId) + "&sz=w800")) + '" data-name="' + esc(a.name) +
+        '" title="Expand photo"><img class="pcl-pavatar" src="' +
+        esc(a.photoData || ("https://drive.google.com/thumbnail?id=" +
+          encodeURIComponent(a.photoId) + "&sz=w96")) + '" alt="" loading="lazy" /></button>'
+      : '<span class="pcl-pavatar pcl-pavatar--letter" aria-hidden="true">' +
+        esc((a.name || "?").charAt(0).toUpperCase()) + "</span>";
+    var latest = a.lastUrl
+      ? '<a class="pcl-plink" href="' + esc(a.lastUrl) + '" target="_blank" rel="noopener" title="' +
+        esc(a.lastUrl) + '">' + (a.lastFormat ? "<b>" + esc(fmtShort(a.lastFormat)) + "</b> " : "") +
+        esc(shortLink(a.lastUrl)) + " &#8599;</a>"
+      : '<span class="pcl-plink is-none">No posts yet</span>';
+    return '<div class="pcl-pcard">' +
+      '<span class="pcl-prank">' + rank + "</span>" +
+      avatar +
+      '<div class="pcl-pid">' +
+        '<p class="pcl-pname"><span class="pcl-pnametext">' + esc(a.name) + tick + "</span></p>" +
+        '<p class="pcl-psub">' +
+          (desig ? esc(desig) + " · " : "") + "mgr " + esc(a.manager || "–") +
+          (mixShort(a) ? ' · <span class="pcl-pmix">' + mixShort(a) + "</span>" : "") +
+        "</p>" +
+      "</div>" +
+      '<div class="pcl-pstats">' +
+        pstat("VERIFIED PTS", a.vpts ? fmt(a.vpts) : "–", true) +
+        pstat("PROJECTED", fmt(a.ppts)) +
+        pstat("VIEWS", fmt(a.views)) +
+        pstat("POSTS", a.uniqueMedia) +
+        pstat("APPS", a.apps) +
+      "</div>" +
+      '<div class="pcl-pact">' + latest +
+        '<button type="button" class="pcl-abtn pcl-abtn--small pcl-pvbtn' +
+          (ver ? " is-on" : "") + '" data-pv-name="' + esc(a.name) +
+          '" data-pv-to="' + (ver ? "0" : "1") + '">' +
+          (ver ? "CLEAR TICK" : "VERIFY ID") + "</button>" +
+      "</div>" +
+      "</div>";
+  }
+
+  function renderPlayers() {
+    var wrap = $("playersList");
+    if (!wrap) return;
+    var list = playerAgg();
+    var q = state.pq.toLowerCase();
+    if (q) {
+      list = list.filter(function (a) {
+        return (a.name + " " + a.manager).toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    var s = state.psort;
+    var dir = s.mode === "alpha" ? s.adir : s.pdir;
+    var mul = dir === "asc" ? 1 : -1;
+    list.sort(function (x, y) {
+      var v;
+      if (s.mode === "alpha") {
+        v = String(x.name || "").localeCompare(String(y.name || ""));
+      } else if (s.metric === "views") {
+        v = (x.views - y.views) || ((x.vpts + x.ppts) - (y.vpts + y.ppts));
+      } else if (s.metric === "apps") {
+        v = (x.apps - y.apps) || (x.vpts - y.vpts);
+      } else {
+        v = (x.vpts - y.vpts) || (x.ppts - y.ppts);   // verified leads, projected breaks ties
+      }
+      return mul * (v || String(x.name || "").localeCompare(String(y.name || "")));
+    });
+    wrap.innerHTML = list.map(playerCardHtml).join("");
+    $("playersEmpty").hidden = list.length > 0;
+    syncSortUi();
+  }
+
+  /* filter UI state — the active filter lights up and shows WHICH side
+     (high→low or low→high) it is presenting right now */
+  function syncSortUi() {
+    var s = state.psort;
+    var pb = $("sortPoints"), ab = $("sortAlpha"), pg = $("pointsGroup");
+    if (!pb || !ab) return;
+    pb.classList.toggle("is-active", s.mode === "points");
+    ab.classList.toggle("is-active", s.mode === "alpha");
+    pb.setAttribute("aria-pressed", String(s.mode === "points"));
+    ab.setAttribute("aria-pressed", String(s.mode === "alpha"));
+    pb.setAttribute("data-dir", s.mode === "points" ? s.pdir : "");
+    ab.setAttribute("data-dir", s.mode === "alpha" ? s.adir : "");
+    pg.classList.toggle("is-active", s.mode === "points");
+    Array.prototype.forEach.call(document.querySelectorAll(".pcl-subchip"), function (c) {
+      c.classList.toggle("is-active",
+        s.mode === "points" && c.getAttribute("data-metric") === s.metric);
+    });
+  }
+
+  $("sortPoints").addEventListener("click", function () {
+    var s = state.psort;
+    if (s.mode !== "points") s.mode = "points";        // back to points, keep its last direction
+    else s.pdir = s.pdir === "desc" ? "asc" : "desc";  // re-click flips high ↔ low
+    renderPlayers();
+  });
+  $("sortAlpha").addEventListener("click", function () {
+    var s = state.psort;
+    if (s.mode !== "alpha") s.mode = "alpha";          // first click opens A→Z
+    else s.adir = s.adir === "asc" ? "desc" : "asc";   // re-click flips A–Z ↔ Z–A
+    renderPlayers();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".pcl-subchip"), function (c) {
+    c.addEventListener("click", function () {
+      state.psort.metric = c.getAttribute("data-metric") || "points";
+      state.psort.mode = "points";
+      renderPlayers();
+    });
+  });
+  $("pSearch").addEventListener("input", function () {
+    state.pq = this.value.trim();
+    renderPlayers();
+  });
+  $("playersList").addEventListener("click", function (ev) {
+    var av = ev.target.closest("[data-photo]");
+    if (av) {
+      PhotoLb.open(av.getAttribute("data-photo"), av.getAttribute("data-name"));
+      return;
+    }
+    var btn = ev.target.closest("[data-pv-name]");
+    if (!btn) return;
+    var name = btn.getAttribute("data-pv-name");
+    var to = btn.getAttribute("data-pv-to") === "1";
+    btn.disabled = true;
+    btn.textContent = "SAVING…";
+    gasPost({ action: "adminPlayerVerify", adminKey: state.key,
+              operator: operatorName(), players: [{ name: name, verified: to }] })
+      .then(function (out) {
+        if (!out || out.ok === false) {
+          throw new Error((out && (out.error || (out.errors && out.errors[0] &&
+            out.errors[0].error))) || "Write failed");
+        }
+        toast(to ? "Identity verified — tick is live for " + name
+                 : "Tick cleared for " + name);
+        return loadAll(true);
+      })
+      .catch(function (err) {
+        toast(err.message || "Save failed — nothing was written", true);
+        btn.disabled = false;
+      });
+  });
+
+  /* ============================================================================
      REPORTS — season cards, weekly windows, player table
      ========================================================================== */
   function seasonTotals() {
@@ -1201,68 +1499,9 @@
       "<th>WEEK</th><th>WINDOW (IST)</th><th class='num'>POSTS</th><th class='num'>PLAYERS</th>" +
       "<th class='num'>PROJECTED</th><th class='num'>VERIFIED</th><th>LEADER</th>" +
       "</tr></thead><tbody>" + wRows + "</tbody>";
-
-    /* player table — verified points lead, projected breaks ties.
-       Identity columns: designation + the verified tick with a one-click
-       VERIFY / CLEAR action (writes adminPlayerVerify to the ledger). */
-    var players = state.players.slice().sort(function (a, b) {
-      return (b.verifiedPoints - a.verifiedPoints) ||
-             (b.projectedPoints - a.projectedPoints);
-    });
-    var pRows = players.map(function (p) {
-      var mix = Object.keys(p.formatRatio || {}).map(function (f) {
-        return "<b>" + p.formatRatio[f] + "×</b> " + esc(fmtShort(f));
-      }).join(" · ") || "–";
-      var ident = pmapOf(p.player);
-      var ver = !!(ident ? ident.verified : p.verified);
-      var desig = (ident && ident.designation) || p.designation || "";
-      return "<tr><td>" + esc(p.player) +
-        '<br /><span class="pcl-muted-cell">mgr ' + esc(p.manager || "–") + "</span></td>" +
-        '<td class="pcl-desigcell">' + (desig ? esc(desig) :
-          '<span class="pcl-muted-cell">—</span>') +
-        (ver ? TICK_SVG : "") + "</td>" +
-        '<td class="num">' + p.submissions + "</td>" +
-        '<td class="num">' + p.posts + "</td>" +
-        '<td class="num">' + p.uniqueMedia + "</td>" +
-        '<td class="pcl-fmtcell">' + mix + "</td>" +
-        '<td class="num">' + fmt(p.projectedPoints) + "</td>" +
-        '<td class="num">' + fmt(p.verifiedPoints) + "</td>" +
-        '<td><button type="button" class="pcl-abtn pcl-abtn--small pcl-pvbtn' +
-          (ver ? " is-on" : "") + '" data-pv-name="' + esc(p.player) +
-          '" data-pv-to="' + (ver ? "0" : "1") + '">' +
-          (ver ? "CLEAR TICK" : "VERIFY ID") + "</button></td></tr>";
-    }).join("");
-    $("playerTable").innerHTML = "<thead><tr>" +
-      "<th>PLAYER</th><th>DESIGNATION</th><th class='num'>SUBS</th><th class='num'>POSTS</th><th class='num'>UNIQUE</th>" +
-      "<th>FORMAT MIX</th><th class='num'>PROJECTED</th><th class='num'>VERIFIED</th><th>IDENTITY</th>" +
-      "</tr></thead><tbody>" + (pRows || '<tr><td colspan="9" class="pcl-muted-cell">No players yet.</td></tr>') + "</tbody>";
+    /* the per-player roster now lives in its own PLAYERS tab (tab 2) —
+       reports stays season-level: cards + weekly windows */
   }
-
-  /* one-click identity verification — the admin confirms the player's
-     photo + designation; the tick appears on form, feed and leaderboard */
-  $("playerTable").addEventListener("click", function (ev) {
-    var btn = ev.target.closest("[data-pv-name]");
-    if (!btn) return;
-    var name = btn.getAttribute("data-pv-name");
-    var to = btn.getAttribute("data-pv-to") === "1";
-    btn.disabled = true;
-    btn.textContent = "SAVING…";
-    gasPost({ action: "adminPlayerVerify", adminKey: state.key,
-              operator: operatorName(), players: [{ name: name, verified: to }] })
-      .then(function (out) {
-        if (!out || out.ok === false) {
-          throw new Error((out && (out.error || (out.errors && out.errors[0] &&
-            out.errors[0].error))) || "Write failed");
-        }
-        toast(to ? "Identity verified — tick is live for " + name
-                 : "Tick cleared for " + name);
-        return loadAll(true);
-      })
-      .catch(function (err) {
-        toast(err.message || "Save failed — nothing was written", true);
-        btn.disabled = false;
-      });
-  });
 
   /* ============================================================================
      CSV EXPORT — full ledger, client-side
@@ -1353,7 +1592,7 @@
     Array.prototype.forEach.call(
       $("tabs").querySelectorAll(".pcl-vbtn"),
       function (b) { b.classList.toggle("is-active", b === btn); });
-    ["feed", "audit", "reports", "log"].forEach(function (t) {
+    ["feed", "players", "reports", "audit", "log"].forEach(function (t) {
       $("tab" + t.charAt(0).toUpperCase() + t.slice(1)).hidden = t !== tab;
     });
   });
@@ -1410,6 +1649,9 @@
     loadAll: loadAll,
     openReview: openReview,
     exportCsv: exportCsv,
-    weekOf: weekOf
+    weekOf: weekOf,
+    renderPlayers: renderPlayers,
+    playerAgg: playerAgg,
+    PhotoLb: PhotoLb
   };
 })();

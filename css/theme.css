@@ -2197,3 +2197,41 @@ html:not([data-pcl-font="og"]) .pcl-wk-pts { font-size: 12px; letter-spacing: 0.
   html:not([data-pcl-font="og"]) .pcl-footer { font-size: 12px; letter-spacing: 0.4px; }
   html:not([data-pcl-font="og"]) .pcl-board-link { font-size: 11.5px; }
 }
+
+/* ============================================================================
+   PICTURE EXPAND CHIP + SINGLE LIGHTBOX MODE (Season 2 round 3)
+   Every picture is expandable: the shot square keeps replace-on-click, the
+   corner magnifier zooms. Same chip works on the round pfp tile.
+   ========================================================================== */
+.pcl-cell--shot { position: relative; }
+.pcl-expand {
+  position: absolute; right: -7px; top: -7px;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  padding: 0; cursor: zoom-in; z-index: 3;
+  color: var(--pcl-text); background: var(--pcl-surface);
+  border: 2px solid var(--pcl-line);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  transition: border-color .12s steps(2), color .12s steps(2),
+              box-shadow .12s steps(2);
+}
+.pcl-expand:hover {
+  border-color: var(--pcl-primary); color: var(--pcl-primary);
+  box-shadow: 2px 2px 0 var(--pcl-hard), 0 0 10px var(--pcl-glow-soft);
+}
+.pcl-expand:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+.pcl-expand svg { width: 13px; height: 13px; display: block; }
+.pcl-expand[hidden] { display: none; }
+/* the pfp tile sits in a 84-96px field — pull the chip onto the circle edge */
+.pcl-photofield .pcl-expand { right: 2px; top: -2px; }
+/* single-image mode: hide strip + arrows, nothing to step through.
+   Single mode IS the pfp zoom — the pfp stays round at every size. */
+.pcl-lightbox.is-single .pcl-lb-strip,
+.pcl-lightbox.is-single .pcl-lb-nav { display: none; }
+.pcl-lightbox.is-single .pcl-lb-stage { align-items: center; }
+.pcl-lightbox.is-single .pcl-lb-img {
+  width: min(420px, 78vw);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 50%;
+}

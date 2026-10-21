@@ -1,6 +1,6 @@
 # PCL SEASON 2 — MASTER TRACKER
 **The ultimate list: everything needed · everything done · everything still open.**
-**Deadline: Wednesday 23 October 2026, 12:00 PM IST.** Owner split: 🔧 = built by the dev agent · 🧑 = needs Praper/user. Updated 22 Oct, late evening.
+**Deadline: Wednesday 23 October 2026, 12:00 PM IST.** Owner split: 🔧 = built by the dev agent · 🧑 = needs Praper/user. Updated 22 Oct night (review round A2 in).
 
 ---
 
@@ -109,6 +109,67 @@ deadline (with owner) · D) post-deadline / continuous ops. If an item has a
   filled, photo fade cycle, mobile post cards (SF + OG), admin feed chips +
   ticks, admin Players verify table, leaderboard SF + OG. 10 screenshots in
   `/download/s2-*.png`.
+
+---
+
+## A2 · DONE — review round (22 Oct night, `s3-*`)
+
+### Common · pictures 🔧
+- **Round pfp everywhere, no exceptions**: feed avatars now `border-radius
+  50%` (were square), participants-tab avatars round, photo lightbox zooms
+  round at every size, letter-fallback avatars round.
+- **Every picture is expandable** — and not all through the same popup:
+  attached analytics shots open the existing shots lightbox (strip +
+  PREV/NEXT) or the review modal in admin; pfps open a dedicated round
+  image viewer (`PhotoLb` in admin, single-mode `pclLightbox` on the
+  form). New **magnifier corner chip** on the pfp tile and on set shot
+  squares — the tile keeps upload/replace, the corner chip zooms.
+
+### Admin console 🔧
+- **Saved-rows capsule vs footer**: footer is now a SOLID island (opaque
+  `--pcl-bg-3` + solid top border, own z-lane) and the body grows 96px of
+  extra scroll space while the capsule is open — the two can never
+  overlap again, at any scroll position.
+- **Shot next to the URL**: the evidence thumbnail moved INSIDE the post
+  cell, immediately left of the media link (header renamed `POST + SHOT`).
+  Feed row is a 6-column grid; mobile areas remapped.
+- **`UPD·S2` badge removed** (it marked an UPDATE row's snapshot number —
+  confusing to non-panellists; snapshot info stays in the review modal).
+- **Tab 2 = ALL PARTICIPANTS list view** (was Boost Audit; audit moved to
+  slot 4, intact). Two filters, reusable pattern:
+  - **POINTS** — first click ranks highest-first, re-click flips to
+    lowest-first. Toggleable sub-metrics: **POINTS / VIEWS / APPS**
+    (views = latest claimed per unique post — no update double-count;
+    apps = submissions).
+  - **A–Z** — first click A→Z, re-click Z→A.
+  - BOTH direction arrows always visible on both filters; the live
+    direction lights up (glow) so the active side is never a guess.
+  - Cards show rank, round avatar (expandable), name + verified tick,
+    designation · manager · format mix, big stat blocks (VERIFIED PTS
+    orange lead / PROJECTED / VIEWS / POSTS / APPS), latest-post link
+    chip, one-click VERIFY ID / CLEAR TICK. Search box on top.
+- **LOG tab renamed ADMIN LOG** (panel title too).
+- **Feed polish**: full-row hover highlight, redundant raw mediaId under
+  OCR removed (tail stays in the post line, full ID moved to the review
+  modal's meta line).
+- REPORTS slimmed to season cards + weekly windows (the roster lives in
+  tab 2 now — no duplicate tables).
+
+### Form 🔧
+- pfp expand chip + single-mode lightbox (round 420px zoom, no strip/
+  arrows, Esc closes); attached-shot corner chip opens the shots
+  lightbox on that exact shot; draft auto-save keeps it all across
+  reloads (re-verified).
+
+### Tests + verification 🔧
+- node --check 3/3; doPost 19/19 · rollup 16/16 · url diag 24/24.
+- agent-browser E2E (`/download/s3-*.png`): feed shot+url pairing, zero
+  UPD badges, round avatars, PLAYERS sort toggles (points desc→asc,
+  views, apps, A–Z both ways), search, photo lightbox (round, caption),
+  dirty-bar/footer zero-overlap at scroll bottom, discard toast, mobile
+  feed + players cards, dark + OG passes, reports/audit render, form pfp
+  + shot expand chips, single-mode round zoom, leaderboard clean load.
+  Zero console errors.
 
 ---
 
