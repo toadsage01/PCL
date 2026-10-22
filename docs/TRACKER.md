@@ -352,6 +352,54 @@ causes**, none of which were the user's Wi-Fi:
   never-silently-zero staleness, 20-URL pilot before switching the leaderboard
   over. No single pipe can take the data down.
 
+## A5 · DONE — leaderboard string-view kill + six-password admin access (22 Oct, user report round)
+
+**User report 1 — "leaderboard was showing some sort of string as the view."**
+- Live probe: the stats endpoint now answers in the NEW shape (weeks + awards
+  blocks) and the board is empty (`players: []`) — the sighting came from the
+  OLD pinned deployment whose roll-up let sheet strings ride through into
+  `impressions`/`points`.
+- Fix is two layers deep so this class of bug is dead even if a future
+  backend regresses:
+  - `js/leaderboard.js`: new `toNum()` coerces every payload number (number,
+    `"12,345"`, NBSP-padded, garbage→0, absent→null/"—"); `normalize()` and
+    the weekly-bucket mapping route ALL numbers through it; `fmt()` is
+    self-defensive (strips commas itself, renders NaN/Infinity/garbage as "0",
+    never echoes a raw string).
+  - Backend `numOrBlank_`/`toCount_` already numeric-tight (verified).
+- New suite `scripts/test_leaderboard_sanitize.js` — 33 assertions feeding
+  dirty payloads (comma strings, NBSP, "seventeen billion", NaN, Infinity,
+  legacy shapes) through the EXTRACTED shipped functions. ALL PASS.
+
+**User report 2 — "remove the admin access, create 6 passwords … admin firstName@123."**
+- The single ADMIN_KEY (Script Properties) + operator-name dropdown + device
+  binding are GONE. New model: **the password is the identity.**
+- `gas/Code.gs`: `ADMINS` roster (pratham@123/sejal@123/kanupriya@123/
+  vikram@123/lagan@123/manas@123 → full names), `adminByPass_()`,
+  `operatorOf_()` (accepts POST `adminKey` and JSONP `key`), `checkAdmin_()`
+  rewritten; `adminLogin_` returns `{ok, operator}` derived SERVER-SIDE and
+  logs LOGIN with the fingerprint as context only (no lock, no resetAdminDevice);
+  every write action (adminVerify / adminPlayerVerify / awardChallenge /
+  syncNow) stamps the AdminLog + PCL-Awards "Awarded By" with the DERIVED
+  name — a client-supplied operator is never trusted; `ledgerEndpoint_`
+  returns `operator` for the console chip.
+- `admin.html`: single "Admin password" field (no name picker), operator chip
+  in the toolbar; `js/admin.js`: no dropdown, no client-declared operator,
+  mock mode = any password ≥ 4 chars as "Demo Admin"; session restore keeps
+  working. CSS: `.pcl-tag--operator`.
+- Harness: test 15 rewritten (password identity, new device just works,
+  whitespace tolerated, wrong/empty refused) + test 21 (all six passwords map
+  to the right names; AdminLog/Awarded-By stamps prove the client operator
+  string is ignored) — ~65 assertions ALL PASS. 3-portal browser E2E green:
+  dropdown gone, short password refused, lagan@123 unlocks as OPERATOR ·
+  Demo Admin, awards flow intact, board clean, zero console errors.
+
+**Deploy note:** rides the SAME C1 paste + New version as A2–A4. Until the
+paste lands, the console still runs the OLD backend — the six passwords will
+be refused there ("wrong admin password") because the old check compares
+against the retired ADMIN_KEY property. After the paste, the old ADMIN_KEY
+stops mattering entirely.
+
 ---
 
 ## D · POST-DEADLINE / CONTINUOUS OPS (tracked, not urgent)

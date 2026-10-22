@@ -17,7 +17,7 @@
      · REPORTS computes season cards, weekly windows (Mon 11:00 IST
        deadline) and the per-player table. CSV export is client-side.
 
-   Debug/demo: open admin.html?mock=1 → mock ledger, any key ≥ 4 chars
+   Debug/demo: open admin.html?mock=1 → mock ledger, any password ≥ 4 chars
    unlocks, writes apply in-memory. window.PCL_ADMIN exposes state.
    ========================================================================== */
 
@@ -522,7 +522,7 @@
         setTimeout(function () {
           if (body.action === "adminLogin") {
             mockLog.unshift({ ts: new Date().toISOString(),
-              operator: body.operator || "unnamed", action: "LOGIN",
+              operator: state.operator || "unnamed", action: "LOGIN",
               target: "Control Room", detail: "gate unlocked" });
             resolve({ ok: true });
             return;
@@ -538,7 +538,7 @@
               MOCK_VERIFIED[String(p.name || "").toLowerCase()] = !!p.verified;
             });
             mockLog.unshift({ ts: new Date().toISOString(),
-              operator: body.operator || "unnamed",
+              operator: state.operator || "unnamed",
               action: (body.players || []).some(function (p) { return p.verified; })
                 ? "VERIFY-ID" : "UNVERIFY-ID",
               target: (body.players || []).map(function (p) { return p.name; }).join(", ") || "—",
@@ -551,7 +551,7 @@
             MOCK_AWARDS.push({ week: body.week, player: body.name,
                                points: body.points, note: "" });
             mockLog.unshift({ ts: new Date().toISOString(),
-              operator: body.operator || "unnamed", action: "AWARD",
+              operator: state.operator || "unnamed", action: "AWARD",
               target: "W" + body.week + " · " + body.name + " · +" + body.points,
               detail: "weekly challenge reward" });
             resolve({ ok: true, awarded: { week: body.week, name: body.name,
@@ -581,6 +581,7 @@
      ========================================================================== */
   var state = {
     key: "",
+    operator: "",        // signed-in admin — derived from the password
     rows: [],
     players: [],
     pmap: {},            // name → {designation, verified}
@@ -600,13 +601,20 @@
     tab: "feed"
   };
 
-  /* the six league operators — the ONLY names the gate accepts */
-  var ADMINS = ["Pratham Jindal", "Sejal Choudhary", "Kanupriya Srikoti",
-                "Vikram Singh Mawari", "Lagan Garg", "Manas Ranjan"];
-
-  function operatorName() {
-    var el = $("gateOperator");
-    return (el && el.value.trim()) || "unnamed";
+  /* identity — the SERVER derives the operator name from the password
+     (ADMINS roster in gas/Code.gs) and every audit entry is stamped with
+     it. The client only displays what the backend answered; it never
+     declares who it is. */
+  function showOperator() {
+    var chip = $("opChip");
+    if (!chip) return;
+    if (state.operator) {
+      chip.textContent = "OPERATOR · " + state.operator;
+      chip.hidden = false;
+    } else {
+      chip.textContent = "";
+      chip.hidden = true;
+    }
   }
 
   function displayOf(r) {
@@ -658,14 +666,9 @@
   }
 
   function tryUnlock(key, silent) {
-    if (!key) { if (!silent) gateError("Enter the access key."); return Promise.resolve(false); }
-    var op = operatorName();
-    if (op === "unnamed") {
-      if (!silent) gateError("Select your name from the list first.");
-      return Promise.resolve(false);
-    }
+    if (!key) { if (!silent) gateError("Enter your admin password."); return Promise.resolve(false); }
     if (MOCK && key.length < 4) {
-      if (!silent) gateError("Mock mode: any key with 4+ characters unlocks.");
+      if (!silent) gateError("Mock mode: any password with 4+ characters unlocks.");
       return Promise.resolve(false);
     }
     gateBusy(true, "VERIFYING…");
@@ -693,23 +696,32 @@
       });
   }
 
-  /* login + device binding; resolves false when the backend refuses */
+  /* login trail; resolves false when the backend refuses. The operator
+     name comes FROM the backend (matched against the password) — knowing
+     the password is the proof of identity, so there is no name picker and
+     no device lock; the fingerprint rides along as audit context only. */
   function loginCheck(key) {
-    var op = operatorName();
-    try { sessionStorage.setItem(OP_STORE, op === "unnamed" ? "" : op); } catch (e) { /* ok */ }
     var dev = deviceFingerprint();
     if (MOCK) {
-      mockLog.unshift({ ts: new Date().toISOString(), operator: op,
+      state.operator = "Demo Admin";
+      try { sessionStorage.setItem(OP_STORE, "Demo Admin"); } catch (e) { /* ok */ }
+      mockLog.unshift({ ts: new Date().toISOString(), operator: "Demo Admin",
         action: "LOGIN", target: "Control Room",
         detail: "gate unlocked (mock) · device " + String(dev).split("·")[0] });
       renderLog();
+      showOperator();
       return Promise.resolve(true);
     }
-    return gasPost({ action: "adminLogin", adminKey: key, operator: op, device: dev })
+    return gasPost({ action: "adminLogin", adminKey: key, device: dev })
       .then(function (out) {
         if (out && out.ok === false && out.error) {
           gateError(out.error);
           return false;
+        }
+        if (out && out.operator) {
+          state.operator = out.operator;
+          try { sessionStorage.setItem(OP_STORE, out.operator); } catch (e) { /* ok */ }
+          showOperator();
         }
         return true;
       })
@@ -729,6 +741,7 @@
     try { sessionStorage.setItem(KEY_STORE, key); } catch (e) { /* ok */ }
     $("gate").hidden = true;
     $("console").hidden = false;
+    showOperator();
   }
 
   /* ============================================================================
@@ -756,6 +769,11 @@
     });
     state.totals = out.totals || null;
     state.generatedAt = out.generatedAt || null;
+    if (out.operator) {
+      state.operator = out.operator;
+      try { sessionStorage.setItem(OP_STORE, out.operator); } catch (e) { /* ok */ }
+      showOperator();
+    }
     state.awards = Array.isArray(out.awards) ? out.awards : [];
     state.awardByWeek = {};
     state.awards.forEach(function (a) {
@@ -1161,7 +1179,6 @@
     $("saveBtn").disabled = true;
     $("saveBtn").textContent = "SAVING…";
     gasPost({ action: "adminVerify", adminKey: state.key,
-              operator: operatorName(), device: deviceFingerprint(),
               updates: rows })
       .then(function (out) {
         if (!out || out.ok === false) {
@@ -1665,7 +1682,7 @@
     btn.disabled = true;
     btn.textContent = "SAVING…";
     gasPost({ action: "adminPlayerVerify", adminKey: state.key,
-              operator: operatorName(), players: [{ name: name, verified: to }] })
+              players: [{ name: name, verified: to }] })
       .then(function (out) {
         if (!out || out.ok === false) {
           throw new Error((out && (out.error || (out.errors && out.errors[0] &&
@@ -1788,7 +1805,6 @@
     btn.disabled = true;
     btn.textContent = "…";
     gasPost({ action: "awardChallenge", adminKey: state.key,
-              operator: operatorName(), device: deviceFingerprint(),
               week: w, name: name, points: pts })
       .then(function (out) {
         if (!out || out.ok === false) {
@@ -1912,8 +1928,7 @@
     btn.disabled = true;
     var old = btn.textContent;
     btn.textContent = "SYNCING…";
-    gasPost({ action: "syncNow", adminKey: state.key,
-              operator: operatorName(), device: deviceFingerprint() })
+    gasPost({ action: "syncNow", adminKey: state.key })
       .then(function (out) {
         if (!out || out.ok === false) {
           throw new Error((out && out.error) || "Sync failed");
@@ -1989,23 +2004,9 @@
   });
 
   (function boot() {
-    /* gate operator dropdown — ONLY the six league operators appear */
-    var opSel = $("gateOperator");
-    if (opSel && opSel.options.length <= 1) {   // placeholder only → fill it
-      ADMINS.forEach(function (n) {
-        var o = document.createElement("option");
-        o.value = n;
-        o.textContent = n;
-        opSel.appendChild(o);
-      });
-    }
     try {
       var savedOp = sessionStorage.getItem(OP_STORE);
-      if (savedOp && opSel) {
-        for (var i = 0; i < opSel.options.length; i++) {
-          if (opSel.options[i].value === savedOp) { opSel.value = savedOp; break; }
-        }
-      }
+      if (savedOp) state.operator = savedOp;
     } catch (e) { /* ok */ }
     var saved = "";
     try { saved = sessionStorage.getItem(KEY_STORE) || ""; } catch (e) { /* ok */ }
@@ -2017,11 +2018,13 @@
           $("console").hidden = true;
         }
       });
+    } else {
+      showOperator();
     }
     if (MOCK) {
       var note = document.querySelector(".pcl-gate-note");
       if (note) note.innerHTML = "<strong>MOCK MODE</strong> — demo ledger, no backend " +
-        "calls. Any key with 4+ characters unlocks.";
+        "calls. Any password with 4+ characters unlocks.";
     }
   })();
 

@@ -158,8 +158,10 @@ media rides every ledger row as an AUTO tag — the reviewer sees the
 platform-observed number next to the claim without opening anything.
 
 ### Tab `AdminLog`
-Every admin write: who, what, old→new values, device fingerprint. The
-AUDIT and ADMIN LOG tabs render it. This is the season's legal record.
+Every admin write: who (derived from the admin's password server-side — a
+client can never mislabel it), what, old→new values. LOGIN entries add the
+device fingerprint as context. The AUDIT and ADMIN LOG tabs render it. This
+is the season's legal record.
 
 ### Tab `PCL-Awards`
 Weekly-challenge rewards: Week · Player · Points · Note · Awarded By.
@@ -228,12 +230,16 @@ nothing.
 
 ## 9 · The Control Room — the reviewer team's console
 
-- **Gate**: 6 whitelisted operators (Pratham Jindal, Sejal Choudhary,
-  Kanupriya, Vikram Singh Mawari, Lagan Garg, Manas Ranjan) + the admin
-  key. The **first device** an operator unlocks from is bound to them
-  (hashed fingerprint); the same name from a different device is refused
-  and logged. `resetAdminDevice("Full Name")` from the script editor frees
-  a legitimate new device.
+- **Gate — one password per admin**: Pratham Jindal, Sejal Choudhary,
+  Kanupriya Srikoti, Vikram Singh Mawari, Lagan Garg, Manas Ranjan — interim
+  passwords follow `firstName@123` (e.g. `lagan@123`), held ONLY in the
+  `ADMINS` roster inside `gas/Code.gs` (never client-side). **The password
+  is the identity**: the backend derives the operator name from it and
+  stamps every audit entry with that name — a client can never sign an
+  action under somebody else's name, and there is no name picker to misuse.
+  The browser fingerprint still rides along in the log as context, but it
+  gates nothing — a new device just works. Rotate by editing the `ADMINS`
+  list and deploying a new version.
 - **FEED** — every row newest-first: brand badges, collab tags, content
   type, hashes, OCR/tracked AUTO tags, quick chips (ALL / NEEDS REVIEW /
   BOOST / MISMATCH / DONE) and instant filters. Staged edits save in one
@@ -258,6 +264,12 @@ nothing.
 - **Shows**: RANK · NAME · DESIGNATION · TOTAL IMPRESSIONS · TOTAL POINTS.
 - **Never shows**: verification status (stripped server-side), photos,
   manager names, collab details, OCR/machine values, admin anything.
+- **Number pipeline, twice-hardened**: the backend coerces every count
+  (`numOrBlank_`/`toCount_` — commas and spaces stripped, always numeric)
+  and the client re-coerces before rendering (`toNum` + a self-defensive
+  `fmt`), so a sheet string can never again reach the board as a raw
+  string, `NaN` or `Infinity` — the "string as view" class of bug is dead
+  at both layers (33-assertion sanitize suite proves it).
 
 ## 11 · Data-integrity guarantees — the "no corruption, no loss" list
 
@@ -287,13 +299,13 @@ nothing.
 | 3 portals | GitHub repo → Vercel (`praper-contest-league.vercel.app`) | auto-redeploys on push |
 | `/api/submit` | Vercel function | needs env var `GOOGLE_SCRIPT_WEBAPP_URL` (set) |
 | Backend | Apps Script bound to the Sheet | **pinned-version deploy: every Code.gs change = paste + New version** |
-| Secrets | Script Properties | `ADMIN_KEY`; optional `YOUTUBE_API_KEY` override |
+| Secrets | Script Properties | optional `YOUTUBE_API_KEY` override (admin passwords live in the `ADMINS` roster in Code.gs) |
 
 **The one manual step (C1): paste `gas/Code.gs` into the Apps Script
 editor → Deploy → Manage deployments → Edit → New version.** That single
-paste installs: content-type persistence, device binding, the YouTube
-tracking leg + PCL-Snapshots, subcheck, LockService, collab full-points,
-PCL-Awards, the review-first HEADERS, and the OCR-count ingest.
+paste installs: content-type persistence, the six-password admin roster,
+the YouTube tracking leg + PCL-Snapshots, subcheck, LockService, collab
+full-points, PCL-Awards, the review-first HEADERS, and the OCR-count ingest.
 
 ## 13 · Operations runbook — launch + the 10-week rhythm
 
@@ -328,10 +340,11 @@ history covers the rest. Nothing in this system deletes.
 
 | Suite | Proves | Run |
 |---|---|---|
-| `scripts/test_do_post_collab.js` | 50 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, device binding, subcheck, awards math, public-stats verified strip, review-first reorder with data survival | `node scripts/test_do_post_collab.js` |
+| `scripts/test_do_post_collab.js` | ~65 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats verified strip, review-first reorder with data survival | `node scripts/test_do_post_collab.js` |
 | `scripts/test_ocr_parse.js` | 34 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection | `node scripts/test_ocr_parse.js` |
 | `scripts/test_leaderboard_rollup.js` | 16: dedup-by-media, verified-over-claimed, weekly buckets | `node scripts/test_leaderboard_rollup.js` |
 | `scripts/test_url_diag.js` | 24: every accepted URL shape | `node scripts/test_url_diag.js` |
+| `scripts/test_leaderboard_sanitize.js` | 33: the board can never render a raw string/NaN/Infinity as a view count (comma strings, NBSP, garbage, old payload shapes) | `node scripts/test_leaderboard_sanitize.js` |
 | `scripts/save_e2e.sh` + `fixture_save.js` | browser E2E of the transport chain against the REAL wire shapes (Vercel-healthy / GAS-302 / dead-route) | `bash scripts/save_e2e.sh` |
 | `scripts/ocr_e2e.sh`, `save_e2e.sh`, prior rounds | agent-browser E2E across all 3 portals (form flows, admin gate/tabs/awards, leaderboard) | see scripts/ |
 

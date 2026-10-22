@@ -171,6 +171,13 @@ footer.pcl-footer.pcl-wide { max-width: 1180px; }
   border-color: #1a2f9e;
 }
 .pcl-tag--collabpend { color: var(--pcl-gold); border-color: var(--pcl-gold); }
+/* signed-in admin chip in the console toolbar — name comes from the
+   password the backend matched, so it always matches the audit stamps */
+.pcl-tag--operator {
+  color: var(--pcl-primary); border-color: var(--pcl-primary);
+  background: var(--pcl-surface-2); font-size: 8px; padding: 3px 6px 2px;
+  text-transform: uppercase;
+}
 .pcl-tag--dirty {
   color: #fff; background: var(--pcl-primary);
   border-color: var(--pcl-primary-deep);

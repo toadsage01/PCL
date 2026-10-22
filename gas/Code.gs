@@ -30,8 +30,9 @@
  *            per player {posts, impressions, points} deduped the same
  *            way (latest snapshot per Media ID, first-snapshot week).
  *
- *   ADMIN CONSOLE (admin.html) — gated by a secret key stored in the
- *   script's Script Properties (set it once: run setAdminKey("secret")):
+ *   ADMIN CONSOLE (admin.html) — gated by six per-admin passwords (the
+ *   ADMINS roster in this file; password = identity, audit entries are
+ *   stamped server-side):
  *     doGet  ?action=ledger&key=…[&callback=…]  → every ledger row (newest
  *            first, incl. Drive file ids + thumbnail urls) + totals +
  *            per-player roll-up. JSONP when `callback` is given, so the
@@ -211,8 +212,11 @@ var COLLAB_CONFIRMED = 'CONFIRMED';
 var CHECK_PENDING = 'PENDING OCR';
 var CHECK_VALUES = ['PENDING OCR', 'MATCH', 'MISMATCH', 'BOOST?'];
 
-/** Admin console — secret key lives in Script Properties, not in code. */
-var ADMIN_KEY_PROP = 'ADMIN_KEY';
+/** Admin console — one password per admin (see ADMINS near checkAdmin_).
+ *  The password IS the identity: every audit entry is stamped with the name
+ *  derived SERVER-SIDE from the password, so the client can never mislabel
+ *  who did what. Interim passwords follow firstName@123 — rotate by editing
+ *  the ADMINS list and deploying a new version. */
 
 /** Column indexes of the four review columns — derived from HEADERS. */
 var COL_OCR = HEADERS.indexOf('OCR Count') + 1;
@@ -526,6 +530,7 @@ function ledgerEndpoint_(p) {
   return reply_(p, {
     ok: true,
     generatedAt: new Date().toISOString(),
+    operator: operatorOf_(p),        // identity for the console header chip
     totals: {
       totalSubmissions: s.totalSubmissions,
       totalPosts: s.totalPosts,
@@ -631,8 +636,8 @@ function awardChallenge_(payload) {
     return json_({ ok: false, error: 'Points must be a positive number' });
   }
   getAwardsSheet_().appendRow([new Date(), week, name, points, note,
-                               str_(payload.operator) || 'unnamed']);
-  logAdmin_(payload.operator, 'AWARD',
+                               operatorOf_(payload) || 'console']);
+  logAdmin_(operatorOf_(payload) || 'console', 'AWARD',
             'W' + week + ' · ' + name + ' · +' + points,
             note || 'weekly challenge reward');
   return json_({ ok: true, awarded: { week: week, name: name, points: points } });
@@ -1047,31 +1052,44 @@ function ledgerIndex_(sheet) {
 
 /** ---------- ADMIN CONSOLE ---------- */
 
-// Run this ONCE from the script editor:  setAdminKey("your-secret")
-// The key is stored in Script Properties — never in the code or the repo.
-function setAdminKey(key) {
-  if (!key) throw new Error('Usage:  setAdminKey("your-secret")');
-  PropertiesService.getScriptProperties()
-    .setProperty(ADMIN_KEY_PROP, String(key));
-  return 'ADMIN_KEY saved. The admin console can now unlock with it.';
+/** The six league admins — password is the identity. Keep this list the
+ *  single source of truth: rotate a password here, deploy a new version,
+ *  done. (Never move this list client-side.) */
+var ADMINS = [
+  { pass: 'pratham@123',   name: 'Pratham Jindal' },
+  { pass: 'sejal@123',     name: 'Sejal Choudhary' },
+  { pass: 'kanupriya@123', name: 'Kanupriya Srikoti' },
+  { pass: 'vikram@123',    name: 'Vikram Singh Mawari' },
+  { pass: 'lagan@123',     name: 'Lagan Garg' },
+  { pass: 'manas@123',     name: 'Manas Ranjan' }
+];
+
+/** Look an admin up by password; null when the password matches nobody. */
+function adminByPass_(key) {
+  var k = String(key == null ? '' : key).trim();
+  for (var i = 0; i < ADMINS.length; i++) {
+    if (ADMINS[i].pass === k) return ADMINS[i];
+  }
+  return null;
 }
 
-function adminKey_() {
-  return String(PropertiesService.getScriptProperties()
-    .getProperty(ADMIN_KEY_PROP) || '');
+/** Operator name derived from the request's own credentials (adminKey on
+ *  POST payloads, key on JSONP GETs). '' when unrecognised. Audit entries
+ *  always use this — a client-supplied operator name is never trusted. */
+function operatorOf_(payload) {
+  if (!payload) return '';
+  var raw = (payload.adminKey !== undefined && payload.adminKey !== null)
+    ? payload.adminKey : payload.key;
+  var a = adminByPass_(raw);
+  return a ? a.name : '';
 }
 
 function checkAdmin_(key) {
-  var want = adminKey_();
-  if (!want) {
-    return 'ADMIN_KEY is not set — open the script editor and run ' +
-           'setAdminKey("your-secret") once.';
-  }
-  if (String(key || '') !== want) return 'Access denied — wrong admin key.';
+  if (!adminByPass_(key)) return 'Access denied — wrong admin password.';
   return '';
 }
 
-// Admin write-back: {action:'adminVerify', adminKey, operator, updates:[
+// Admin write-back: {action:'adminVerify', adminKey, updates:[
 //   {row:<sheet row>, ocrCount:…, crossCheck:…, verifiedCount:…,
 //    contentType:'PRAPER'|'PERSONAL'|''}, … ]}
 // Verified Points are always recomputed here — the console never sends them.
@@ -1135,7 +1153,7 @@ function adminVerify_(payload) {
     if (ctype) sheet.getRange(row, ctCol).setValue(ctype);
     updated++;
 
-    logAdmin_(payload.operator, 'VERIFY', 'row ' + row + ' · ' + pname,
+    logAdmin_(operatorOf_(payload) || 'console', 'VERIFY', 'row ' + row + ' · ' + pname,
       'OCR: ' + oldVals[0] + '→' + (ocr === '' ? '—' : ocr) +
       ' · CHECK: ' + oldVals[1] + '→' + check +
       ' · VERIFIED: ' + oldVals[2] + '→' + (vcount === '' ? '—' : vcount) +
@@ -1191,7 +1209,8 @@ function adminPlayerVerify_(payload) {
       sheet.getRange(row, verCol).setValue(val);
       updated++;
     });
-    logAdmin_(payload.operator, w.verified ? 'VERIFY-ID' : 'UNVERIFY-ID',
+    logAdmin_(operatorOf_(payload) || 'console',
+      w.verified ? 'VERIFY-ID' : 'UNVERIFY-ID',
       w.name + ' · ' + w.rows.length + ' row(s)',
       'identity ' + (w.verified ? 'VERIFIED (tick on)' : 'unverified (tick off)'));
   });
@@ -1201,69 +1220,19 @@ function adminPlayerVerify_(payload) {
                    ? errors[0].error : undefined });
 }
 
-/** Admin LOGIN trail + DEVICE BINDING — the console sends a browser
- *  fingerprint with every unlock. The FIRST device an operator unlocks
- *  from becomes theirs; the same name from a DIFFERENT device is refused
- *  (the audit catalogue records the denial), so nobody can sign in under
- *  somebody else's name. A legitimate new device is unlocked once by the
- *  league engineer: resetAdminDevice("Full Name") from the script editor. */
+/** Admin LOGIN trail — the password IS the identity, so the operator name
+ *  in the audit log is derived SERVER-SIDE from it (a client can never
+ *  sign an entry under somebody else's name). The browser fingerprint still
+ *  rides along as audit context (who unlocks from where) but gates nothing:
+ *  a new device just works, because knowing the password is the proof.
+ *  Post: {action:'adminLogin', adminKey, device} → {ok, operator} */
 function adminLogin_(payload) {
-  var err = checkAdmin_(payload.adminKey);
-  if (err) return json_({ ok: false, error: err });
-  var op = normName_(payload.operator);
-  if (!op) return json_({ ok: false, error: 'Select your name before unlocking.' });
+  var op = operatorOf_(payload);
+  if (!op) return json_({ ok: false, error: 'Access denied — wrong admin password.' });
   var device = str_(payload.device) || 'unknown-device';
-  var hash = device.split('·')[0];
-  var devices = adminDevices_();
-  var rec = devices[op];
-  if (rec && rec.hash && rec.hash !== hash) {
-    logAdmin_(payload.operator, 'LOGIN-DENIED', 'Control Room',
-      'device mismatch — name is bound to device ' + rec.hash +
-      ', this browser is ' + hash);
-    return json_({ ok: false, error: '"' + str_(payload.operator) +
-      '" is usually operated from another device. If this is really you, ask ' +
-      'the league engineer to run resetAdminDevice("' + str_(payload.operator) +
-      '") once in the Apps Script editor.' });
-  }
-  if (!rec) {
-    devices[op] = { hash: hash, device: device, ts: new Date().toISOString() };
-    setAdminDevices_(devices);
-  }
-  logAdmin_(payload.operator, 'LOGIN', 'Control Room',
-    'gate unlocked · device ' + hash);
-  return json_({ ok: true });
-}
-
-/** Device bindings live in Script Properties as JSON — never in the code. */
-var ADMIN_DEVICES_PROP = 'ADMIN_DEVICES';
-function adminDevices_() {
-  try {
-    var raw = PropertiesService.getScriptProperties()
-      .getProperty(ADMIN_DEVICES_PROP);
-    return raw ? JSON.parse(raw) : {};
-  } catch (ignore) { return {}; }
-}
-function setAdminDevices_(map) {
-  PropertiesService.getScriptProperties()
-    .setProperty(ADMIN_DEVICES_PROP, JSON.stringify(map || {}));
-}
-/** Run from the script editor when an operator legitimately changes device:
- *  resetAdminDevice("Sejal Choudhary") — their next unlock re-binds. */
-function resetAdminDevice(name) {
-  var who = normName_(name);
-  if (!who) throw new Error('Usage:  resetAdminDevice("Full Name")');
-  var devices = adminDevices_();
-  delete devices[who];
-  setAdminDevices_(devices);
-  logAdmin_(name, 'DEVICE-RESET', 'Control Room',
-    'device binding cleared — next unlock re-binds');
-  return 'Device binding cleared for ' + name + '.';
-}
-/** Nuclear option — clear every binding (e.g. after a team-wide migration). */
-function resetAdminDevices() {
-  setAdminDevices_({});
-  logAdmin_('engineer', 'DEVICE-RESET', 'Control Room', 'all device bindings cleared');
-  return 'All device bindings cleared.';
+  logAdmin_(op, 'LOGIN', 'Control Room',
+    'gate unlocked · device ' + device.split('·')[0]);
+  return json_({ ok: true, operator: op });
 }
 
 /** ---------- METRICS TRACKING (Phase 1) ----------
@@ -1424,7 +1393,7 @@ function syncNow_(payload) {
   var ig = syncInstagram_();
   var li = syncLinkedIn_();
   try { ensureMetricsTriggers_(); } catch (ignore) { /* best effort */ }
-  logAdmin_(payload.operator || 'console', 'SYNC', 'metrics',
+  logAdmin_(operatorOf_(payload) || 'console', 'SYNC', 'metrics',
     'YT ' + yt.updated + '/' + yt.checked + (yt.note ? ' (' + yt.note + ')' : '') +
     (ig.note ? ' · IG ' + ig.note : '') +
     (li.note ? ' · LI ' + li.note : ''));
@@ -1800,11 +1769,11 @@ function buildAdminGuide() {
     ['Verified Count', 'Admin', 'What the screenshot REALLY shows. This is the number the league trusts.'],
     ['Verified Points', 'Form→admin (automatic)', 'Verified Count × multiplier — written for you, never edit by hand.'],
     ['Player Photo', 'Form (automatic)', 'One photo per player, reused on every entry.'],
-    ['Collab With / Collab Status', 'Form (automatic)', 'COLLAB pairs. CONFIRMED = both players submitted the same link → points split 50:50.'],
+    ['Collab With / Collab Status', 'Form (automatic)', 'COLLAB pairs. CONFIRMED = both players submitted the same link → each scores FULL points (rulebook §6 rule 2).'],
     ['Player Designation', 'Player (first time)', 'Job title shown on the leaderboard. Reused automatically afterwards.'],
     ['Player Verified', 'Admin', 'VERIFIED = photo + designation checked against name · manager · designation (PLAYERS tab → CONFIRM ID). Green tick shows everywhere. Empty = no badge.'],
     ['PCL-Snapshots tab', 'Automatic (YouTube tracking)', 'The SYNC NOW pipeline appends every platform-observed count here: Timestamp · Media ID · Source · Views. Ledger rows show the latest as an AUTO tag in the feed.'],
-    ['Admin devices', 'Automatic', 'Each operator\'s first unlock binds their browser. A different device under the same name is refused (LOGIN-DENIED in the log). Fix: resetAdminDevice("Full Name") in the editor.'],
+    ['Admin access', 'Six passwords', 'One password per admin (firstName@123). The password IS the identity — every log entry is stamped with the matching name automatically; there is no name picker and no device lock. Rotate by editing ADMINS in Code.gs + a new version.'],
     ['', '', ''],
     ['DAILY FLOW', '', '1. FEED tab: newest entries.  2. SCAN + compare screenshot.  3. Type Verified Count.'],
     ['', '', '4. Set Cross-Check.  5. SAVE CHANGES (sticky bar).  6. REPORTS → Players → VERIFY ID for new players.'],

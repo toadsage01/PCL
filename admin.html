@@ -62,29 +62,19 @@
   </div>
 
   <main class="pcl-main pcl-wide pcl-admin">
-    <!-- ================= GATE — visible until the key unlocks ============ -->
+    <!-- ================= GATE — visible until the password unlocks ======= -->
     <section id="gate" class="pcl-panel pcl-gate">
       <h2 class="pcl-panel-title">Access Terminal</h2>
       <p class="pcl-hint">Restricted deck — this console touches the league
-        ledger. Enter the admin access key to continue.</p>
+        ledger. Each of the six league admins has their own password; enter
+        yours to continue. Your password identifies you — every audit entry
+        is stamped with your name automatically.</p>
       <div class="pcl-field" id="gateField">
-        <label class="pcl-label" for="gateKey">Access key</label>
+        <label class="pcl-label" for="gateKey">Admin password</label>
         <input class="pcl-input" id="gateKey" type="password"
                placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
-               autocomplete="off" />
-        <p class="pcl-err" id="gateErr">Wrong key — access denied.</p>
-      </div>
-      <div class="pcl-field" id="gateOpField">
-        <label class="pcl-label" for="gateOperator">Your name</label>
-        <div class="pcl-selectwrap">
-          <select class="pcl-input pcl-select" id="gateOperator" autocomplete="off">
-            <option value="">Select your name…</option>
-          </select>
-          <span class="pcl-chevron" aria-hidden="true"></span>
-        </div>
-        <p class="pcl-hint">Only the six league operators can unlock this deck —
-          pick your own name. This console remembers the device you usually work
-          from, so nobody can sign in under someone else's name.</p>
+               autocomplete="current-password" />
+        <p class="pcl-err" id="gateErr">Wrong password — access denied.</p>
       </div>
       <div class="pcl-gate-actions">
         <button id="gateBtn" class="pcl-btn pcl-btn--primary">
@@ -92,9 +82,9 @@
         </button>
         <span class="pcl-savestate" id="gateState" role="status" hidden></span>
       </div>
-      <!-- <p class="pcl-gate-note">First run? Open the Apps Script editor and run
-        <code>setAdminKey("your-secret")</code> once — the key is stored in
-        Script Properties, never in this site&rsquo;s code.</p> -->
+      <!-- <p class="pcl-gate-note">Rotating passwords? Edit the ADMINS list at
+        the top of gas/Code.gs and deploy a new version — the console and the
+        audit stamps follow automatically.</p> -->
     </section>
 
     <!-- ================= CONSOLE ========================================= -->
@@ -114,6 +104,8 @@
                   role="tab">ADMIN LOG</button>
         </div>
         <div class="pcl-adminbar-right">
+          <span class="pcl-tag pcl-tag--operator" id="opChip" hidden
+                title="Signed-in admin — derived from your password, stamped on every audit entry"></span>
           <span class="pcl-sync" id="syncInfo">&hellip;</span>
           <button type="button" class="pcl-abtn" id="refreshBtn">REFRESH</button>
           <button type="button" class="pcl-abtn pcl-abtn--accent" id="syncNowBtn"

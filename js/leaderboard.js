@@ -33,7 +33,26 @@
   }
   function fmt(n) {
     if (n == null || n === "") return "—";
-    return Number(n).toLocaleString("en-IN");
+    var x = Number(n);
+    if (!isFinite(x) && typeof n === "string") {
+      x = Number(n.replace(/[ ,\u00A0\u202F]/g, ""));
+    }
+    if (!isFinite(x)) return "0";      // never print NaN / Infinity
+    return x.toLocaleString("en-IN");
+  }
+  /* STRICT number coercion — the board must never render a raw string as a
+     view count (an older backend once let sheet strings leak through).
+     · number            → kept when finite, else 0
+     · "12,345" / " 99 " → commas + whitespace stripped, then Number
+     · anything else     → null (the column prints "—" for a genuinely
+       absent number; points fall back to 0) */
+  function toNum(v) {
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    if (typeof v === "string" && v.trim() !== "") {
+      var n = Number(v.replace(/[ ,\u00A0\u202F]/g, ""));
+      return isFinite(n) ? n : 0;
+    }
+    return null;
   }
   function fmtIST(iso) {
     try {
@@ -156,10 +175,13 @@
       throw new Error("bad response");
     }
     var players = data.players.map(function (p) {
-      var impressions = (typeof p.impressions === "number") ? p.impressions : null;
-      var points = (typeof p.points === "number")
-        ? p.points
-        : (p.verifiedPoints > 0 ? p.verifiedPoints : (p.projectedPoints || 0));
+      var impressions = toNum(p.impressions);
+      var points = toNum(p.points);
+      if (points === null) {
+        points = toNum(p.verifiedPoints);        // older payload shapes
+        if (points === null || points <= 0) points = toNum(p.projectedPoints);
+        if (points === null) points = 0;
+      }
       return {
         name: String(p.player || "").trim(),
         designation: String(p.designation || "").trim(),
@@ -191,7 +213,7 @@
     var list = (d.weeks && d.weeks.byWeek && d.weeks.byWeek[String(state.view)]) || [];
     return list.map(function (p) {
       return { name: p.player, designation: p.designation,
-               impressions: p.impressions, points: p.points };
+               impressions: toNum(p.impressions), points: toNum(p.points) || 0 };
     }).sort(function (a, b) {
       return b.points - a.points || (b.impressions || 0) - (a.impressions || 0) ||
              a.name.localeCompare(b.name);
@@ -286,7 +308,7 @@
       unit = "SEASON 2 ★ HIGH SCORES LIVE ";
     } else {
       var impTotal = d.players.reduce(function (a, p) {
-        return a + (p.impressions || 0);
+        return a + (toNum(p.impressions) || 0);
       }, 0);
       var wkTxt = d.currentWeek > 0 ? "WEEK " + d.currentWeek + " LIVE" : "SEASON 2";
       unit = "SEASON 2 ★ " + wkTxt + " ★ " + d.players.length + " PLAYERS ★ " +
