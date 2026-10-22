@@ -917,13 +917,19 @@
       '" data-act="ctype" data-ct="PERSONAL" data-id="' + esc(p.id) + '" aria-pressed="' +
       (ct === "PERSONAL") + '" title="Personal content">PERSONAL</button>' +
       "</span>";
+    var vn = viewsNum_(p);
     var cellViews = '<div class="pcl-cell pcl-cell--views' +
       (p.errViews ? " is-error" : "") + '">' +
       '<input class="pcl-input pcl-views" data-id="' + esc(p.id) +
       '" type="text" inputmode="numeric" placeholder="Views / impressions"' +
       ' value="' + esc(p.views) + '" aria-label="Views or impressions — post ' + n +
       '" /><span class="pcl-sug" data-id="' + esc(p.id) + '">' + sugHtml_(p) +
-      '</span><p class="pcl-err">Required</p></div>';
+      '</span>' +
+      /* sanity lamp — a single organic post never reaches tens of millions;
+         a 17,017,775,513-style typo must get caught at the FORM, not on
+         the board. Advisory: the reviewer still makes the final call. */
+      (vn > 25000000 ? '<span class="pcl-highnote">VERY HIGH — confirm against the screenshot</span>' : "") +
+      '<p class="pcl-err">Required</p></div>';
     var btn = p.shot
       ? '<button type="button" class="pcl-shotbtn is-set" data-act="shot" data-id="' +
         esc(p.id) + '" title="Screenshot attached — click to replace" ' +
@@ -1062,6 +1068,22 @@
         p.errViews = false;
         var cell = input.closest(".pcl-cell");
         if (cell) cell.classList.remove("is-error");
+      }
+      /* sanity lamp lives with the typing (rows don't re-render while the
+         caret is in the field) — a 17,017,775,513-style typo gets flagged
+         the moment it is typed, not on the next render */
+      var vcell = input.closest(".pcl-cell--views");
+      if (vcell) {
+        var note = vcell.querySelector(".pcl-highnote");
+        var tooHigh = viewsNum_(p) > 25000000;
+        if (tooHigh && !note) {
+          note = document.createElement("span");
+          note.className = "pcl-highnote";
+          note.textContent = "VERY HIGH — confirm against the screenshot";
+          vcell.insertBefore(note, vcell.querySelector(".pcl-err"));
+        } else if (!tooHigh && note) {
+          note.parentNode.removeChild(note);
+        }
       }
       return;
     }
@@ -1823,8 +1845,84 @@
     nameTimer = setTimeout(function () {
       rosterDesigFill();
       lookupPhoto();
+      nameHintCheck();
     }, 600);
   });
+
+  /* IDENTITY GUARD — there is no signup, so (Full Name + Reporting
+     Manager) IS the identity. Two spellings of one person ("Manas" vs
+     "Manas Ranjan") would create two leaderboard entities and split
+     their points forever. When the typed name is CLOSE to a known
+     roster/ledger name but not exact, surface a tap-to-use hint BEFORE
+     the entry lands. Advisory only — it never blocks typing. */
+  var statNames = null;               // ledger names, lazily fetched once
+  function nameHintCheck() {
+    var hint = $("pclNameHint");
+    if (!hint) return;
+    var typedN = normId(fullName.value);
+    if (typedN.length < 3) { hint.hidden = true; return; }
+
+    /* ROSTER WINS — the roster is the canonical spelling. A name typed
+       exactly like a LEDGER entry but shorter than the ROSTER form
+       ("Manas" vs "Manas Ranjan") is exactly how duplicate entities are
+       born, so the roster's longer spelling is always offered first. */
+    function scan(list) {
+      var exact = false, near = "";
+      var seen = {};
+      for (var i = 0; i < list.length; i++) {
+        var nn = normId(String(list[i] || ""));
+        if (!nn || seen[nn]) continue;
+        seen[nn] = true;
+        if (nn === typedN) { exact = true; }
+        else if (!near &&
+            ((nn.indexOf(typedN) === 0 && nn.length > typedN.length) ||
+             (typedN.indexOf(nn) === 0 && typedN.length > nn.length &&
+              nn.length >= 4))) {
+          near = String(list[i]);
+        }
+      }
+      return { exact: exact, near: near };
+    }
+
+    /* roster keys are stored lowercase — identity is a RAW string, so the
+       offered name must be canonical ("manas ranjan" -> "Manas Ranjan")
+       or the USE button would mint a THIRD spelling */
+    function canonName_(name) {
+      return String(name).toLowerCase().replace(/\s+/g, " ").trim()
+        .replace(/(^|[\s\-'])([a-z])/g, function (m, p, c) { return p + c.toUpperCase(); });
+    }
+    var match = "";
+    var r = scan(Object.keys(ROSTER || {}));
+    if (r.exact) { hint.hidden = true; return; }        // roster spelling - clean
+    if (r.near) match = canonName_(r.near);             // roster extends the typing
+    if (!match && statNames) {
+      var l = scan(statNames);
+      if (!l.exact && l.near) match = canonName_(l.near);   // ledger-only near match
+      /* ledger-only EXACT spelling: already how this player is known -
+         nothing better to offer, so no hint */
+    }
+    if (!match) { hint.hidden = true; return; }
+    hint.innerHTML = 'SAME PERSON? \u201C' + esc(fullName.value.trim()) +
+      '\u201D nearly matches <b>' + esc(match) + "</b> in the league \u2014 one " +
+      "spelling per player keeps one identity. " +
+      '<button type="button" class="pcl-namehint-btn" id="nameHintUse">USE \u201C' +
+      esc(match) + '\u201D</button>';
+    hint.hidden = false;
+    var use = $("nameHintUse");
+    if (use) use.addEventListener("click", function () {
+      fullName.value = match;
+      fullName.dispatchEvent(new Event("input", { bubbles: true }));
+      hint.hidden = true;
+    });
+  }
+  try {
+    jsonpGet({ action: "stats" }).then(function (out) {
+      if (out && out.ok && Array.isArray(out.players)) {
+        statNames = out.players.map(function (p) { return p.player; });
+        nameHintCheck();
+      }
+    }).catch(function () { /* advisory only — offline is fine */ });
+  } catch (e) { /* advisory only */ }
   manager.addEventListener("input", refreshPhoto);
   desig.addEventListener("input", function () {
     desigLocked = false;

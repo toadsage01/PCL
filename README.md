@@ -1,286 +1,356 @@
-# Praper Contest League — Submission Form + Control Room
+# Praper Content League — Season 2 · The Complete System Guide
 
-A free, self-hostable contest submission form for a **views-first league**:
-players paste **all** their post links at once, every link becomes a chip,
-the platform + format + multiplier is auto-detected, and each post carries
-its own **analytics screenshot**. Google Apps Script + Sheets/Drive track it
-all in a duplicate-proof ledger — and an **admin console** (`admin.html`)
-reviews, verifies and audits it.
+**This document explains everything that was built, how it fits together,
+what it enforces, and how to run it for the next 10 weeks without losing
+or corrupting a single data point.**
 
-No form framework — the engine is ~600 lines of dependency-free vanilla JS
-(`js/app.js`) over a static skeleton (`index.html`), so every interaction is
-exactly as specified.
+> Audience: Manas (league engineer) first, the reviewer team second, and
+> anyone who has to maintain this after the season. Read sections 1–5 once
+> and you understand the machine; sections 10–14 are the operations
+> runbook you will actually live in.
 
-**Pixel Arcade theme** — built from the PCL brand DNA: orange `#ed3b00`
-(leaderboard bars) on a deep royal-blue family, pixel type (Press Start 2P,
-Silkscreen, Pixelify Sans — all vendored in `fonts/`), square corners and
-hard offset shadows everywhere, and **glow-driven light + dark modes**
-("Sunset Cabinet" / "Midnight Arcade" — no bland black & white). The PCL
-logo lives in the black arcade marquee header with the SEASON 2 tag above
-the SUBMISSION TERMINAL kicker (`assets/brand/`, original inspo in
-`assets/inspo/`).
+---
 
-## Features
+## 1 · What this is — the 30-second version
 
-- **Bulk link paste** — throw every URL in one box (spaces, commas,
-  semicolons or new lines). Valid links become chips (hover → × to remove);
-  bad ones become red chips with the reason on hover. Enter / `+ ADD`
-  commits more links anytime.
-- **Format auto-detection** — no manual dropdown: the URL decides
-  IG Reel ×1.25 / IG Post ×1 / YT Shorts ×1.25 / YT Video ×2 / LinkedIn
-  Post ×1. Accepts `https://…`, `www.…` or bare-domain shapes.
-- **Post Details, two modes** — EDIT (compact columnar: link · format badge ·
-  views · screenshot) and VIEW (confirmation rows + floating screenshot
-  lightbox with details line, thumbnail strip and PREV/NEXT).
-- **Honest error UX** — missing required field: red border + shadow + small
-  "Required" below, navy restored on input. Link errors appear at commit
-  time, never after the final submit. (Amber state reserved for a future
-  link-liveness / privacy check.)
-- **Participant identity done right** — Desg. dropdown (opens on focus with
-  the league's real titles) sits before Full name and renders as a
-  smart-shortened capsule inside the name field (Jr. VE · Exec. GFX …);
-  the 60-person league roster auto-fills a player's title from their name;
-  collab partner input autocompletes managers + roster; the logo is a link
-  back to the form; the completion screen reads ENTRY LOGGED · Points
-  Queued.
-- **50:50 balance rule (§6)** — every post is tagged PRAPER or PERSONAL
-  (toggle per row). The Control Room checks the balance PER PLATFORM
-  (players tab shows `IG 5:5` chips) and can retag any row from the review
-  modal. Rulebook §6 carries the exact wording.
-- **Admin access is bound** — the gate is a dropdown of the six league
-  operators; each operator's first unlock binds their browser, so nobody
-  can sign in under someone else's name (denials are logged; a legitimate
-  new device is unlocked once with `resetAdminDevice("Name")`).
-- **Auto-tracked views (YouTube live)** — SYNC NOW + twice-daily triggers
-  pull fresh YouTube counts into an append-only PCL-Snapshots tab; ledger
-  rows show the tracked number as an AUTO tag beside the claim. Instagram
-  activates when the Meta app lands; LinkedIn runs decision (c) with OCR
-  as the floor.
-- **Ledger that tells the truth** — the DONE filter counts every finished
-  review (MATCH or verified), and every read carries a cache-buster so
-  REFRESH can never serve stale numbers again.
-- **Official link formats only** — every pasteable shape of the three
-  league platforms passes: Instagram `instagram.com` + `instagr.am` legacy
-  domain (`/p/`, `/reel/`, `/reels/`, `/tv/`), YouTube `youtube.com`
-  (+ `m.` / `music.` subdomains) + `youtu.be` + `youtube-nocookie.com`
-  (`watch?v=`, `/shorts/`, `/live/`, `/embed/`, `/v/`), LinkedIn
-  `linkedin.com` (`/posts/`, `/feed/update/`, `/pulse/`, any activity id)
-  plus **`lnkd.in` — LinkedIn's own shortener**. Third-party shorteners
-  (bit.ly, tinyurl, …) stay rejected.
-- **Link ownership + 50:50 collabs** — a submitted link belongs to the
-  player who posted it first: the same player re-submitting it saves an
-  UPDATE snapshot, but ANOTHER player's identical link is rejected unless
-  it is a confirmed collab. Collab tagging is a small circular **people
-  icon** on each post row (community-style); tapping it opens a dropdown
-  right there to name the partner (a ½ badge marks tagged posts). When the
-  partner submits the same link (either side can tag first), the backend
-  confirms the pair, marks both ledger rows CONFIRMED and their points
-  split 50:50 at verification and on the leaderboard roll-up. Unconfirmed
-  collab tags stay PENDING (full points).
-- **Photo cropper** — the player photo opens a square cropper: drag to
-  position, zoom (slider / buttons / wheel / pinch), **CROP & USE** exports
-  a 512×512 JPEG (~100 KB) so the submit payload stays light and fast. The
-  photo lives in a compact tile LEFT of the name fields (mobile: above
-  them, centred) — icon-first (a Windows-style open-folder glyph), one alt
-  line: *only for the first time, until the admin approves it*.
-- **Self-healing submit** — `/api/submit` first (12 s guard), then a direct
-  simple POST to the GAS `/exec` URL; backend rejections (duplicate link,
-  unconfirmed collab, missing env var) surface as their real message —
-  never a phantom "SAVE FAILED — CHECK CONNECTION" on a healthy line.
-  Retried submissions are recognised by `submissionId` and never append
-  twice.
-- **Duplicate-proof ledger** — Media ID extracted per URL (`ig_<shortcode>`,
-  `yt_<videoId>`, `li_<activityId>`); the same post re-submitted is an
-  UPDATE snapshot, never double-counted views. One row per post rolls up
-  per player — `doGet` returns per-player post counts, unique media,
-  format ratio and projected points. A link on file under another player
-  is rejected at submission time (except the confirmed-collab flow above).
-- **Image uploads** with a hard 5 MB cap, type filter, per-row thumbnails.
-- **Player photo, one per player** — mandatory upload stored in Drive as
-  `<name>__<manager>` inside a child folder; a re-submission replaces the old
-  file (exactly one photo per unique player). Typing a name that already has
-  a photo pulls it back into the form automatically (JSONP lookup), and the
-  backend reuses it when no new file is picked.
-- **Reading-font toggle** — the **Aa** button beside the theme switch flips
-  the body face between **SF Pro / system sans** (the default on the form,
-  leaderboard and Control Room) and **VT323**, the original terminal-pixel
-  reading font. Titles keep the Silkscreen/Press Start 2P skeleton; the
-  choice persists per browser. In SF mode the copy runs at weight 500 with
-  a small solid drop shadow so the sans face sits inside the pixel design
-  without turning into VT323's heavy ink.
-- **Draft auto-save (accidental-reload insurance)** — every field, chip,
-  view count, collab tag and the uncommitted link text are continuously
-  saved (localStorage for text, IndexedDB for media). Close the tab, crash
-  the browser, refresh by accident → the form comes back with a
-  "DRAFT RESTORED ✓" note, photo and screenshots included. The draft is
-  wiped only when a submission actually succeeds.
-- **Typo-pointing link errors** — an invalid link is never just "invalid":
-  the error chip lights up the exact broken segment (the mistyped host, the
-  wrong path, or the whole foreign domain — `youtube.cm` even asks "did you
-  mean youtube.com?"). One click drops the link back into the input with
-  that part pre-selected, ready to retype.
-- **Undo / redo in the links box** — `Ctrl+Z` / `Ctrl+Y` (and `Ctrl+Shift+Z`)
-  rewind the whole links section: typing bursts, accidental mega-pastes,
-  commits and chip deletions. Duplicates are allowed to land for a moment
-  as an amber "duplicate, removing…" chip with a 3-second countdown bar,
-  then remove themselves.
-- **Manager autocomplete** — the reporting-manager field suggests from the
-  official list after one letter, case-blind ("VIK" finds Vikram Singh),
-  ranked by word-start → contains → initials, with the top match
-  pre-highlighted so Enter commits the exact spelling. Free text is still
-  allowed — the list assists, it never locks.
-- **Brand badges** — chips and post rows show a small platform logo
-  (Instagram / YouTube / LinkedIn SVG) with the word Reel / Post / Short /
-  Video tinted in the platform's brand colour — one readable item, not
-  an acronym.
-- **Weekly challenge, live week only** — the Week select offers just the
-  week that is live right now (season clock: opens Mon 19 Oct 2026 11:00 AM
-  IST, 7-day windows, warm-up counts as Week 1). The **i** button opens the
-  full challenge calendar — every week's name, criteria, reward points and
-  dates — so upcoming weeks can be planned.
-- **Rulebook on a button** — the marquee's **RULEBOOK ▸** opens the official
-  Season 2 rulebook (prizes, multipliers, 50:50 rule, participation rules)
-  restyled to the theme, no PDF needed.
-- **LOCAL mode** out of the box — works with no backend at all.
+A free, zero-dependency contest system for a **views-first content league**
+(100+ Praper Media participants, 10 weeks, LinkedIn + Instagram + YouTube):
 
-## Admin Console — `admin.html` (Control Room)
+| Piece | Where | What it does |
+|---|---|---|
+| **Entry Form** | `index.html` + `js/app.js` | Players submit post links + analytics screenshots; OCR reads the screenshots; YouTube counts auto-fetch |
+| **Control Room** | `admin.html` + `js/admin.js` | The 6-person review team verifies photos, designations and every claimed number |
+| **Leaderboard** | `leaderboard.html` + `js/leaderboard.js` | The public board — rank, name, designation, impressions, points. **Nothing else.** |
+| **The Ledger** | Google Apps Script (`gas/Code.gs`) + Google Sheets | Every submission, review write, snapshot and audit line lives in one spreadsheet |
+| **Relay** | `api/submit.js` on Vercel | Same-origin proxy so the form never fights CORS |
 
-Same pixel design system, key-gated review surface over the ledger:
+No form framework, no paid service, no server to rent: the frontend is
+static (GitHub → Vercel), the backend is one Apps Script file over
+Sheets + Drive.
 
-- **FEED** — every ledger row newest-first with filters (search, week,
-  format, status, NEW/UPDATE). Edit **Verified Count** and **Cross-Check**
-  (PENDING OCR / MATCH / MISMATCH / BOOST?) inline; edits are staged and
-  written in one batch by the sticky **SAVE CHANGES** bar.
-- **Review modal** — click any row thumbnail: the analytics screenshot sits
-  side-by-side with the claim. **SCAN** runs the free Drive OCR pass and
-  pre-fills a suggested count (you confirm). PREV/NEXT walks the filtered
-  rows; Esc / ← → keys work.
-- **AUDIT** — per-Media-ID snapshot timelines. Claimed-count jumps
-  (>50% within <72h) get an automatic **WATCH** mark; one click stages a
-  **BOOST?** flag on the latest snapshot.
-- **REPORTS** — season cards (submissions / posts / unique media /
-  projected + verified points), **weekly windows** (Mon 11:00 AM IST
-  deadlines, per-week posts/points/leader), per-player table with format
-  mix, and one-click **CSV export** of the full ledger.
-- **LOG** — the audit catalogue: who unlocked the Control Room (the gate
-  asks for the operator's name) and every saved write with old → new
-  values. Stored in an **AdminLog** sheet, so accidental or random edits
-  are always traceable. Feed rows also show the player's photo as an
-  avatar when one is on file.
+**Theme** — pixel arcade: orange `#ed3b00`, hard offset shadows, square
+corners, Silkscreen / Press Start 2P accents (vendored in `fonts/`), SF Pro
+for readability everywhere else, and a dark/light "arcade cabinet" toggle.
 
-### Turn the console on (2 minutes)
+---
 
-1. Re-paste the new `gas/Code.gs` into your Apps Script project and create a
-   **new deployment version**.
-2. In the editor run once: `setAdminKey("your-secret")` — the key is stored
-   in **Script Properties**, never in the repo.
-3. Open `/admin.html`, unlock with the key (kept in `sessionStorage`).
-4. Optional semi-auto OCR: in the editor **Services (+) → Drive API** add the
-   advanced service. Without it the SCAN button explains itself and you type
-   the count manually — everything else works.
+## 2 · How identity works — there is no signup
 
-> Demo without a backend: open `admin.html?mock=1` — a built-in mock ledger
-> exercises every surface (any key with 4+ characters unlocks).
+There is deliberately **no account system**. A participant IS the pair:
 
-## Leaderboard — `leaderboard.html` (public)
+> **(Full Name, Reporting Manager)** — typed on the form, verified by
+> a human on the first submission.
 
-The league's public high-score board, styled after the official PCL
-leaderboard sheet (royal-blue stage, orange score bars, white dividers) in
-the pixel design system, with a data face (VT323) chosen for readability.
-Exactly five columns: **RANK · NAME · DESIGNATION · TOTAL IMPRESSIONS ·
-TOTAL POINTS**.
+- **Full Name** — the form carries the 60-person roster (name → real job
+  title). Picking/typing a name auto-fills the designation. As of the
+  latest build, if the typed name *nearly* matches a roster or ledger name
+  ("Manas" vs "Manas Ranjan"), an amber **SAME PERSON?** hint appears with
+  a one-tap USE button — two spellings of one human would otherwise
+  become two leaderboard entities and split their points forever.
+- **Designation (Desg.)** — chosen from a dropdown of the league's real
+  titles (or typed), rendered as a smart capsule before the name
+  ("VE", "Sr. Exec | Motion Graphics", …). First submission writes it to
+  the ledger; later submissions reuse it silently.
+- **Reporting Manager** — autocomplete over the real manager list
+  (tap-to-fill), used for identity disambiguation and nothing else.
+- **Photo** — cropped in-browser to a 512×512 JPEG (~100 KB). The photo is
+  reused from the ledger the next time the same name appears — nobody
+  uploads twice.
 
-- **Week chips** — ALL-SEASON + Week 1..10 once the backend reports season
-  weeks; the live week pulses, future weeks are locked. A pre-weeks backend
-  simply shows the ALL-SEASON board (no error).
-- **Dedup math** — impressions/points are computed server-side: per Media ID
-  only the newest snapshot counts (UPDATE rows repeat the full count), a
-  post sits in the week of its first snapshot, and verified cells win over
-  claimed/projected once the review fills them in. This also fixed
-  `players[].projectedPoints`, which previously summed every snapshot row.
-- **Resilience** — manual REFRESH + LAST SYNC stamp (weak-network friendly),
-  SIGNAL LOST retry state, `?mock=1` offline demo board.
-- **Designations** — fill `PLAYER_META` in `gas/Code.gs`
-  (`'Full Name': 'Designation'`); unlisted names show an em dash.
+### The verification badge — and where it may appear
 
-### Turn the weekly tabs on (1 minute)
+The reviewer team (Control Room) manually confirms that a participant's
+photo is really them (not a meme/vulgar image) and that the designation is
+correct. That confirmation produces a **VERIFIED tick** — and league
+policy is absolute:
 
-Re-paste `gas/Code.gs` into the Apps Script project and create a **new
-deployment version** — the board picks up the `weeks` roll-up and
-designations automatically. No frontend config, no other changes; the
-season clock lives in `SEASON_START_ISO` / `LEAGUE_WEEKS` at the top of
-`Code.gs`.
+- ✅ Form: the player's own designation seal.
+- ✅ Control Room: review flows, participant cards, photo lightbox.
+- ❌ **Leaderboard: NEVER.** The public stats endpoint strips verification
+  at the source (`publicPlayer_` in Code.gs) *and* the board renderer has
+  no code path that could draw it. Rank, name, designation, impressions,
+  points — nothing else ever.
 
-## Run locally
+---
 
-```bash
-./serve.sh            # → http://localhost:8080
-# or: python3 -m http.server 8080
-```
+## 3 · The rulebook → what the code enforces
 
-No GAS URL configured yet? You are in LOCAL mode — submissions print to
-the browser console and are kept in `localStorage` (`pcl_submissions`).
-
-## Connect Google Apps Script (5 min)
-
-1. Open <https://script.google.com> → **New project**
-2. Paste `gas/Code.gs` into the editor, save
-3. **Deploy → New deployment → Web app**
-   - Execute as: **Me**
-   - Who has access: **Anyone**
-4. Copy the `/exec` URL into `js/gas-endpoint.js` → `gasWebAppUrl`
-5. Done. Submissions land in a "Submissions" sheet (one row per post);
-   uploads go to a "Praper Contest League Uploads" Drive folder. `GET` the
-   `/exec` URL for `{totalSubmissions, totalPosts, uniqueMedia, players[], …}`
-   metrics.
-
-> Already deployed an earlier version? Re-paste `Code.gs` and create a NEW
-> deployment version so `/exec` picks it up. The `Content Type` column is
-> deprecated but kept in `HEADERS` — existing sheets keep working.
-
-## Go public (free)
-
-**Option A — GitHub Pages** (pure static, GAS URL visible in client config):
-
-Settings → Pages → Deploy from branch → `main` / `(root)` → Save
-
-**Option B — Vercel** (free tier, keeps the GAS URL secret server-side):
-
-1. Push this repo, then in Vercel: **Add New → Project → Import** the repo
-2. Framework preset: **Other** (it's a static site + one serverless fn)
-3. Settings → Environment Variables → add
-   `GOOGLE_SCRIPT_WEBAPP_URL` = your `/exec` URL
-4. Deploy. Then flip `submitViaApi: true` in `js/gas-endpoint.js` so
-   submissions route through `/api/submit` (the serverless forwarder in
-   `api/submit.js`) instead of hitting GAS directly from the browser.
-
-**Local dev like Vercel prod** (`vercel dev`):
-
-```bash
-npm i -g vercel        # once
-vercel link            # follow prompts
-cp .env.example .env.local   # then paste your GAS /exec URL inside
-vercel dev             # → http://localhost:3000
-```
-
-> Scale notes: the form page is static → effectively unlimited concurrent
-> viewers; the real bottleneck is Google Apps Script itself (fine for a
-> weekly contest; for massive spikes, queue submissions before GAS).
-
-## Customize
-
-| What | Where |
+| Rulebook rule | Where it lives |
 |---|---|
-| Section copy / week list | `index.html` (form skeleton) |
-| URL → format rules, multipliers | `js/app.js` (`FORMATS`, `classifyUrl`) |
-| Attachment cap + accepted types | `js/gas-endpoint.js` (`maxFileMB`, `fileTypes`) |
-| Colors / dark & light palettes | `css/theme.css` (`:root` + `html[data-pcl-theme="dark"]` tokens) |
-| Success screen | `#pclDone` markup in `index.html` |
-| Backend sheet/folder names, server cap | `gas/Code.gs` (top CONFIG block) |
-| Submit mode (direct vs Vercel API) | `js/gas-endpoint.js` (`submitViaApi`) |
-| Admin season dates / week count | `js/admin.js` (`SEASON_START_ISO`, `WEEKS`) |
-| Admin statuses / audit jump rule | `gas/Code.gs` (`CHECK_VALUES`) · `js/admin.js` (`renderAudit`) |
+| YT Long-form ×2 · YT Shorts ×1.25 · IG Reels ×1.25 · IG Posts/Carousels ×1 · LinkedIn ×1 | `MULTIPLIERS` in Code.gs; format auto-detected from the URL, never hand-picked |
+| **Fractional points round UP** | every points write goes through `Math.ceil` (9,863 reel views → 12,329 pts, never 12,328) |
+| **Collab = FULL points each** (§6 rule 2: *"Both employees will receive 1,250 leaderboard points each"*) | Both rows share one `Media ID`; each scores its own player the FULL `ceil(views × mult)`. There is **no halving anywhere** — the roll-up credits every CONFIRMED row to its own player explicitly |
+| One Post, One Platform (§6 rule 4) | identical content on multiple platforms → admin reviews; the ledger keeps every link for the audit |
+| No paid boosting (§6 rule 3) | the review pipeline (Cross-Check = BOOST?) flags suspected paid spikes before points are verified |
+| Redundant-URL protection (no self-duplicate point spikes) | every link is fingerprinted to a `Media ID`; the same player resubmitting the same link is an **UPDATE** (snapshot refresh, never a second score); a *different* player claiming the same link untagged is **REJECTED**; tagged both ways it becomes a **CONFIRMED collab** |
+| 50:50 content balance (§5) | every post carries `Content Type` = PRAPER or PERSONAL (one-tap toggle on the form, admin-editable); the Control Room's PLAYERS tab shows per-platform balance chips (amber when off-balance) |
+| ≥2 platforms, ≥20 posts, weekly challenge deadlines | tracked in the ledger; challenge entries ride the weekly fields |
+| Weekly challenge rewards (§4: +6000…+12000) | `PCL-Awards` tab + the REPORTS tab's **GIVE** control; award points ride on top of post multipliers in season totals and weekly buckets |
+| CBO/COO & notice-period players earn points but no prizes | organizational — the board scores everyone identically |
 
-## Docs
+---
 
-Architecture, data flow and failure modes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+## 4 · How a submission travels — end to end
+
+```
+Player form (index.html)
+  1. paste links            → chips, format auto-detected, duplicates flagged
+  2. type views OR let the machine read them (see §8)
+  3. attach screenshot      → downscaled to ≤1600px JPEG (~130KB, was ~2.7MB raw)
+  4. SUBMIT                 → payload = identity + posts[] + screenshots + OCR reads
+                             → one submissionId ("pcl-<time>-<rand>") stamps the whole batch
+  5. transport chain:
+       a. POST /api/submit (Vercel function, same-origin, 30s timeout)
+            → forwards to the Apps Script /exec URL (secret env var)
+            → relays GAS's JSON answer verbatim
+       b. if that route is unreachable → direct simple POST to /exec
+            (the 302 answer is CORS-unreadable BY DESIGN of Google's infra,
+             so the form then CONFIRMS via JSONP action=subcheck, keyed on
+             the submissionId; found → success, truly-absent → one auto
+             retry → honest failure)
+  6. GAS ingest (under a serialization LockService):
+       - per post: ownership check → NEW / UPDATE / REJECT / collab CONFIRM
+       - screenshots → Drive files; row(s) appended to PCL-Data
+       - OCR Count written at ingest; Projected Points precomputed (ceil)
+       - idempotent: a retried submissionId can never append twice
+  7. form shows ENTRY LOGGED! / Points Queued — draft wiped
+```
+
+**Failure semantics (the SAVE-FAILED saga):** a non-JSON gateway answer is
+*never* mistaken for success; a server rejection ("duplicate link",
+"collab not confirmed") stops the chain and shows its real message; only
+true network drops fall through to the next transport. The Vercel function
+declares `maxDuration = 60` and answers upstream failures in plain text so
+the frontend falls through instead of showing a phantom rejection.
+
+---
+
+## 5 · The Google Sheet — the single source of truth
+
+One spreadsheet, four tabs (SIDEBAR: `SHEET_ID` in Code.gs):
+
+### Tab `PCL-Data` — the ledger (29 columns, REVIEW-FIRST order)
+
+Physical order = review priority. Every access in the code is **by header
+name**, so the layout is presentation-only:
+
+| # | Column | Meaning |
+|---|---|---|
+| 1 | Timestamp | row write time (IST) |
+| 2–4 | Full Name · Reporting Manager · Player Designation | identity (repeats on every row the player owns) |
+| 5 | Player Verified | `VERIFIED` once the Control Room confirms photo + designation — admin-facing only |
+| 6 | Player Photo | Drive link to the 512px crop |
+| 7 | Entry Type | `NEW` first claim of a media id · `UPDATE` same player refreshing the count |
+| 8 | Weekly Challenge | which challenge this entry enters (blank = none) |
+| 9–13 | Platform · Format · Multiplier · Post URL · Media ID | what the post is; Media ID = dedupe key |
+| 14–16 | Collab With · Collab Status · Content Type | collab lifecycle + PRAPER/PERSONAL tag |
+| 17–18 | Claimed Views/Impressions · OCR Count | what the player typed · what the machine read off the screenshot |
+| 19 | Cross-Check | review state: `PENDING OCR` / `MATCH` / `MISMATCH` / `BOOST?` |
+| 20–22 | Verified Count · Verified Points · Projected Points | the reviewer's final numbers and both point derivations |
+| 23–24 | Screenshot File · Screenshot Link | Drive evidence |
+| 25–26 | Challenge URL · Notes | weekly-challenge context |
+| 27–29 | Submission ID · Snapshot # · Raw JSON | machine/audit tail |
+
+### Tab `PCL-Snapshots`
+Append-only metric snapshots (per Media ID: source, observed count, time)
+written by the twice-daily trigger and SYNC NOW. The newest snapshot per
+media rides every ledger row as an AUTO tag — the reviewer sees the
+platform-observed number next to the claim without opening anything.
+
+### Tab `AdminLog`
+Every admin write: who, what, old→new values, device fingerprint. The
+AUDIT and ADMIN LOG tabs render it. This is the season's legal record.
+
+### Tab `PCL-Awards`
+Weekly-challenge rewards: Week · Player · Points · Note · Awarded By.
+Folded into totals by the roll-up automatically.
+
+---
+
+## 6 · Scoring math — how points are derived
+
+```
+projected points (per row) = ceil(claimed views × format multiplier)
+verified points (per row)  = ceil(verified count × format multiplier)   ← full points, collab or not
+```
+
+Player totals (deduped — only the **newest snapshot per Media ID** counts,
+so UPDATEs never stack):
+
+- **impressions** = Σ verified count where present, else claimed count
+- **points** = Σ verified points where present, else projected — plus
+  weekly-challenge awards
+- weekly buckets credit each media to the week of its **first** snapshot
+  (a post stays in the week it entered the league, no matter when the
+  count was refreshed)
+
+The leaderboard's points column = verified-where-filled, projected
+otherwise — the honest "current best" number the rulebook wants.
+
+---
+
+## 7 · The review pipeline — from claim to verified
+
+Each row walks: `PENDING OCR → MATCH / MISMATCH / BOOST? → Verified Count
+filled → points verified`.
+
+1. **The machine reads first.** OCR (Tesseract.js, client-side) extracts
+   the number from every attached screenshot at attach time; YouTube links
+   self-fetch the official `viewCount` via the Data API key. The form
+   auto-fills under an `AUTO · OCR` / `AUTO · YOUTUBE` tag; if the player
+   typed a different number, a tap-to-use `OCR READS x — USE` chip offers
+   the machine read; a human edit always wins. Machine reads land in the
+   **OCR Count** column at ingest.
+2. **The reviewer compares.** The Control Room feed shows claimed · OCR ·
+   tracked (platform snapshot) side by side. A typed verified count that
+   matches promotes the row to MATCH automatically.
+3. **The reviewer writes the final number** (Verified Count) — points
+   derive and the row is done. SCAN (Drive-side OCR) and the review modal
+   can overwrite anything; every write is logged old→new.
+
+---
+
+## 8 · Metrics auto-tracking — what's automatic vs manual
+
+| Platform | Automatic | Manual fallback |
+|---|---|---|
+| **YouTube** | official `viewCount` via Data API v3 (key health-tested; form reads it the moment a `yt_` link lands; server batch-syncs twice daily into PCL-Snapshots) | screenshot + OCR |
+| **Instagram** | none possible without a reviewed Meta app (impressions are author-private) | screenshot + OCR; snapshot sync stub awaits the Meta app |
+| **LinkedIn** | no public API at all (option (c) decision) | screenshot + OCR floor |
+
+**Why "impressions" was never needed for YouTube:** the Data API's public
+`viewCount` is the scored metric; Studio impressions are author-private
+data (OAuth-locked). The research phase listed them as an ideal-to-have;
+the working key made them moot — YT participants type and screenshot
+nothing.
+
+---
+
+## 9 · The Control Room — the reviewer team's console
+
+- **Gate**: 6 whitelisted operators (Pratham Jindal, Sejal Choudhary,
+  Kanupriya, Vikram Singh Mawari, Lagan Garg, Manas Ranjan) + the admin
+  key. The **first device** an operator unlocks from is bound to them
+  (hashed fingerprint); the same name from a different device is refused
+  and logged. `resetAdminDevice("Full Name")` from the script editor frees
+  a legitimate new device.
+- **FEED** — every row newest-first: brand badges, collab tags, content
+  type, hashes, OCR/tracked AUTO tags, quick chips (ALL / NEEDS REVIEW /
+  BOOST / MISMATCH / DONE) and instant filters. Staged edits save in one
+  batch (SAVE CHANGES).
+- **PLAYERS** — all participants: aggregated points/views, per-platform
+  balance chips, app multi-select, photo + identity verification
+  (**CONFIRM ID** = green tick; identity triple: name · manager ·
+  designation), CONFIRM/CLEAR per media id.
+- **REPORTS** — season cards + weekly windows (Mon 11:00 IST closes) +
+  per-week **CHALLENGE AWARD** (pick a player, type points, GIVE — writes
+  to PCL-Awards, appears in totals instantly).
+- **AUDIT / ADMIN LOG** — the AdminLog catalogue.
+- **CSV EXPORT** — full ledger client-side.
+
+---
+
+## 10 · The public leaderboard
+
+- JSONP read of the stats endpoint with a cache-buster (Google's /exec CDN
+  would otherwise serve stale numbers); 60s client guard, REFRESH button.
+- ALL-SEASON + W1…W10 tabs; LAST SYNC stamp.
+- **Shows**: RANK · NAME · DESIGNATION · TOTAL IMPRESSIONS · TOTAL POINTS.
+- **Never shows**: verification status (stripped server-side), photos,
+  manager names, collab details, OCR/machine values, admin anything.
+
+## 11 · Data-integrity guarantees — the "no corruption, no loss" list
+
+1. **Identity uniqueness** — Media-ID ownership: one link → one owner;
+   second claimer rejected or collab-confirmed. Same player + same link →
+   UPDATE (snapshot), never a duplicate score. Submission-ID idempotency:
+   a retry can't double-append. Near-match name hint at the form catches
+   "Manas" vs "Manas Ranjan" before it lands.
+2. **No lost updates** — every ingest runs under `LockService` (30s wait):
+   two participants submitting in the same instant serialize.
+3. **No silent point inflation** — ceil everywhere, dedup by newest
+   snapshot per media, UPDATE rows carry full current counts (never
+   deltas), collab rows score full-but-independent.
+4. **Absurd numbers get caught early** — the form raises a "VERY HIGH"
+   lamp above 25,000,000; the OCR reader rejects >1e10; the reviewer makes
+   the final call with OCR + tracked snapshots side by side.
+5. **Nothing is destructive** — appends only; reviews overwrite specific
+   cells with old→new audit lines; `reorganizeForReview_()` backs the whole
+   tab up before touching a single column; CSV export is one click.
+6. **Transport honesty** — no phantom successes (non-JSON answers fail),
+   no phantom failures (the 302 is verified through subcheck).
+
+## 12 · Deployment — what runs where
+
+| Piece | Host | Notes |
+|---|---|---|
+| 3 portals | GitHub repo → Vercel (`praper-contest-league.vercel.app`) | auto-redeploys on push |
+| `/api/submit` | Vercel function | needs env var `GOOGLE_SCRIPT_WEBAPP_URL` (set) |
+| Backend | Apps Script bound to the Sheet | **pinned-version deploy: every Code.gs change = paste + New version** |
+| Secrets | Script Properties | `ADMIN_KEY`; optional `YOUTUBE_API_KEY` override |
+
+**The one manual step (C1): paste `gas/Code.gs` into the Apps Script
+editor → Deploy → Manage deployments → Edit → New version.** That single
+paste installs: content-type persistence, device binding, the YouTube
+tracking leg + PCL-Snapshots, subcheck, LockService, collab full-points,
+PCL-Awards, the review-first HEADERS, and the OCR-count ingest.
+
+## 13 · Operations runbook — launch + the 10-week rhythm
+
+**Before W1 opens (one-time, in the Apps Script editor):**
+1. Paste Code.gs + New version (above).
+2. Run `reorganizeForReview_()` once — physically reorders the existing
+   PCL-Data columns to the review-first layout (auto-backup tab first).
+3. **Clean the test mess**: the sheet currently holds test rows (61
+   Jasmine rows, a 17,017,775,513 "Manas", manager typos like "Vikram" vs
+   "Vikram Singh"). Select those rows in PCL-Data → delete. Do this BEFORE
+   week 1 so the board starts clean. (The form-side guards now prevent
+   every one of those mess classes; the old rows just need deleting.)
+4. Optional: `buildAdminGuide()` prints an in-editor cheatsheet.
+
+**Weekly rhythm (reviewer team):**
+- **Mon 11:00 IST** — the week closes (rulebook). FEED → review every
+  PENDING OCR row: compare claimed vs OCR vs tracked → type Verified
+  Count → SAVE CHANGES. DONE chip = check MATCH or verified filled.
+- **Verify identities** — PLAYERS tab: photo real? designation right?
+  → CONFIRM ID. Unverified is invisible to the public board by design.
+- **Award the week** — REPORTS → CHALLENGE AWARD → GIVE.
+- **Watch the SYNC stamp** — YT syncs twice daily (09:00/21:00 trigger);
+  SYNC NOW forces a pass. IG/LI stay manual (screenshots).
+- **Mondays are the rush** — submissions serialize behind the lock;
+  the form retries and verifies on its own; nobody needs to babysit.
+
+**If something looks wrong:** AUDIT tab shows who-wrote-what; the backup
+tabs (`PCL-Data-Backup-*`) are pristine copies; the sheet's File → Version
+history covers the rest. Nothing in this system deletes.
+
+## 14 · The test suite — what's proven and how to re-run it
+
+| Suite | Proves | Run |
+|---|---|---|
+| `scripts/test_do_post_collab.js` | 50 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, device binding, subcheck, awards math, public-stats verified strip, review-first reorder with data survival | `node scripts/test_do_post_collab.js` |
+| `scripts/test_ocr_parse.js` | 34 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection | `node scripts/test_ocr_parse.js` |
+| `scripts/test_leaderboard_rollup.js` | 16: dedup-by-media, verified-over-claimed, weekly buckets | `node scripts/test_leaderboard_rollup.js` |
+| `scripts/test_url_diag.js` | 24: every accepted URL shape | `node scripts/test_url_diag.js` |
+| `scripts/save_e2e.sh` + `fixture_save.js` | browser E2E of the transport chain against the REAL wire shapes (Vercel-healthy / GAS-302 / dead-route) | `bash scripts/save_e2e.sh` |
+| `scripts/ocr_e2e.sh`, `save_e2e.sh`, prior rounds | agent-browser E2E across all 3 portals (form flows, admin gate/tabs/awards, leaderboard) | see scripts/ |
+
+## 15 · Known limits & gotchas
+
+- **GAS is pinned-version**: a paste without "New version" changes nothing.
+  If the console and sheet ever disagree, suspect a stale deployment.
+- **Google's /exec CDN caches GETs** — all reads carry `&_=<ms>`; don't
+  remove the cache-busters.
+- **The direct /exec leg can never read its own answer** (302 + no CORS
+  headers — Google's infrastructure, not a bug). subcheck exists for that
+  reason; keep it deployed.
+- **Vercel Hobby body ceiling 4.5MB** — the payload diet (≤1600px shots)
+  keeps submissions ~130–400KB; the 413 guard has a readable message.
+- **The YT API key is public by design** (front-end auto-read); restrict
+  it by referrer in Google Cloud if you ever want belt-and-suspenders.
+- **Identity is spelling-sensitive by nature** — the hint chip + roster
+  autofill prevent most; the reviewer's PLAYERS tab is the final net.
+
+*Everything else — every chip, badge, tab and number — is described
+inline in the code where it happens; `docs/ARCHITECTURE.md` carries the
+round-by-round build history and `docs/TRACKER.md` the decision log.*

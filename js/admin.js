@@ -285,6 +285,7 @@
      ========================================================================== */
   var mockEdits = {};   // sheet row → {ocrCount, crossCheck, verifiedCount}
   var MOCK_VERIFIED = {};  // normName → bool (mock identity verification)
+  var MOCK_AWARDS = [];    // mock weekly-challenge rewards (PCL-Awards)
 
   function mockSvg(seed, big) {
     // tiny pixel analytics placeholder — deterministic per seed
@@ -455,6 +456,7 @@
                     lastSubmissionAt: rows[0].ts },
           players: mockPlayers,
           rows: rows,
+          awards: MOCK_AWARDS.slice(),
           log: mockLog
         });
       }, 220);
@@ -545,6 +547,17 @@
             resolve({ ok: true, updated: (body.players || []).length });
             return;
           }
+          if (body.action === "awardChallenge") {
+            MOCK_AWARDS.push({ week: body.week, player: body.name,
+                               points: body.points, note: "" });
+            mockLog.unshift({ ts: new Date().toISOString(),
+              operator: body.operator || "unnamed", action: "AWARD",
+              target: "W" + body.week + " · " + body.name + " · +" + body.points,
+              detail: "weekly challenge reward" });
+            resolve({ ok: true, awarded: { week: body.week, name: body.name,
+                                           points: body.points } });
+            return;
+          }
           mockLog.unshift({ ts: new Date().toISOString(),
             operator: body.operator || "unnamed", action: "VERIFY",
             target: (body.updates || []).length + " row(s)",
@@ -574,6 +587,8 @@
     totals: null,
     generatedAt: null,
     log: [],             // audit catalogue (newest first)
+    awards: [],          // weekly-challenge rewards (PCL-Awards)
+    awardByWeek: {},     // week → { total, list:[{player,points,note}] }
     pending: {},          // sheet row → {ocrCount?, crossCheck?, verifiedCount?, contentType?}
     filters: { q: "", week: "all", format: "all", status: "all", type: "all", ctype: "all" },
     plats: [],            // participants tab: selected platform keys ['ig','yt','li']
@@ -741,6 +756,14 @@
     });
     state.totals = out.totals || null;
     state.generatedAt = out.generatedAt || null;
+    state.awards = Array.isArray(out.awards) ? out.awards : [];
+    state.awardByWeek = {};
+    state.awards.forEach(function (a) {
+      var slot = state.awardByWeek[a.week] ||
+        (state.awardByWeek[a.week] = { total: 0, list: [] });
+      slot.total += Number(a.points) || 0;
+      slot.list.push({ player: a.player, points: a.points, note: a.note });
+    });
     if (Array.isArray(out.log)) state.log = out.log;
     else if (MOCK) state.log = mockLog;
     renderAll();
@@ -1709,6 +1732,7 @@
     for (var w = 1; w <= WEEKS; w++) {
       var win = weekWindow(w);
       var b = byWeek[w];
+      var aw = state.awardByWeek[w];
       var windowTxt = fmtDay(win.a.toISOString()) + " → " + fmtDay(win.b.toISOString());
       var live = win.b.getTime() > Date.now();
       wRows += "<tr" + (b && b.lead ? "" : ' class="pcl-muted-row"') + ">" +
@@ -1719,15 +1743,68 @@
         '<td class="num">' + (b ? fmt(b.pts) : "–") + "</td>" +
         '<td class="num">' + (b ? fmt(b.ver) : "–") + "</td>" +
         "<td>" + (b && b.lead ? esc(b.lead.name) + ' <span class="pcl-muted-cell">(' + fmt(b.lead.pts) + ")</span>" : "–") + "</td>" +
+        '<td><div class="pcl-award">' +
+          '<span class="pcl-award-total" title="awarded challenge points for this week">' +
+            (aw ? "+" + fmt(aw.total) : "+0") + "</span>" +
+          '<input class="pcl-award-name" data-aw="' + w + '" placeholder="player" ' +
+            'list="pclAwardNames" aria-label="Award player for week ' + w + '" />' +
+          '<input class="pcl-award-pts" data-aw="' + w + '" type="number" min="1" ' +
+            'placeholder="pts" aria-label="Award points for week ' + w + '" />' +
+          '<button type="button" class="pcl-award-btn" data-act="award" data-week="' + w +
+            '">GIVE</button>' +
+          "</div></td>" +
         "</tr>";
+    }
+    var awardNames = $("pclAwardNames");
+    if (awardNames) {
+      awardNames.innerHTML = state.players.map(function (p) {
+        return '<option value="' + esc(p.player || "") + '">';
+      }).join("");
     }
     $("weekTable").innerHTML = "<thead><tr>" +
       "<th>WEEK</th><th>WINDOW (IST)</th><th class='num'>POSTS</th><th class='num'>PLAYERS</th>" +
       "<th class='num'>PROJECTED</th><th class='num'>VERIFIED</th><th>LEADER</th>" +
+      "<th>CHALLENGE AWARD</th>" +
       "</tr></thead><tbody>" + wRows + "</tbody>";
     /* the per-player roster now lives in its own PLAYERS tab (tab 2) —
        reports stays season-level: cards + weekly windows */
   }
+
+  /* weekly-challenge awards (rulebook §4) — write straight to PCL-Awards
+     via the key-gated awardChallenge action; the roll-up folds them into
+     the player's season total and the week's bucket automatically */
+  $("weekTable").addEventListener("click", function (ev) {
+    var t = ev.target;
+    var btn = t && t.closest ? t.closest('[data-act="award"]') : null;
+    if (!btn) return;
+    var w = Number(btn.getAttribute("data-week"));
+    var wrap = btn.closest(".pcl-award");
+    var name = wrap.querySelector(".pcl-award-name").value.trim();
+    var pts = Math.ceil(Number(wrap.querySelector(".pcl-award-pts").value));
+    if (!name || !(pts > 0)) {
+      toast("Pick a player and positive points first", true);
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "…";
+    gasPost({ action: "awardChallenge", adminKey: state.key,
+              operator: operatorName(), device: deviceFingerprint(),
+              week: w, name: name, points: pts })
+      .then(function (out) {
+        if (!out || out.ok === false) {
+          throw new Error((out && out.error) || "Award failed");
+        }
+        toast("+" + pts + " points → " + name + " (W" + w + ")");
+        return loadAll(true);
+      })
+      .catch(function (err) {
+        toast(err.message || "Award failed", true);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = "GIVE";
+      });
+  });
 
   /* ============================================================================
      CSV EXPORT — full ledger, client-side

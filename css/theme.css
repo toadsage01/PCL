@@ -2395,3 +2395,27 @@ html[data-pcl-font="og"] .pcl-cttag { font-size: 7px; }
 /* SF readability for the new pieces */
 html:not([data-pcl-font="og"]) .pcl-desig-capsule { font-weight: 600; letter-spacing: 0.2px; }
 html:not([data-pcl-font="og"]) .pcl-ct { font-weight: 600; }
+
+/* ---------- identity guard hint (form) + sanity lamp (post rows) ---------- */
+.pcl-namehint {
+  font-size: 14px; line-height: 1.5; color: #8a5200;
+  background: #fff4e0; border: 2px dashed #e0a23c; border-radius: 10px;
+  padding: 9px 12px; margin: -2px 0 12px;
+}
+.pcl-namehint b { color: var(--pcl-primary, #1a1b20); }
+.pcl-namehint-btn {
+  margin-left: 8px; padding: 5px 10px; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 700;
+  border: 2px solid var(--pcl-primary, #1a1b20); border-radius: 7px;
+  background: var(--pcl-primary, #1a1b20); color: #fffdf6;
+  box-shadow: 2px 2px 0 rgba(26,27,32,.25);
+}
+.pcl-namehint-btn:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 rgba(26,27,32,.25); }
+.pcl-highnote {
+  display: block; margin-top: 4px;
+  font-size: 12px; font-weight: 700; letter-spacing: .2px; color: #8a5200;
+}
+html[data-pcl-theme="dark"] .pcl-namehint {
+  color: #ffd9a0; background: #2a2115; border-color: #b57f2e;
+}
+html[data-pcl-theme="dark"] .pcl-highnote { color: #ffd9a0; }

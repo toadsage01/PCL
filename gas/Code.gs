@@ -12,7 +12,7 @@
  *            3. enforces LINK OWNERSHIP: a link already on file under
  *               ANOTHER player is rejected unless the collab pair checks
  *               out (either side tagged the other) — confirmed pairs get
- *               'Collab Status' = CONFIRMED and their points split 50:50
+ *               'Collab Status' = CONFIRMED; BOTH rows score FULL points
  *            4. saves the analytics screenshot (base64) to Drive
  *            5. appends one ledger row with claimed count, multiplier and
  *               projected points — leaving the OCR / cross-check / verified
@@ -166,21 +166,24 @@ var PLAYER_META = {
   'hirday sarkar': 'Junior Video Editor'
 };
 
-/** Canonical ledger columns — order matters, created on first run.
- *  APPEND-ONLY: new columns go at the END so the review-column indexes
- *  (COL_OCR..COL_VPOINTS) stay stable for older sheets. */
+/** Canonical ledger columns — REVIEW-FIRST order (created on first run):
+ *  identity + verify columns first, machine/audit columns last. */
+/* REVIEW-FIRST column order: identity + what-needs-verifying come first;
+ * machine/audit columns (Submission ID, Snapshot #, Raw JSON…) go last.
+ * Every read and write addresses columns BY NAME, so this layout is
+ * presentation-only — run reorganizeForReview_() once from the editor to
+ * physically reorder an existing sheet (it backs the data up first). */
 var HEADERS = [
-  'Timestamp', 'Submission ID', 'Entry Type', 'Snapshot #',
-  'Full Name', 'Reporting Manager',
-  'Content Type', 'Platform', 'Format', 'Multiplier', 'Post URL', 'Media ID',
-  'Weekly Challenge', 'Challenge URL', 'Notes',
-  'Claimed Views/Impressions', 'Projected Points',
+  'Timestamp', 'Full Name', 'Reporting Manager',
+  'Player Designation', 'Player Verified', 'Player Photo',
+  'Entry Type', 'Weekly Challenge',
+  'Platform', 'Format', 'Multiplier', 'Post URL', 'Media ID',
+  'Collab With', 'Collab Status', 'Content Type',
+  'Claimed Views/Impressions', 'OCR Count', 'Cross-Check',
+  'Verified Count', 'Verified Points', 'Projected Points',
   'Screenshot File', 'Screenshot Link',
-  'OCR Count', 'Cross-Check', 'Verified Count', 'Verified Points',
-  'Raw JSON',
-  'Player Photo',
-  'Collab With', 'Collab Status',
-  'Player Designation', 'Player Verified'
+  'Challenge URL', 'Notes',
+  'Submission ID', 'Snapshot #', 'Raw JSON'
 ];
 
 /** Player identity (per PLAYER, not per post — the same value repeats on
@@ -191,12 +194,16 @@ var HEADERS = [
  *          player's photo + designation (insta-style tick everywhere); ''
  *          means unverified, and unverified players get NO badge at all. */
 
-/** Collab-post lifecycle (rulebook §7, 50:50 split):
+/** Collab-post lifecycle (rulebook §6, rule 2):
  *  ''        plain post — the link belongs to this player
  *  PENDING   the player tagged a partner; the partner's same-link entry has
- *            not landed yet (unconfirmed collabs still earn full points)
+ *            not landed yet
  *  CONFIRMED the partner's matching entry landed and the pair was verified
- *            — BOTH players' rows get 50% of the post's points. */
+ *            — EACH employee receives the post's FULL points. The rulebook
+ *            is explicit: 1,000 views × 1.25 = 1,250 points and "Both
+ *            employees will receive 1,250 leaderboard points each". The
+ *            two rows share one Media ID but score independently; there is
+ *            NO halving anywhere in the pipeline. */
 var COLLAB_PENDING = 'PENDING';
 var COLLAB_CONFIRMED = 'CONFIRMED';
 
@@ -207,8 +214,11 @@ var CHECK_VALUES = ['PENDING OCR', 'MATCH', 'MISMATCH', 'BOOST?'];
 /** Admin console — secret key lives in Script Properties, not in code. */
 var ADMIN_KEY_PROP = 'ADMIN_KEY';
 
-/** Column indexes (1-based) of the four review columns — consecutive. */
-var COL_OCR = 20, COL_CHECK = 21, COL_VCOUNT = 22, COL_VPOINTS = 23;
+/** Column indexes of the four review columns — derived from HEADERS. */
+var COL_OCR = HEADERS.indexOf('OCR Count') + 1;
+var COL_CHECK = HEADERS.indexOf('Cross-Check') + 1;
+var COL_VCOUNT = HEADERS.indexOf('Verified Count') + 1;
+var COL_VPOINTS = HEADERS.indexOf('Verified Points') + 1;
 
 /** Rulebook §3 — leaderboard multipliers per format. */
 var MULTIPLIERS = {
@@ -236,6 +246,20 @@ var PLATFORM_LABELS = {
 /** ---------- ENTRY POINTS ---------- */
 
 function doPost(e) {
+  /* serialization lock — two participants submitting in the same moment
+     (the Monday 11:00 deadline rush) must never interleave their
+     read-modify-write cycles; a lost update here would be silent data
+     corruption, and data loss is not acceptable at any point */
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    return doPostLocked_(e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doPostLocked_(e) {
   try {
     var payload = JSON.parse(e.postData.contents);
 
@@ -244,6 +268,7 @@ function doPost(e) {
     if (payload && payload.action === 'adminPlayerVerify') return adminPlayerVerify_(payload);
     if (payload && payload.action === 'adminLogin') return adminLogin_(payload);
     if (payload && payload.action === 'syncNow') return syncNow_(payload);
+    if (payload && payload.action === 'awardChallenge') return awardChallenge_(payload);
 
     var id = payload.submissionId || Utilities.getUuid();
     var d = payload.data || {};
@@ -420,7 +445,7 @@ function doPost(e) {
       written++;
 
       // A confirmed pair also flips the PARTNER's prior rows to CONFIRMED
-      // (their Collab With is filled in when blank) so both sides split.
+      // (their Collab With is filled in when blank) so both sides score.
       if (b.status === COLLAB_CONFIRMED) {
         var partnerWho = normName_(b.partner);
         b.priorOthers.forEach(function (r) {
@@ -454,17 +479,40 @@ function doGet(e) {
 
 /** Public metrics (feeds the form page + the public leaderboard). JSONP
  *  when `callback` is given — the static board reads it cross-origin with
- *  zero CORS configuration; plain JSON otherwise, shape unchanged. */
+ *  zero CORS configuration; plain JSON otherwise.
+ *
+ *  The PUBLIC board payload strips verification status at the source —
+ *  league policy: verification NEVER appears on the leaderboard (defence
+ *  in depth: the renderer never reads it either). Designation itself
+ *  stays; it is public. */
+function publicPlayer_(p) {
+  var c = {};
+  Object.keys(p).forEach(function (k) { if (k !== 'verified') c[k] = p[k]; });
+  return c;
+}
+
 function statsEndpoint_(p) {
   var s = collect_();
+  var byWeek = {};
+  Object.keys(s.weeks.byWeek).forEach(function (w) {
+    byWeek[w] = s.weeks.byWeek[w].map(publicPlayer_);
+  });
   return reply_(p, {
     ok: true,
     totalSubmissions: s.totalSubmissions,
     totalPosts: s.totalPosts,
     uniqueMedia: s.uniqueMedia,
     lastSubmissionAt: s.lastSubmissionAt,
-    players: s.players,
-    weeks: s.weeks,
+    players: s.players.map(publicPlayer_),
+    weeks: {
+      seasonStart: s.weeks.seasonStart,
+      total: s.weeks.total,
+      current: s.weeks.current,
+      byWeek: byWeek
+    },
+    awards: (s.awards || []).map(function (a) {
+      return { week: a.week, player: a.name, points: a.points, note: a.note };
+    }),
     generatedAt: new Date().toISOString()
   });
 }
@@ -513,13 +561,134 @@ function subcheckEndpoint_(p) {
   var lastRow = sheet.getLastRow();
   var found = false;
   if (lastRow > 1) {
-    // column 2 = Submission ID
-    var ids = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    // column located BY NAME — survives any physical column order
+    var idCol = HEADERS.indexOf('Submission ID') + 1;
+    var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues();
     for (var i = 0; i < ids.length; i++) {
       if (str_(ids[i][0]) === id) { found = true; break; }
     }
   }
   return reply_(p, { ok: true, found: found });
+}
+
+/** ---------- WEEKLY CHALLENGE AWARDS (rulebook §4) ---------- */
+
+var AWARDS_SHEET = 'PCL-Awards';
+var AWARDS_HEADERS = ['Timestamp', 'Week', 'Player', 'Points', 'Note',
+                      'Awarded By'];
+
+function getAwardsSheet_() {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(AWARDS_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(AWARDS_SHEET);
+    sheet.appendRow(AWARDS_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/** All awards, blank-safe; unknown rows are skipped, not fatal. */
+function getAwards_() {
+  var sheet = getAwardsSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var vals = sheet.getRange(2, 1, lastRow - 1, AWARDS_HEADERS.length).getValues();
+  var out = [];
+  vals.forEach(function (r) {
+    var pts = Number(r[3]);
+    if (r[1] === '' || r[1] === null) return;
+    var name = str_(r[2]);
+    if (!name || isNaN(pts) || pts <= 0) return;
+    out.push({
+      week: Number(r[1]) || 0,
+      name: name,
+      points: Math.ceil(pts),
+      note: str_(r[4]),
+      by: str_(r[5]),
+      ts: r[0] instanceof Date ? r[0].toISOString() : str_(r[0])
+    });
+  });
+  return out;
+}
+
+/** Admin POST action — grant a weekly-challenge reward (rulebook §4:
+ *  6000–12000 LeaderBoard points for the week's winner). The points ride
+ *  ON TOP of the post multipliers in season totals and weekly buckets. */
+function awardChallenge_(payload) {
+  var err = checkAdmin_(payload.adminKey);
+  if (err) return json_({ ok: false, error: err });
+
+  var week = Number(payload.week);
+  var name = str_(payload.name).trim();
+  var points = Math.ceil(Number(payload.points));
+  var note = str_(payload.note).trim();
+  if (!(week >= 1 && week <= LEAGUE_WEEKS)) {
+    return json_({ ok: false, error: 'Week must be 1-' + LEAGUE_WEEKS });
+  }
+  if (!name) return json_({ ok: false, error: 'Player name required' });
+  if (isNaN(points) || points <= 0) {
+    return json_({ ok: false, error: 'Points must be a positive number' });
+  }
+  getAwardsSheet_().appendRow([new Date(), week, name, points, note,
+                               str_(payload.operator) || 'unnamed']);
+  logAdmin_(payload.operator, 'AWARD',
+            'W' + week + ' · ' + name + ' · +' + points,
+            note || 'weekly challenge reward');
+  return json_({ ok: true, awarded: { week: week, name: name, points: points } });
+}
+
+/** ---------- SHEET LAYOUT: review-first reorder (one-shot) ---------- */
+
+/** Physically reorders PCL-Data columns into the review-first HEADERS
+ *  order. Identity + verify columns first, machine/audit columns last.
+ *  Every read and write in this script addresses columns BY HEADER NAME,
+ *  so the physical order is presentation-only and this is safe to run at
+ *  any time, any number of times. A full backup tab is created before
+ *  anything is touched — data loss is not acceptable. */
+function reorganizeForReview_() {
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) return 'Sheet is empty — nothing to do';
+
+  var current = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+    .map(function (h) { return str_(h).trim(); });
+  var inOrder = lastCol === HEADERS.length &&
+    HEADERS.every(function (h, i) { return current[i] === h; });
+  if (inOrder) return 'Already in review-first order';
+
+  // 1. full backup tab before touching anything
+  var ss = getSpreadsheet_();
+  var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(),
+                                   'yyyyMMdd-HHmmss');
+  var backupName = 'PCL-Data-Backup-' + stamp;
+  ss.getSheetByName(SHEET_NAME).copyTo(ss).setName(backupName);
+  SpreadsheetApp.flush();
+
+  // 2. read everything, project columns onto the HEADERS order in memory
+  var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var byName = {};
+  current.forEach(function (h, i) {
+    if (h && byName[h] === undefined) byName[h] = i;
+  });
+  var out = [];
+  for (var r = 0; r < lastRow; r++) {
+    var row = [];
+    HEADERS.forEach(function (h) {
+      var ci = byName[h];
+      row.push(ci === undefined ? '' : values[r][ci]);
+    });
+    out.push(row);
+  }
+
+  // 3. rewrite (values only; legacy columns a new build no longer knows
+  //    are preserved in the backup tab)
+  sheet.clearContents();
+  sheet.getRange(1, 1, out.length, HEADERS.length).setValues(out);
+  sheet.setFrozenRows(1);
+  SpreadsheetApp.flush();
+  return 'Reordered to review-first layout. Backup tab: ' + backupName;
 }
 
 /** ---------- SEASON CLOCK ---------- */
@@ -638,8 +807,10 @@ function collect_() {
   // to its player, and the media is bucketed in the week of its FIRST
   // snapshot (when the post entered the league). Verified cells win over
   // claimed/projected once the review pipeline fills them in. Confirmed
-  // collab pairs split 50:50 — the review pipeline writes already-split
-  // verified points, so only the projected/claimed fallback paths halve.
+  // collab rows share one Media ID but EACH scores its own player FULL
+  // points (rulebook §6 rule 2 — no halving anywhere); partner rows are
+  // credited explicitly because latestByMedia keeps only the newest
+  // snapshot per media.
   var latestByMedia = {}, firstByMedia = {};
   rows.forEach(function (r) {
     var k = r.mediaId || 'row:' + r.row;
@@ -666,7 +837,7 @@ function collect_() {
 
     // Confirmed collab pairs share one Media ID, so the latest-snapshot rule
     // alone would erase the partner's half. Every CONFIRMED row of this
-    // media credits its own player — the post's points split 50:50.
+    // media credits its own player — FULL points each (rulebook §6 rule 2).
     var partners = [];
     if (collabSplit) {
       rows.forEach(function (x) {
@@ -679,7 +850,7 @@ function collect_() {
       });
     }
 
-    function credit(row, isSplit) {
+    function credit(row) {
       var views = numOrBlank_(row.verified);
       if (views === '') views = toCount_(row.claimed);
       if (views === '') views = 0;
@@ -690,15 +861,12 @@ function collect_() {
         pts = Math.ceil(views * Number(row.mult));
       }
       if (pts === '') pts = 0;
-      if (!ptsFromVerified && pts > 0 && isSplit) {
-        pts = Math.ceil(Number(pts) / 2);
-      }
       var d = dedup[row.name] ||
         (dedup[row.name] = { imp: 0, pts: 0, proj: 0, ver: 0 });
       d.imp += views;
       d.pts += pts;
       var proj = numOrBlank_(row.projected);
-      if (proj !== '') d.proj += isSplit ? Math.ceil(proj / 2) : proj;
+      if (proj !== '') d.proj += proj;
       var ver = numOrBlank_(row.verifiedPoints);
       if (ver !== '') d.ver += ver;
       var w = weekOfMs_(new Date(firstByMedia[k].ts).getTime());
@@ -713,8 +881,20 @@ function collect_() {
       wp.points += pts;
     }
 
-    credit(r, collabSplit);
-    partners.forEach(function (x) { credit(x, true); });
+    credit(r);
+    partners.forEach(function (x) { credit(x); });
+  });
+  // Weekly-challenge awards (rulebook §4) — admin-granted reward points
+  // that ride ON TOP of the post multipliers, per player and per week.
+  var awards = getAwards_();
+  var awardTotal = {}, awardWeek = {};
+  awards.forEach(function (a) {
+    var k = normName_(a.name);
+    if (!k) return;
+    awardTotal[k] = (awardTotal[k] || 0) + a.points;
+    var wkey = String(a.week);
+    if (!awardWeek[wkey]) awardWeek[wkey] = {};
+    awardWeek[wkey][k] = (awardWeek[wkey][k] || 0) + a.points;
   });
   var playerList = Object.keys(players).map(function (k) {
     var pl = players[k];
@@ -729,7 +909,7 @@ function collect_() {
       uniqueMedia: Object.keys(pl.media).length,
       formatRatio: pl.formats,
       impressions: d.imp,
-      points: d.pts,
+      points: d.pts + (awardTotal[normName_(k)] || 0),
       projectedPoints: d.proj,         // deduped — latest snapshot per media
       verifiedPoints: d.ver
     };
@@ -739,7 +919,10 @@ function collect_() {
     .sort(function (a, b) { return a - b; })
     .forEach(function (w) {
       byWeek[String(w)] = Object.keys(wk[w]).map(function (n) {
-        return wk[w][n];
+        var p = wk[w][n];
+        var aw = awardWeek[String(w)];
+        if (aw) p.points += aw[normName_(n)] || 0;
+        return p;
       }).sort(function (a, b) {
         return b.points - a.points || b.impressions - a.impressions ||
                a.player.localeCompare(b.player);
@@ -768,6 +951,7 @@ function collect_() {
     uniqueMedia: Object.keys(media).length,
     lastSubmissionAt: last,
     players: playerList,
+    awards: awards,
     rows: rows,
     weeks: {
       seasonStart: SEASON_START_ISO,
@@ -936,12 +1120,10 @@ function adminVerify_(payload) {
       return;
     }
 
-    // Confirmed collab pairs split the post's points 50:50 — both players'
-    // rows carry Collab Status = CONFIRMED, each keeps half the total.
-    var collabStatus = str_(sheet.getRange(row, HEADERS.indexOf('Collab Status') + 1, 1, 1)
-                              .getDisplayValue()).toUpperCase().trim();
-    var split = collabStatus === COLLAB_CONFIRMED ? 2 : 1;
-    var vpoints = (vcount !== '') ? Math.ceil(vcount * mult / split) : '';
+    // Confirmed collab pairs BOTH earn the post's FULL points (rulebook
+    // §6 rule 2: "Both employees will receive 1,250 leaderboard points
+    // each") — the rows share a Media ID, never the points.
+    var vpoints = (vcount !== '') ? Math.ceil(vcount * mult) : '';
 
     // capture the old review values BEFORE writing (for the audit log)
     var oldVals = sheet.getRange(row, COL_OCR, 1, 4).getDisplayValues()[0];
@@ -958,8 +1140,7 @@ function adminVerify_(payload) {
       ' · CHECK: ' + oldVals[1] + '→' + check +
       ' · VERIFIED: ' + oldVals[2] + '→' + (vcount === '' ? '—' : vcount) +
       ' · VPTS: ' + oldVals[3] + '→' + (vpoints === '' ? '—' : vpoints) +
-      (ctype ? ' · CT: ' + (oldCt || '—') + '→' + ctype : '') +
-      (split === 2 ? ' · COLLAB ½' : ''));
+      (ctype ? ' · CT: ' + (oldCt || '—') + '→' + ctype : ''));
   });
 
   return json_({ ok: errors.length === 0, updated: updated,

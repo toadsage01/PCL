@@ -870,3 +870,26 @@ html[data-pcl-theme="dark"] .pcl-bal.is-off { color: #ffc35c; }
 html:not([data-pcl-font="og"]) .pcl-platbtn,
 html:not([data-pcl-font="og"]) .pcl-bal,
 html:not([data-pcl-font="og"]) .pcl-board-chip { font-weight: 600; }
+
+/* ---------- weekly challenge award cell (REPORTS) ---------- */
+.pcl-award { display: flex; align-items: center; gap: 6px; min-width: 300px; }
+.pcl-award-total {
+  font-family: var(--pcl-font-display, inherit); font-size: 12px; font-weight: 700;
+  color: #1d9e57; white-space: nowrap; min-width: 52px;
+}
+.pcl-award input {
+  width: 120px; padding: 6px 8px; font-size: 12px; font-family: inherit;
+  border: 1.5px solid var(--pcl-line-soft, #c9ccd4); border-radius: 6px;
+  background: var(--pcl-surface, #fff); color: var(--pcl-primary, #1a1b20);
+}
+.pcl-award input.pcl-award-pts { width: 64px; }
+.pcl-award-btn {
+  padding: 6px 10px; cursor: pointer; font-family: var(--pcl-font-title, inherit);
+  font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  border: 2px solid var(--pcl-primary, #1a1b20); border-radius: 6px;
+  background: var(--pcl-primary, #1a1b20); color: #fffdf6;
+}
+.pcl-award-btn:disabled { opacity: .45; cursor: default; }
+html[data-pcl-theme="dark"] .pcl-award input {
+  background: var(--pcl-surface-2, #131418); border-color: var(--pcl-line-soft, #33363e);
+}
