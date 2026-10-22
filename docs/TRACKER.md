@@ -555,3 +555,33 @@ no breakage, just no early banners.
 **Frontend Season-2 batch: DONE and E2E-proven · Backend code: DONE, waiting
 on ONE paste + New version click · Metrics tracker: research committed,
 blocked on the three Phase-0 keys — the clock on those starts today.**
+
+---
+
+## A8 · Round 28 — full-system test sweep + hardening (2026-10-23)
+
+User directive: "full in detail, no time restrained, or capability limited,
+testing of all the pages, sheet, app script, vercel, possible threats…
+test all and fix all. we don't [want] anything to break in these 2 months."
+
+- OAuth Client ID wired into gas-endpoint.js + Code.gs (aud check live).
+  Secret stays in Google Cloud only. Harness gained the aud-mismatch case.
+- SECURITY: safeUrl_ scheme guard at ingest (javascript:/data: refused,
+  scheme-less domains upgraded) — kills the stored-XSS-in-Control-Room
+  vector; safeHref client halves in admin.js + director.js.
+- INTEGRITY: cellSafe_ formula-injection guard on every participant-typed
+  sheet cell + AdminLog + awards; csvCell guard on CSV export.
+- DATA LOSS: dailyLedgerBackup_ — full PCL-Data-Backup-YYYYMMDD tab daily,
+  keep 14, self-healing trigger (setupBackupTrigger / SYNC NOW / metrics).
+- PRIVACY: publicPlayer_ strips manager (as well as verified).
+- UX: OCR boost false-positive deadlock fixed (bare "boost" = button ≠
+  Boosted state); global Enter guard on the form (name/challenge never
+  implicitly submit); leg-2 server rejections surface verbatim.
+- CONSISTENCY: mock console FULL collab points + "COLLAB · FULL" modal
+  meta; leaderboard og-font init fixed; non-image screenshots REJECTED.
+- NEW SUITES: test_threat_matrix.js (107), harness groups 25-29 (121
+  total), round28_e2e.sh (8 browser checks), probe_live.sh (read-only).
+  364 unit assertions + 6 E2E suites ALL GREEN.
+- LIVE FINDINGS: deployed GAS is an intermediate version (D1 paste still
+  pending); pcl-form.prapermedia.in serves a GAS HtmlService error, not
+  the Vercel build (D2 domain fix). Both documented in docs/TEST-REPORT.md.

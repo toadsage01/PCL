@@ -293,7 +293,12 @@ function doPostLocked_(e) {
       // designation already on file for this name is picked up further down
       // (needs the ledger index, which is built right after this block)
     var week = str_(d.challengeWeek);
-    var challengeUrl = str_(d.challengeUrl);
+    var challengeUrl = safeUrl_(d.challengeUrl);
+    if (challengeUrl === null) {
+      return json_({ ok: false, error:
+        'The challenge link looks invalid — paste the full web address ' +
+        '(it must start with https://).' });
+    }
     var notes = str_(d.additionalNotes);
 
     var sheet = getSheet_();
@@ -324,7 +329,12 @@ function doPostLocked_(e) {
     for (var i = 0; i < posts.length; i++) {
       var p = posts[i];
       var fmt = str_(p.format);
-      var postUrl = str_(p.link);
+      var postUrl = safeUrl_(p.link);
+      if (postUrl === null) {
+        return json_({ ok: false, error:
+          'A post link looks invalid — links must be normal web addresses ' +
+          'starting with https://.' });
+      }
       var mediaId = mediaId_(postUrl, fmt);
       var claimed = toCount_(p.viewsImpressions);
       var mult = MULTIPLIERS.hasOwnProperty(fmt) ? MULTIPLIERS[fmt] : '';
@@ -415,8 +425,8 @@ function doPostLocked_(e) {
       row['Submission ID'] = id;
       row['Entry Type'] = entryType;
       row['Snapshot #'] = snapshotNo;
-      row['Full Name'] = fullName;
-      row['Reporting Manager'] = manager;
+      row['Full Name'] = cellSafe_(fullName);
+      row['Reporting Manager'] = cellSafe_(manager);
       // 50:50 balance rule (rulebook §6) — the form tags every post
       // PRAPER/PAVE or PERSONAL; the column was kept for exactly this revival
       row['Content Type'] = str_(b.p.contentType).toUpperCase() === 'PERSONAL'
@@ -424,14 +434,14 @@ function doPostLocked_(e) {
       row['Platform'] = PLATFORM_LABELS[b.fmt] || '';
       row['Format'] = FORMAT_LABELS[b.fmt] || b.fmt;
       row['Multiplier'] = b.mult;
-      row['Post URL'] = b.postUrl;
+      row['Post URL'] = cellSafe_(b.postUrl);
       row['Media ID'] = b.mediaId;
-      row['Weekly Challenge'] = week;
-      row['Challenge URL'] = challengeUrl;
-      row['Notes'] = notes;
+      row['Weekly Challenge'] = cellSafe_(week);
+      row['Challenge URL'] = cellSafe_(challengeUrl);
+      row['Notes'] = cellSafe_(notes);
       row['Claimed Views/Impressions'] = b.claimed;
       row['Projected Points'] = b.projected;
-      row['Screenshot File'] = shot ? shot.name
+      row['Screenshot File'] = shot ? cellSafe_(shot.name)
         : 'REJECTED — over ' + MAX_FILE_MB + ' MB cap';
       row['Screenshot Link'] = shot ? shot.url : '';
       // OCR Count: machine-read of the screenshot. The form's client-side
@@ -444,9 +454,9 @@ function doPostLocked_(e) {
       row['Verified Points'] = '';         // final leaderboard points
       row['Raw JSON'] = raw;
       row['Player Photo'] = photoUrl;
-      row['Collab With'] = b.partner;
+      row['Collab With'] = cellSafe_(b.partner);
       row['Collab Status'] = b.status;
-      row['Player Designation'] = designation;
+      row['Player Designation'] = cellSafe_(designation);
       row['Player Verified'] = index.verifiedByName[who] ? 'VERIFIED' : '';
         // carry the player's existing verification onto new rows so a single
         // read pass always sees it (the Control Room can flip it any time)
@@ -462,7 +472,7 @@ function doPostLocked_(e) {
           if (normName_(r.name) !== partnerWho) return;
           sheet.getRange(r.row, colStatus).setValue(COLLAB_CONFIRMED);
           if (!r.collabWith) {
-            sheet.getRange(r.row, colWith).setValue(fullName);
+            sheet.getRange(r.row, colWith).setValue(cellSafe_(fullName));
           }
         });
       }
@@ -500,7 +510,11 @@ function doGet(e) {
  *  stays; it is public. */
 function publicPlayer_(p) {
   var c = {};
-  Object.keys(p).forEach(function (k) { if (k !== 'verified') c[k] = p[k]; });
+  Object.keys(p).forEach(function (k) {
+    /* verified = league policy (the public board never shows it);
+       manager = internal reporting-line data, not for a public endpoint */
+    if (k !== 'verified' && k !== 'manager') c[k] = p[k];
+  });
   return c;
 }
 
@@ -694,8 +708,8 @@ function awardChallenge_(payload) {
   if (isNaN(points) || points <= 0) {
     return json_({ ok: false, error: 'Points must be a positive number' });
   }
-  getAwardsSheet_().appendRow([new Date(), week, name, points, note,
-                               operatorOf_(payload) || 'console']);
+  getAwardsSheet_().appendRow([new Date(), week, cellSafe_(name), points,
+                               cellSafe_(note), operatorOf_(payload) || 'console']);
   logAdmin_(operatorOf_(payload) || 'console', 'AWARD',
             'W' + week + ' · ' + name + ' · +' + points,
             note || 'weekly challenge reward');
@@ -1165,7 +1179,7 @@ function directorCode_() {
  *  OAuth Client ID as js/gas-endpoint.js (it verifies the ID token's
  *  audience). Empty = the audience check is skipped (domain + allowlist
  *  still enforced) — fill it in once the OAuth client exists. */
-var GOOGLE_OAUTH_CLIENT_ID = '';
+var GOOGLE_OAUTH_CLIENT_ID = '199911099744-6pt5fvjcl5u8g4qk06tlpqigd7tbaev8.apps.googleusercontent.com';
 var EMPLOYEE_DOMAIN = 'praper.in';
 
 /** The active-employee email log lives in its own tab (PCL-Allowlist):
@@ -1619,6 +1633,7 @@ function syncNow_(payload) {
   var ig = syncInstagram_();
   var li = syncLinkedIn_();
   try { ensureMetricsTriggers_(); } catch (ignore) { /* best effort */ }
+  try { ensureBackupTrigger_(); } catch (ignore) { /* best effort */ }
   logAdmin_(operatorOf_(payload) || 'console', 'SYNC', 'metrics',
     'YT ' + yt.updated + '/' + yt.checked + (yt.note ? ' (' + yt.note + ')' : '') +
     (ig.note ? ' · IG ' + ig.note : '') +
@@ -1632,6 +1647,7 @@ function metricsDaily_() {
   var yt = syncYouTube_();
   if (yt.note) logAdmin_('system', 'SYNC', 'metrics',
     'scheduled · YT ' + yt.updated + '/' + yt.checked + ' (' + yt.note + ')');
+  try { ensureBackupTrigger_(); dailyLedgerBackup_(); } catch (ignore) { /* best effort */ }
 }
 function ensureMetricsTriggers_() {
   var want = 'metricsDaily_';
@@ -1647,6 +1663,74 @@ function ensureMetricsTriggers_() {
 function setupMetricsTriggers() {
   ensureMetricsTriggers_();
   return 'Daily tracking triggers installed (09:00 & 21:00).';
+}
+
+/** ---------- DAILY LEDGER BACKUP (10-week insurance) ----------
+ *  The league cannot lose data — ever. Once a day the whole PCL-Data tab
+ *  is copied INSIDE the same spreadsheet as PCL-Data-Backup-YYYYMMDD, so
+ *  even a bad manual edit / bad mass-paste can be rolled back to the
+ *  previous morning. The newest 14 backup tabs are kept, older ones prune
+ *  themselves. Install once with setupBackupTrigger() from the editor;
+ *  SYNC NOW and the scheduled metrics run both self-heal the trigger. */
+var BACKUP_PREFIX = 'PCL-Data-Backup-';
+var BACKUP_KEEP = 14;
+
+function dailyLedgerBackup_() {
+  var out = { made: '', pruned: 0, note: '' };
+  try {
+    var ss = getSpreadsheet_();
+    var data = ss.getSheetByName(SHEET_NAME);
+    if (!data) { out.note = 'no ledger tab'; return out; }
+    var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(),
+                                     'yyyyMMdd');
+    var name = BACKUP_PREFIX + stamp;
+    if (!ss.getSheetByName(name)) {
+      var copy = data.copyTo(ss);
+      copy.setName(name);
+      try { copy.setFrozenRows(1); } catch (ignore) { /* cosmetic */ }
+      out.made = name;
+    } else {
+      out.note = 'already backed up today';
+    }
+    /* prune — oldest backup tabs beyond the retention window */
+    var backs = ss.getSheets().map(function (s) { return s.getName(); })
+      .filter(function (n) { return n.indexOf(BACKUP_PREFIX) === 0; })
+      .sort();
+    while (backs.length > BACKUP_KEEP) {
+      var old = backs.shift();
+      try { ss.deleteSheet(ss.getSheetByName(old)); out.pruned++; }
+      catch (ignore) { break; }
+    }
+  } catch (err) { out.note = String(err).slice(0, 120); }
+  return out;
+}
+
+/** Time-driven wrapper — the trigger calls THIS, so a failed backup can
+ *  never take the scheduled run down with it. */
+function dailyLedgerBackupTrigger() {
+  var b = dailyLedgerBackup_();
+  if (b.made || b.pruned) {
+    logAdmin_('system', 'BACKUP', b.made || 'prune',
+              'daily ledger backup' +
+              (b.pruned ? ' · pruned ' + b.pruned + ' old tab(s)' : ''));
+  }
+}
+
+function ensureBackupTrigger_() {
+  var want = 'dailyLedgerBackupTrigger';
+  var has = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === want;
+  });
+  if (!has) {
+    ScriptApp.newTrigger(want).timeBased().everyDays(1).atHour(6).create();
+  }
+}
+
+/** Run ONCE from the editor (or let SYNC NOW self-heal it): */
+function setupBackupTrigger() {
+  ensureBackupTrigger_();
+  var b = dailyLedgerBackup_();
+  return 'Backup trigger installed. First backup: ' + (b.made || b.note);
 }
 
 /** ---------- AUDIT LOG ("AdminLog" sheet) ---------- */
@@ -1667,8 +1751,11 @@ function getLogSheet_() {
 
 function logAdmin_(operator, action, target, detail) {
   try {
-    getLogSheet_().appendRow([new Date(), str_(operator) || 'unnamed',
-                              action, target, detail]);
+    /* cellSafe_ — log targets/details echo participant-typed names and
+       admin notes; a crafted name must never become a live formula cell */
+    getLogSheet_().appendRow([new Date(), cellSafe_(str_(operator) || 'unnamed'),
+                              cellSafe_(action), cellSafe_(target),
+                              cellSafe_(detail)]);
   } catch (ignore) { /* the ledger write must never fail because of the log */ }
 }
 
@@ -1709,6 +1796,7 @@ function savePlayerPhoto_(data, fullName, manager, uploadsFolder) {
     if (Array.isArray(files) && files.length && files[0] &&
         typeof files[0].content === 'string' && files[0].content) {
       var file = files[0];
+      if (file.type && !/^image\//i.test(file.type)) return '';   // images only
       var base64 = file.content.split(',')[1] || '';
       var bytes = Utilities.base64Decode(base64);
       if (bytes.length > MAX_FILE_MB * 1024 * 1024) return '';
@@ -1882,6 +1970,34 @@ function numOrBlank_(v) {
   return (isNaN(n) || n < 0) ? '' : n;
 }
 
+/** Spreadsheet-formula injection guard. A participant-typed string that
+ *  begins with = + - @ would be EXECUTED as a formula the moment Sheets
+ *  ingests it — =IMPORTXML(...) or =GOOGLEFINANCE(...) can exfiltrate
+ *  adjacent ledger cells to an attacker's server when an admin opens the
+ *  tab. Prefixing an apostrophe forces text mode; the apostrophe is
+ *  storage-only (Sheets hides it) and reads back unchanged. Every
+ *  participant-typed TEXT field goes through this on the way into the
+ *  sheet; numbers, dates and whitelisted values never do. */
+function cellSafe_(v) {
+  var s = str_(v);
+  if (s && /^[=+\-@\t\r]/.test(s)) return "'" + s;
+  return s;
+}
+
+/** URL normaliser for anything a participant (or a raw API caller) sends
+ *  as a link. '' passes through. A scheme-less domain gets https:// — the
+ *  same thing the form's URL engine does. Anything with a dangerous
+ *  scheme (javascript:, data:, vbscript:) or malformed shape returns
+ *  null so the ingest can refuse it — a javascript: URL in a ledger row
+ *  would otherwise become a clickable XSS in the Control Room. */
+function safeUrl_(u) {
+  var s = str_(u).trim();
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s)) return s;
+  if (/^[\w-]+(\.[\w-]+)+([\/?#].*)?$/i.test(s)) return 'https://' + s;
+  return null;
+}
+
 /** Extract the Drive file id from a stored share link. */
 function driveFileId_(url) {
   var m = String(url || '').match(/\/d\/([\w-]{20,})/) ||
@@ -1946,6 +2062,14 @@ function fileAnswer_(value, folder, submissionId) {
 function saveFile_(file, folder, submissionId) {
   var base64 = file.content.split(',')[1] || '';   // strip data-URL prefix
   var bytes = Utilities.base64Decode(base64);
+
+  if (file.type && !/^image\//i.test(file.type)) {
+    /* defense in depth — the form's file picker already restricts to
+       PNG/JPG/WEBP; a raw API caller does not, and a non-image blob has
+       no business in the analytics evidence chain */
+    return { name: 'REJECTED — screenshots must be PNG / JPG / WEBP (' +
+                     file.name + ')', url: '' };
+  }
 
   if (bytes.length > MAX_FILE_MB * 1024 * 1024) {
     return { name: 'REJECTED — over ' + MAX_FILE_MB + ' MB cap (' + file.name + ')', url: '' };

@@ -76,6 +76,14 @@
   function normCheck(v) {
     return String(v || "").toUpperCase().trim() || "PENDING OCR";
   }
+  /* Only real web addresses become links. Ledger rows are written by the
+     form, but the ingest endpoint is public — a hostile direct API write
+     must never get a javascript:/data: URL rendered as a clickable href
+     inside the Control Room. Non-http(s) values degrade to an inert "#". */
+  function safeHref(u) {
+    var s = String(u || "").trim();
+    return /^https?:\/\//i.test(s) ? s : "#";
+  }
   /* collab badge: CONFIRMED pairs split verified points 50:50 server-side,
      PENDING means the player tagged a partner whose same-link entry has not
      landed (or does not match) yet — reviewer gets to see it at a glance */
@@ -390,10 +398,10 @@
       if (tone !== undefined) {
         r.photoData = mockAvatar(r.name.charAt(0).toUpperCase(), tone);
       }
-      // collab-confirmed rows split their verified points 50:50 (server rule)
+      // collab-confirmed rows score FULL points EACH (rulebook §6 rule 2 —
+      // the server never halves; the mock must match it exactly)
       r.verifiedPoints = r.verified !== ""
-        ? Math.ceil(Number(r.verified) * Number(r.mult) /
-                    (r.collabStatus === "CONFIRMED" ? 2 : 1))
+        ? Math.ceil(Number(r.verified) * Number(r.mult))
         : "";
     });
     return base;
@@ -405,7 +413,7 @@
       formatRatio: { "Instagram Reel": 2, "YouTube Long-Form": 1 }, projectedPoints: 48950, verifiedPoints: 9612 },
     { player: "Rohit Kharal", manager: "Sneha", designation: "Shorts Editor", verified: true,
       submissions: 1, posts: 1, uniqueMedia: 1,
-      formatRatio: { "Instagram Reel": 1 }, projectedPoints: 23000, verifiedPoints: 11508 },
+      formatRatio: { "Instagram Reel": 1 }, projectedPoints: 23000, verifiedPoints: 23000 },
     { player: "Arjun Verma", manager: "Sneha", designation: "", verified: false,
       submissions: 2, posts: 4, uniqueMedia: 3,
       formatRatio: { "Instagram Reel": 3, "YouTube Shorts": 1 }, projectedPoints: 151625, verifiedPoints: 0 },
@@ -441,8 +449,7 @@
           if (e.verifiedCount !== undefined) {
             r.verified = e.verifiedCount;
             r.verifiedPoints = e.verifiedCount !== ""
-              ? Math.ceil(Number(e.verifiedCount) * Number(r.mult) /
-                          (r.collabStatus === "CONFIRMED" ? 2 : 1)) : "";
+              ? Math.ceil(Number(e.verifiedCount) * Number(r.mult)) : "";
           }
         });
         var mockPlayers = JSON.parse(JSON.stringify(MOCK_PLAYERS));
@@ -982,7 +989,7 @@
       "</span>" +
       '<span class="fr-post">' + thumb +
         '<span class="pcl-fr-posttext">' +
-          '<a class="pcl-fr-link" href="' + esc(r.url) + '" target="_blank" rel="noopener"' +
+          '<a class="pcl-fr-link" href="' + esc(safeHref(r.url)) + '" target="_blank" rel="noopener"' +
           ' title="' + esc(r.url) + '">#' + esc(postHashOf(r)) + "</a>" +
           '<span class="pcl-fr-fmt">' + brandBadgeAdm(r.format) + " <b>" + esc(multOf(r.mult)) +
             '</b> <span class="pcl-fr-id">· ' + esc(postHashOf(r)) + "</span>" +
@@ -1245,7 +1252,7 @@
       img.alt = "No screenshot on file";
     }
     var link = $("rvShotLink");
-    if (r.shotUrl) { link.href = r.shotUrl; link.style.display = ""; }
+    if (r.shotUrl) { link.href = safeHref(r.shotUrl); link.style.display = ""; }
     else link.style.display = "none";
 
     $("rvNum").textContent = "#" + (idx + 1) + " / " + total + " · LEDGER ROW " + r.row +
@@ -1254,11 +1261,11 @@
     $("rvMeta").textContent = fmtShort(r.format) + " " + multOf(r.mult) +
       " · " + (r.type === "UPDATE" ? "UPDATE SNAPSHOT S" + r.snap : "FIRST REPORT") +
       (r.collabStatus === "CONFIRMED"
-        ? " · COLLAB ½ with " + (r.collabWith || "partner")
+        ? " · COLLAB · FULL with " + (r.collabWith || "partner")
         : (r.collabStatus === "PENDING" ? " · COLLAB? with " + (r.collabWith || "?") : "")) +
       " · " + fmtTS(r.ts) + " IST";
     var l = $("rvLink");
-    l.href = r.url;
+    l.href = safeHref(r.url);
     l.textContent = "#" + postHashOf(r) + " ↗";
     l.title = r.url;
     $("rvClaimed").textContent = fmt(r.claimed);
@@ -1546,7 +1553,7 @@
       : '<span class="pcl-pavatar pcl-pavatar--letter" aria-hidden="true">' +
         esc((a.name || "?").charAt(0).toUpperCase()) + "</span>";
     var latest = a.lastUrl
-      ? '<a class="pcl-plink" href="' + esc(a.lastUrl) + '" target="_blank" rel="noopener" title="' +
+      ? '<a class="pcl-plink" href="' + esc(safeHref(a.lastUrl)) + '" target="_blank" rel="noopener" title="' +
         esc(a.lastUrl) + '">' + (a.lastFormat ? brandBadgeAdm(a.lastFormat) + " " : "") +
         "#" + esc(tail8(mediaIdOfUrl(a.lastUrl))) + " &#8599;</a>"
       : '<span class="pcl-plink is-none">No posts yet</span>';
@@ -1857,6 +1864,10 @@
 
   function csvCell(v) {
     v = String(v == null ? "" : v);
+    /* spreadsheet-injection guard — a ledger value beginning with = + - @
+       must open as text when the CSV lands in Excel / Sheets, never as a
+       live formula (the classic =HYPERLINK/=CMD exfiltration trick) */
+    if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
     return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
   function exportCsv() {

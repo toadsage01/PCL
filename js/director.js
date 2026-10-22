@@ -147,6 +147,14 @@
       "</div>";
   }
 
+  /* Only real web addresses become links — the feed is built from ledger
+     rows, and a hostile direct-API write must never render a javascript:
+     href inside the CEO's room. Non-http(s) values degrade to "#". */
+  function safeHref(u) {
+    var s = String(u || "").trim();
+    return /^https?:\/\//i.test(s) ? s : "#";
+  }
+
   /* ---------- render ---------- */
   function renderBanner() {
     var w = currentWeek();
@@ -187,11 +195,11 @@
 
     var acts = "";
     if (e.url) {
-      acts += '<a class="dir-act" href="' + esc(e.url) +
+      acts += '<a class="dir-act" href="' + esc(safeHref(e.url)) +
         '" target="_blank" rel="noopener">OPEN ORIGINAL POST &#8599;</a>';
     }
     if (e.screenshot) {
-      acts += '<a class="dir-act" href="' + esc(e.screenshot) +
+      acts += '<a class="dir-act" href="' + esc(safeHref(e.screenshot)) +
         '" target="_blank" rel="noopener">ANALYTICS SHOT &#8599;</a>';
     }
     $("dirActions").innerHTML = acts;

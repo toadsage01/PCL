@@ -39,7 +39,7 @@ window.PCL_CONFIG = {
   // list — verified server-side against Google's tokeninfo endpoint.
   // Leave "" to hide the sign-in card completely (the form works exactly
   // as before — Full Name + Reporting Manager identity).
-  googleClientId: "",
+  googleClientId: "199911099744-6pt5fvjcl5u8g4qk06tlpqigd7tbaev8.apps.googleusercontent.com",
 
   // The only work domain accepted at sign-in. Must match EMPLOYEE_DOMAIN
   // in gas/Code.gs.

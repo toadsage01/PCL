@@ -411,13 +411,16 @@ history covers the rest. Nothing in this system deletes.
 
 | Suite | Proves | Run |
 |---|---|---|
-| `scripts/test_do_post_collab.js` | ~95 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats verified strip, review-first reorder with data survival, CEO screening feed (passcode gate, week filter, dedupe, collab merge), employee sign-in (tokeninfo stub, domain + allowlist gating) and the **checklink pre-check** (taken/uploader, collabFor for the tagged partner, mine-wins for owners, rejection message names the uploader) | `node scripts/test_do_post_collab.js` |
-| `scripts/test_ocr_parse.js` | ~61 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection, **boost/sponsored/ad-badged text flags** and **platform fingerprints** (wrong-platform chrome refused, chrome-less region crops never blocked) | `node scripts/test_ocr_parse.js` |
+| `scripts/test_do_post_collab.js` | 121 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats strip (verified **and manager**), review-first reorder with data survival, CEO screening feed, employee sign-in (tokeninfo stub incl. **aud mismatch**), checklink pre-check, **hardening groups 25–29: cellSafe_ formula defusal, safeUrl_ scheme rejection, javascript:-link ingest refusal, non-image screenshot REJECTED, daily backup naming/dedupe/prune** | `node scripts/test_do_post_collab.js` |
+| `scripts/test_threat_matrix.js` | 107 adversarial assertions: JSONP callback charset (10 injection shapes), formula-injection vectors, hostile URL schemes (javascript/data/vbscript/file/blob, IDN homoglyphs, userinfo tricks, spoofed subdomains), esc() coverage on all four renderers, csvCell CSV-injection guard, safeHref in admin + director, hostile number shapes (Indian grouping, dot-thousands, >1e10) | `node scripts/test_threat_matrix.js` |
+| `scripts/test_ocr_parse.js` | 63 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection, **boost/sponsored/ad-badged text flags** (bare "boost" = the universal button → never flags; only the Boosted/Sponsored/Promoted STATE does), and **platform fingerprints** (wrong-platform chrome refused, chrome-less region crops never blocked) | `node scripts/test_ocr_parse.js` |
 | `scripts/test_leaderboard_rollup.js` | 16: dedup-by-media, verified-over-claimed, weekly buckets | `node scripts/test_leaderboard_rollup.js` |
 | `scripts/test_url_diag.js` | 24: every accepted URL shape | `node scripts/test_url_diag.js` |
 | `scripts/test_leaderboard_sanitize.js` | 33: the board can never render a raw string/NaN/Infinity as a view count (comma strings, NBSP, garbage, old payload shapes) | `node scripts/test_leaderboard_sanitize.js` |
 | `scripts/save_e2e.sh` + `fixture_save.js` | browser E2E of the transport chain against the REAL wire shapes (Vercel-healthy / GAS-302 / dead-route) | `bash scripts/save_e2e.sh` |
 | `scripts/round27_e2e.sh` + `fixture_form.js` | browser E2E of the ownership banners (taken + collab-for + one-tap CONFIRM), the collab Enter field-confirm fix (picker-open Enter still chooses), and logo→form with content after the DONE screen | `bash scripts/round27_e2e.sh` |
+| `scripts/round28_e2e.sh` + `fixture_form.js` | browser E2E of the hardening round: Enter-in-name/challenge never submits (links Enter still commits chips), leaderboard og-font mapping, admin mock FULL collab points + review-modal meta, dark theme + 390px mobile no-h-scroll | `bash scripts/round28_e2e.sh` |
+| `scripts/probe_live.sh` | READ-ONLY live probes (GAS stats/subcheck/checklink JSONP, wrong-password refusal, hostile-callback echo check, the four portals, YT key, GSI client) — zero sheet writes by design | `bash scripts/probe_live.sh` |
 | `scripts/ocr_e2e.sh`, `save_e2e.sh`, prior rounds | agent-browser E2E across all 3 portals (form flows, admin gate/tabs/awards, leaderboard) | see scripts/ |
 
 ## 15 · Known limits & gotchas
@@ -440,6 +443,19 @@ history covers the rest. Nothing in this system deletes.
   deployed backend does not know `directorFeed`/`employeeLogin` at all.
 - **The sign-in card is invisible until a client ID is pasted** — that is
   deliberate; the form never depends on Google being reachable.
+- **The OAuth client ID is now wired** in `js/gas-endpoint.js` and
+  `gas/Code.gs` (GOOGLE_OAUTH_CLIENT_ID). Sign-in only works when the page
+  is served from an Authorized JavaScript origin — currently
+  `https://pcl-form.prapermedia.in`. The CLIENT SECRET never goes into any
+  file in this repo — it stays in Google Cloud; nothing here needs it.
+- **pcl-form.prapermedia.in currently serves a GAS "Html Convert Error"
+  page, not this Vercel build** (found by the live probes). Point the
+  domain at the Vercel deployment (Vercel → Settings → Domains → add
+  `pcl-form.prapermedia.in`, then fix DNS at the registrar) — until then
+  Google sign-in is authorized for an origin that isn't serving the form.
+- **The daily ledger backup installs itself** on the first SYNC NOW (or
+  run `setupBackupTrigger()` once from the editor): a full
+  `PCL-Data-Backup-YYYYMMDD` tab every morning, newest 14 kept.
 
 *Everything else — every chip, badge, tab and number — is described
 inline in the code where it happens; `docs/ARCHITECTURE.md` carries the

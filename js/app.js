@@ -862,7 +862,12 @@
   function detectBoost_(text) {
     var t = String(text || "").toLowerCase();
     if (!t) return "";
-    var hit = t.match(/\b(boosts?(?:ed|ing)?|sponsored|promoted|paid partnership|paid promotion)\b/);
+    /* boost(ed|ing) — the STATE. Bare "boost" is the CTA button every
+       business post carries (organic included), so flagging it would
+       deadlock honest participants: replace the screenshot, the same
+       button is still there. Real boosted posts always carry the
+       "Boosted" marker (or Sponsored / Promoted / paid-partnership). */
+    var hit = t.match(/\b(boost(ed|ing)|sponsored|promoted|paid partnership|paid promotion)\b/);
     if (hit) return hit[0];
     if (/^[ \t\W]*ad[ \t\W]*$/im.test(t) && !/\badd(ing|ed|s)?\b/.test(t)) return "ad";
     return "";
@@ -3131,7 +3136,11 @@
         if (out && out.ok) return out;
         throw new Error("Backend did not accept the entry.");
       })
-      .catch(function () {
+      .catch(function (err) {
+        /* a readable server rejection is the REAL answer (duplicate link,
+           unconfirmed collab) — rethrow it untouched: no subcheck polling,
+           no retry, no masking it behind "could not be confirmed" */
+        if (err && err.server) throw err;
         return verifySubmission_(payload.submissionId, 4, 1500)
           .then(function (found) {
             if (found) return { ok: true, verified: true };
@@ -3223,6 +3232,25 @@
       submitBtn.disabled = false;
     });
   }
+
+  /* Enter inside ANY text input must never implicitly submit the whole form
+     — the collab partner / manager / designation fields confirm themselves
+     (their own keydown handlers run first and call preventDefault), the
+     links input commits its chips, and THIS guard sweeps the rest (full
+     name, challenge link). Without it, pressing Enter in the Full Name
+     field fired the form-wide validation with a dozen red wells — the
+     same accident class the collab field had. Enter still works as a
+     newline in the notes textarea and on real buttons. */
+  form.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Enter" || ev.isComposing) return;
+    var t = ev.target;
+    if (!t || t.tagName !== "INPUT") return;
+    var ty = String(t.type || "text").toLowerCase();
+    if (ty === "button" || ty === "submit" || ty === "radio" ||
+        ty === "checkbox" || ty === "file") return;
+    if (ev.defaultPrevented) return;    // a specialised handler claimed it
+    ev.preventDefault();
+  });
 
   form.addEventListener("submit", function (ev) {
     ev.preventDefault();
