@@ -475,6 +475,8 @@ function doGet(e) {
     if (p.action === 'ocr')    return ocrEndpoint_(p);
     if (p.action === 'subcheck') return subcheckEndpoint_(p);
     if (p.action === 'playerPhoto') return playerPhotoEndpoint_(p);
+    if (p.action === 'directorFeed') return directorFeed_(p);
+    if (p.action === 'employeeLogin') return employeeLogin_(p);
     return statsEndpoint_(p);
   } catch (err) {
     return reply_(p, { ok: false, error: String(err) });
@@ -1087,6 +1089,173 @@ function operatorOf_(payload) {
 function checkAdmin_(key) {
   if (!adminByPass_(key)) return 'Access denied — wrong admin password.';
   return '';
+}
+
+/** ---------- CEO SCREENING ROOM + EMPLOYEE SIGN-IN ---------- */
+
+/** Screening-room passcode — the ONLY key that opens the private weekly-
+ *  challenge viewer (director.html) for the Director/CEO. It is separate
+ *  from the six admin passwords on purpose: the screening room is the
+ *  CEO's room, nobody else's. Rotate any time: Script Properties →
+ *  add/update `CEO_CODE` — the default below then stops working. */
+var DIRECTOR_CODE = 'director@123';
+function directorCode_() {
+  return String(PropertiesService.getScriptProperties()
+    .getProperty('CEO_CODE') || '').trim() || DIRECTOR_CODE;
+}
+
+/** Google employee sign-in. GOOGLE_OAUTH_CLIENT_ID must hold the SAME
+ *  OAuth Client ID as js/gas-endpoint.js (it verifies the ID token's
+ *  audience). Empty = the audience check is skipped (domain + allowlist
+ *  still enforced) — fill it in once the OAuth client exists. */
+var GOOGLE_OAUTH_CLIENT_ID = '';
+var EMPLOYEE_DOMAIN = 'praper.in';
+
+/** The active-employee email log lives in its own tab (PCL-Allowlist):
+ *  one @praper.in email per row, first column, from row 2 down. Admins
+ *  edit the sheet directly — no redeploy needed. A blank/missing tab
+ *  DENIES every sign-in (employees only, by design). */
+var ALLOWLIST_SHEET = 'PCL-Allowlist';
+var ALLOWLIST_HEADERS = ['Email (one per row — @praper.in addresses only)'];
+
+function getAllowlistSheet_() {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(ALLOWLIST_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(ALLOWLIST_SHEET);
+    sheet.appendRow(ALLOWLIST_HEADERS);
+    sheet.setFrozenRows(1);
+  } else if (sheet.getLastColumn() < ALLOWLIST_HEADERS.length) {
+    sheet.getRange(1, sheet.getLastColumn() + 1, 1,
+                   ALLOWLIST_HEADERS.length - sheet.getLastColumn())
+         .setValues([ALLOWLIST_HEADERS.slice(sheet.getLastColumn())]);
+  }
+  return sheet;
+}
+
+function allowlistHas_(email) {
+  var want = String(email || '').trim().toLowerCase();
+  if (!want) return false;
+  try {
+    var sheet = getAllowlistSheet_();
+    var last = sheet.getLastRow();
+    if (last < 2) return false;
+    var vals = sheet.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (str_(vals[i][0]).trim().toLowerCase() === want) return true;
+    }
+    return false;
+  } catch (ignore) {
+    return false;   // unreadable allowlist denies — never waves someone in
+  }
+}
+
+/** Best-effort map of the Google profile name onto the league roster so
+ *  the form can prefill the exact ledger identity after sign-in. */
+function rosterNameFor_(profileName) {
+  var want = normName_(profileName);
+  if (!want) return '';
+  var names = Object.keys(PLAYER_META);
+  for (var i = 0; i < names.length; i++) {
+    if (normName_(names[i]) === want) {
+      return String(names[i]).replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    }
+  }
+  return '';
+}
+
+/** EMPLOYEE SIGN-IN (Google) — verifies a Google ID token SERVER-SIDE via
+ *  Google's tokeninfo endpoint, then gates on BOTH the company domain AND
+ *  the active-employee allowlist. GET:
+ *  ?action=employeeLogin&token=<ID_TOKEN> →
+ *    { ok, email, name, matchedName }  or  { ok:false, error } */
+function employeeLogin_(p) {
+  var token = str_(p.token);
+  if (!token) return reply_(p, { ok: false, error: 'Missing Google token.' });
+  var info;
+  try {
+    var res = UrlFetchApp.fetch(
+      'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(token),
+      { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) {
+      return reply_(p, { ok: false, error: 'Google could not verify this sign-in. Try again.' });
+    }
+    info = JSON.parse(res.getContentText());
+  } catch (err) {
+    return reply_(p, { ok: false, error: 'Could not reach Google to verify the sign-in.' });
+  }
+  var email = String(info.email || '').toLowerCase();
+  if (String(info.email_verified) !== 'true' && info.email_verified !== true) {
+    return reply_(p, { ok: false, error: 'This Google account has no verified email.' });
+  }
+  if (GOOGLE_OAUTH_CLIENT_ID && info.aud !== GOOGLE_OAUTH_CLIENT_ID) {
+    return reply_(p, { ok: false, error: 'This sign-in was issued for a different app.' });
+  }
+  var dom = '@' + String(EMPLOYEE_DOMAIN).toLowerCase();
+  if (email.slice(-dom.length) !== dom) {
+    return reply_(p, { ok: false,
+      error: 'Employees only — sign in with your @' + EMPLOYEE_DOMAIN + ' work account.' });
+  }
+  if (!allowlistHas_(email)) {
+    return reply_(p, { ok: false,
+      error: 'Your email is not on the active employee list yet — ask an admin to add it to the PCL-Allowlist tab of the league sheet.' });
+  }
+  return reply_(p, { ok: true, email: email, name: str_(info.name),
+                     matchedName: rosterNameFor_(info.name) });
+}
+
+/** CEO SCREENING ROOM feed — the private viewer for the CURRENT week's
+ *  weekly-challenge uploads. Every request carries the screening passcode;
+ *  without the right one the endpoint leaks nothing. Read-only JSONP.
+ *  Entries are deduped per Media ID (the newest snapshot wins) and collab
+ *  partners of the same post are merged into one entry; the room plays in
+ *  submission order. */
+function directorFeed_(p) {
+  if (String(p.code || '').trim() !== directorCode_()) {
+    return reply_(p, { ok: false, error: 'Access denied — wrong screening passcode.' });
+  }
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  var out = { ok: true, week: currentWeek_(), entries: [],
+              generatedAt: new Date().toISOString() };
+  if (lastRow < 2) return reply_(p, out);
+  var vals = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+  var c = {};
+  HEADERS.forEach(function (h, i) { c[h] = i; });
+  var want = 'Week ' + out.week;   // stored as "Week N — Challenge Name"
+  var byMedia = {};
+  for (var i = vals.length - 1; i >= 0; i--) {          // newest first
+    var wk = str_(vals[i][c['Weekly Challenge']]);
+    if (wk.indexOf(want) !== 0) continue;               // other weeks stay out
+    var url = str_(vals[i][c['Post URL']]);
+    var key = str_(vals[i][c['Media ID']]) || url;
+    if (!key) continue;
+    var nm = str_(vals[i][c['Full Name']]);
+    if (byMedia[key]) {                                 // older snapshot of same post
+      if (byMedia[key].names.indexOf(nm) === -1) {      // collab partner merge
+        byMedia[key].names.push(nm);
+        byMedia[key].designations.push(str_(vals[i][c['Player Designation']]));
+      }
+      continue;
+    }
+    byMedia[key] = {
+      names: [nm],
+      designations: [str_(vals[i][c['Player Designation']])],
+      platform: str_(vals[i][c['Platform']]),
+      format: str_(vals[i][c['Format']]),
+      url: url,
+      challenge: wk,
+      challengeUrl: str_(vals[i][c['Challenge URL']]),
+      submittedAt: vals[i][c['Timestamp']] instanceof Date
+        ? vals[i][c['Timestamp']].toISOString() : str_(vals[i][c['Timestamp']]),
+      screenshot: str_(vals[i][c['Screenshot Link']])
+    };
+  }
+  Object.keys(byMedia).forEach(function (k) { out.entries.push(byMedia[k]); });
+  out.entries.sort(function (a, b) {
+    return String(a.submittedAt).localeCompare(String(b.submittedAt));
+  });
+  return reply_(p, out);
 }
 
 // Admin write-back: {action:'adminVerify', adminKey, updates:[
@@ -1774,6 +1943,8 @@ function buildAdminGuide() {
     ['Player Verified', 'Admin', 'VERIFIED = photo + designation checked against name · manager · designation (PLAYERS tab → CONFIRM ID). Green tick shows everywhere. Empty = no badge.'],
     ['PCL-Snapshots tab', 'Automatic (YouTube tracking)', 'The SYNC NOW pipeline appends every platform-observed count here: Timestamp · Media ID · Source · Views. Ledger rows show the latest as an AUTO tag in the feed.'],
     ['Admin access', 'Six passwords', 'One password per admin (firstName@123). The password IS the identity — every log entry is stamped with the matching name automatically; there is no name picker and no device lock. Rotate by editing ADMINS in Code.gs + a new version.'],
+    ['PCL-Allowlist tab', 'Admins (paste emails)', 'The active-employee email log for Google sign-in: one @praper.in email per row from row 2 down. A signer-in must be on the @praper.in domain AND on this list; a blank list denies everyone. Edit the tab any time — no redeploy needed.'],
+    ['Screening Room (CEO)', 'CEO only (private)', 'director.html — a passcode-gated private theatre that plays ONLY the current week\u2019s weekly-challenge uploads for the Director/CEO. Passcode: CEO_CODE Script Property (default director@123). Not linked anywhere public — share the link + passcode with the CEO directly.'],
     ['', '', ''],
     ['DAILY FLOW', '', '1. FEED tab: newest entries.  2. SCAN + compare screenshot.  3. Type Verified Count.'],
     ['', '', '4. Set Cross-Check.  5. SAVE CHANGES (sticky bar).  6. REPORTS → Players → VERIFY ID for new players.'],

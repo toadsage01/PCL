@@ -1,0 +1,300 @@
+/* ============================================================================
+   PCL — SCREENING ROOM (director.html)
+   A private, cinematic one-at-a-time player for the CURRENT week's
+   weekly-challenge uploads. Brand tokens come from css/theme.css; this file
+   only adds the theatre layout.
+   ========================================================================== */
+
+.dir-main {
+  position: relative;
+  z-index: 1;
+  width: 100%;            /* body is a column flexbox — auto margins alone
+                             would shrink this to content width */
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 34px 20px 30px;
+}
+
+/* ---------- gate ---------- */
+.dir-gate { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.dir-gatecard {
+  width: min(460px, 100%);
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 6px 6px 0 var(--pcl-hard), 0 0 24px var(--pcl-glow-soft);
+  padding: 30px 30px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+.dir-lock { display: flex; justify-content: center; }
+.dir-lock svg { width: 44px; height: 44px; }
+.dir-title {
+  font-family: var(--pcl-font-display);
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: 1.5px;
+  color: var(--pcl-text);
+  margin: 0;
+}
+.dir-sub {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--pcl-muted);
+  margin: 0;
+}
+.dir-gatecard form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  margin-top: 4px;
+}
+.dir-code { letter-spacing: 3px; font-size: 16px; text-align: center; }
+.dir-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--pcl-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.dir-remember input { accent-color: var(--pcl-primary); width: 15px; height: 15px; }
+.dir-unlock {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 1.5px;
+  color: var(--pcl-on-primary);
+  background: var(--pcl-primary);
+  border: 3px solid var(--pcl-hard);
+  box-shadow: 4px 4px 0 var(--pcl-hard);
+  padding: 12px 18px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.dir-unlock:hover { background: var(--pcl-primary-hi); }
+.dir-unlock:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--pcl-hard); }
+.dir-unlock:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+.dir-err { color: var(--pcl-error); font-size: 12.5px; min-height: 1em; margin: 0; }
+.dir-foot {
+  font-size: 11.5px;
+  color: var(--pcl-muted);
+  max-width: 460px;
+  text-align: center;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ---------- theatre ---------- */
+.dir-theatre { display: flex; flex-direction: column; gap: 16px; }
+.dir-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 4px 4px 0 var(--pcl-hard);
+  padding: 12px 16px;
+}
+.dir-banner-week {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--pcl-on-primary);
+  background: var(--pcl-secondary);
+  border: 2px solid var(--pcl-hard);
+  padding: 4px 8px;
+}
+.dir-banner-name {
+  font-family: var(--pcl-font-display);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.6px;
+  color: var(--pcl-text);
+  flex: 1 1 auto;
+}
+.dir-count {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  color: var(--pcl-muted);
+}
+
+.dir-stagecard {
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 6px 6px 0 var(--pcl-hard), 0 0 26px var(--pcl-glow-soft);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dir-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #06070f;
+  border: 2px solid var(--pcl-hard);
+  overflow: hidden;
+}
+.dir-stage iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+.dir-stage--ig { aspect-ratio: auto; height: 620px; }
+.dir-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 24px;
+}
+.dir-fallback-word {
+  font-family: var(--pcl-font-display);
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: 2px;
+  color: #ffd76b;
+}
+.dir-fallback-sub { font-size: 13px; color: #9aa3c0; max-width: 420px; line-height: 1.6; }
+.dir-fallback .dir-chip { position: static; }
+
+.dir-who { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.dir-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--pcl-surface-2);
+  border: 2px solid var(--pcl-line);
+  padding: 8px 12px;
+}
+.dir-disc {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--pcl-on-primary);
+  background: var(--pcl-secondary);
+  border: 2px solid var(--pcl-hard);
+}
+.dir-chip-id { display: flex; flex-direction: column; gap: 1px; }
+.dir-chip-name {
+  font-family: var(--pcl-font-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--pcl-text);
+  line-height: 1.2;
+}
+.dir-chip-role { font-size: 11.5px; color: var(--pcl-muted); line-height: 1.3; }
+.dir-chip--plat .dir-chip-name { letter-spacing: 1px; font-size: 11.5px; color: var(--pcl-secondary); }
+
+.dir-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.dir-chip a,
+.dir-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 1.2px;
+  color: var(--pcl-text);
+  background: var(--pcl-input-bg);
+  border: 2px solid var(--pcl-hard);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+  padding: 8px 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.dir-chip a:hover,
+.dir-act:hover { background: var(--pcl-surface-3); }
+.dir-chip a:focus-visible,
+.dir-act:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+
+/* ---------- navigation ---------- */
+.dir-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.dir-navbtn {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-hard);
+  box-shadow: 4px 4px 0 var(--pcl-hard);
+  padding: 12px 20px;
+  cursor: pointer;
+}
+.dir-navbtn:hover:not(:disabled) { background: var(--pcl-surface-3); color: var(--pcl-primary-deep); }
+.dir-navbtn:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--pcl-hard); }
+.dir-navbtn:disabled { opacity: 0.35; cursor: not-allowed; }
+.dir-navbtn:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+.dir-dots { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
+.dir-dot {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--pcl-hard);
+  background: var(--pcl-surface-2);
+  cursor: pointer;
+  padding: 0;
+}
+.dir-dot.is-on { background: var(--pcl-primary); }
+.dir-dot:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+.dir-hint {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--pcl-muted);
+  margin: 0;
+}
+
+/* ---------- empty week ---------- */
+.dir-empty { display: flex; justify-content: center; }
+.dir-emptycard {
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 6px 6px 0 var(--pcl-hard);
+  padding: 34px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+  max-width: 520px;
+}
+
+/* ---------- mobile ---------- */
+@media (max-width: 640px) {
+  .dir-main { padding: 22px 12px 24px; }
+  .dir-gatecard { padding: 24px 18px 22px; }
+  .dir-banner-name { font-size: 13px; }
+  .dir-stage--ig { height: 480px; }
+  .dir-navbtn { padding: 10px 14px; font-size: 12px; }
+}
+
+/* ---------- dark theme nudges (tokens do most of the work) ---------- */
+html[data-pcl-theme="dark"] .dir-stage { border-color: #0c0d14; }
+html[data-pcl-theme="dark"] .dir-fallback-sub { color: #8b93b4; }

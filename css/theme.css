@@ -2419,3 +2419,55 @@ html[data-pcl-theme="dark"] .pcl-namehint {
   color: #ffd9a0; background: #2a2115; border-color: #b57f2e;
 }
 html[data-pcl-theme="dark"] .pcl-highnote { color: #ffd9a0; }
+
+/* ============================================================================
+   EMPLOYEE SIGN-IN (Google) — section 0 card on the form. Invisible until a
+   Google OAuth Client ID is configured in js/gas-endpoint.js.
+   ========================================================================== */
+.pcl-grow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.pcl-gbtnwrap { min-height: 44px; }
+.pcl-gstate {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--pcl-surface-2);
+  border: 2px solid var(--pcl-line);
+  box-shadow: 3px 3px 0 var(--pcl-inset);
+  padding: 8px 12px;
+  max-width: 100%;
+}
+.pcl-gcheck {
+  flex: 0 0 auto;
+  width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: #1d9e57;
+  color: #fff;
+  font-size: 12px; font-weight: 700;
+}
+.pcl-gid {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pcl-text);
+  overflow-wrap: anywhere;
+}
+.pcl-gout {
+  flex: 0 0 auto;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--pcl-text);
+  background: var(--pcl-input-bg);
+  border: 2px solid var(--pcl-hard);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.pcl-gout:active { transform: translate(2px, 2px); box-shadow: none; }
+.pcl-gerr { color: var(--pcl-error); font-size: 12.5px; min-height: 1em; margin: 0; }

@@ -402,6 +402,79 @@ stops mattering entirely.
 
 ---
 
+## A6 · DONE — rulebook additions, collab shared-points wording, CEO Screening Room, employee Google sign-in (23 Oct, deadline day)
+
+**User directive (5 items):** ① confidentiality clause into the RULEBOOK ②
+weekly-challenge judging clarification into the RULEBOOK ③ a CEO-only
+featured view of the current week's challenge uploads with a great UI ④
+collab flow fix — scores SHARED between collaborated players, never
+distributed in portions ⑤ Google login restricted to the @praper.in
+company domain, with an active-employee email allowlist.
+
+**What shipped:**
+- **RULEBOOK (form modal, js/app.js):** ① new mandatory **Client
+  confidentiality** bullet in §7 (no client names / faces / project
+  timelines on any platform, review before posting — user's exact policy);
+  ② new paragraph under §5: weekly challenges are topic/theme-based,
+  judged by a judge or a small panel rating entries on liking/disliking,
+  clearly separate from the views-first league, content is NOT spread
+  around the ten challenges — but weekly-challenge views still count in
+  the main league with the standard multipliers.
+- **Collab wording (item 4):** the backend has credited FULL points to
+  each partner since A4 (no halving anywhere); this round killed the last
+  "split 50:50" copy: form popover title/hint, ½ badge → **FULL** badge,
+  admin feed tag → "COLLAB · FULL", rulebook bullet + header comment now
+  say "shared, never divided (1,000 × 1.25 = 1,250 to EACH)". Partner
+  input stays a NAME with roster autocomplete (no mail id anywhere).
+- **CEO Screening Room (item 3):** NEW `director.html` + `js/director.js`
+  + `css/director.css` — dark cinematic theatre, one entry at a time,
+  WEEK banner with LIVE tag, YT privacy-enhanced embed / IG embed /
+  LinkedIn link-card fallback, participant chips (disc initials + name +
+  designation), OPEN ORIGINAL POST + ANALYTICS SHOT chips, PREV/NEXT +
+  numbered squares + arrow keys, "remember on this device". Backend: NEW
+  `directorFeed_` GET action (doGet routed) — passcode-gated
+  (`CEO_CODE` Script Property, default `director@123`), returns ONLY the
+  current week's weekly-challenge rows, deduped per Media ID (newest
+  snapshot wins), collab partners merged, submission order. Discreet
+  SCREENING ROOM link added to the Control Room header; not linked
+  publicly. E2E: gate deny → unlock → 3-embed theatre → nav → screenshots.
+- **Employee sign-in (item 5):** GIS button in a new form section 0 that
+  stays INVISIBLE until `googleClientId` is set in js/gas-endpoint.js
+  (zero risk before setup). NEW `employeeLogin_` GET action verifies the
+  ID token SERVER-SIDE via Google tokeninfo, then gates on the @praper.in
+  domain AND the NEW **`PCL-Allowlist`** sheet tab (auto-created; one
+  email per row; blank list denies everyone; case/space-tolerant). On
+  success: signed-in chip + roster prefill (matchedName, only when the
+  name field is empty). Setup steps live in README §2 and in the
+  gas-endpoint.js comments; `GOOGLE_OAUTH_CLIENT_ID` in Code.gs holds the
+  same client ID for the audience check.
+- **Guide:** buildAdminGuide rows added for PCL-Allowlist + Screening
+  Room; README §2 (sign-in setup), §10.5 (Screening Room), §14, §15;
+  this A6 section.
+
+**Tests:** harness +9 assertions — group 22 directorFeed (wrong code
+denied, current-week-only + dedupe + collab merge + submission order +
+trimmed passcode) and group 23 employeeLogin (missing token, Google-400,
+unverified email, non-@praper.in, blank allowlist deny, tab auto-create,
+allowlisted OK + roster name mapping, gmail refused, case-insensitive
+membership) — ALL PASS; rollup 16 / sanitize 33 / OCR 34 / URL 24 green;
+node --check on all five JS files + Code.gs. Browser E2E
+(scripts/round_e2e.sh + scripts/fixture_director.js): sign-in card hidden
+with no client id, rulebook contains all three new texts and zero
+"split 50:50", collab popover FULL copy, gate deny → unlock → YT/IG/LI
+entries → keyboard nav, board 5 rows 0 badges. Found + fixed via E2E:
+body's flex column shrank .dir-main to content width (added width:100%).
+
+**Deploy note:** directorFeed/employeeLogin/PCL-Allowlist ride the SAME
+pending C1 paste + New version as A2–A5. Until that paste: the screening
+room and sign-in verify against the OLD backend — the room will refuse
+every code ("wrong screening passcode" → actually action unknown falls
+through to stats) and sign-ins cannot verify. The Screening Room page
+itself deploys the moment Vercel redeploys the static site. Email allowlist
+goes in the sheet tab — no redeploy needed after the first paste.
+
+---
+
 ## D · POST-DEADLINE / CONTINUOUS OPS (tracked, not urgent)
 1. **Metrics Phases 1–3** roll-out + pilots (the METRICS-RESEARCH.md plan —
    this is the "PCL views" ultimate fix; the fallback chains make it

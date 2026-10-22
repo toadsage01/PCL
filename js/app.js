@@ -32,7 +32,8 @@
    Collab posts (rulebook §7): tag a post as COLLAB and name the partner.
    The backend only allows the same link twice when it can confirm the collab
    (the partner tagged this player, or this player tags the partner) — once
-   confirmed, the post's points split 50:50 between the two players.
+   confirmed, the post's FULL points are credited to EACH of the two players
+   (scores are shared among the collaborated players, never divided).
 
    Error model (per spec):
      · Missing required field  → red border + shadow + small "Required" text
@@ -954,19 +955,20 @@
       '" data-act="collab" data-id="' + esc(p.id) +
       '" aria-pressed="' + (p.collab ? "true" : "false") +
       '" aria-label="Collab post — add a partner (post ' + n + ')" ' +
-      'title="Collab post — points split 50:50 once the partner submits the same link">' +
+      'title="Collab post — once the partner submits the same link, BOTH of you earn the full points">' +
       GROUP_SVG +
-      (p.collab ? '<span class="pcl-collab-half" aria-hidden="true">½</span>' : "") +
+      (p.collab ? '<span class="pcl-collab-half" aria-hidden="true">FULL</span>' : "") +
       "</button>" +
       (p.collab
         ? '<div class="pcl-collabpop">' +
-          '<span class="pcl-collab-title">Collab · points split 50:50</span>' +
+          '<span class="pcl-collab-title">Collab · full points for both</span>' +
           '<input class="pcl-input pcl-collab-input' + (p.errCollab ? " is-error" : "") +
           '" data-act="collabname" data-id="' + esc(p.id) +
           '" type="text" placeholder="Partner\u2019s full name" value="' +
           esc(p.collabWith) + '" aria-label="Partner\u2019s full name — post ' + n + '" />' +
           '<span class="pcl-hint pcl-collab-hint">Your partner submits the same link — ' +
-          "once the backend confirms the pair, this post\u2019s points split 50:50.</span>" +
+          "once the backend confirms the pair, the post\u2019s FULL points are awarded to " +
+          "EACH of you. Scores are shared, never divided.</span>" +
           (p.errCollab ? '<p class="pcl-err">Add your partner\u2019s name.</p>' : "") +
           "</div>"
         : "") +
@@ -1478,6 +1480,16 @@
       "each week. Submit post analytics by <b>11:00 AM the following Monday</b>. The " +
       "winning post of each weekly challenge is featured as a collaborative post with " +
       "Praper Media's official pages.</p>" +
+      '<p class="pcl-rb-p"><b>How weekly challenges are judged — and how they relate ' +
+      "to the main league:</b> every weekly challenge is a <b>topic or theme-based</b> " +
+      "competition. A judge — or a small panel — <b>scores or rates the uploaded entries " +
+      "on how much they like or dislike the video</b>, and that rating decides the weekly " +
+      "winner. This is different from the regular league, where leaderboard points come " +
+      "from views and impressions. It may seem that content is spread around the ten " +
+      "challenges — <b>that is clearly not the case</b>. Weekly challenges are solely " +
+      "separate; you do not have to chase every one of them. The only thing they share " +
+      "with the main league is reach: <b>views on a weekly-challenge post still count in " +
+      "the main league with the right set of multipliers</b>.</p>" +
 
       '<span class="pcl-rb-h">6 · Mandatory Posting — the 50:50 Balance Rule</span>' +
       '<p class="pcl-rb-p">All participants are now required to post on ' +
@@ -1502,13 +1514,18 @@
       '<span class="pcl-rb-h">7 · Participation Rules</span>' +
       '<ul class="pcl-rb-ul">' +
       "<li>Participate via LinkedIn, Instagram or YouTube — posts, carousels, Reels, Shorts or Long-Form.</li>" +
-      "<li>Collab posts: tag the post as a collab and name your partner. When " +
-      "both of you submit the same link and the backend confirms the pair, the " +
-      "post\u2019s points are <b>split 50:50</b> between the collaborators.</li>" +
+      "<li>Collab posts: tag the post as a collab and pick your partner\u2019s name. When " +
+      "both of you submit the same link and the backend confirms the pair, the scores are " +
+      "<b>shared among the collaborated players — each of you earns the post\u2019s FULL " +
+      "points</b>, never a divided portion (a 1,000-view Reel at 1.25\u00d7 = " +
+      "<b>1,250 points to EACH partner</b>).</li>" +
       "<li><b>No paid promotions or boosting</b> — only organic reach counts. Manipulated metrics are not permitted.</li>" +
       "<li><b>One Post, One Platform:</b> identical content on multiple platforms counts only on the platform with the highest impressions.</li>" +
       "<li>Every eligible entry must meaningfully mention or feature Praper Media; tag the official account wherever allowed.</li>" +
-      "<li>Content must be original, respectful and public-safe — never disclose confidential client, employee or company information.</li>" +
+      "<li><b>Client confidentiality — mandatory:</b> ensure that no client names, " +
+      "client faces, or project timelines are visible in any content you create or post " +
+      "on any platform. Kindly review your content carefully before posting and make " +
+      "sure all client-related information remains confidential.</li>" +
       "<li>Entries must be published within the contest dates and stay accessible for verification.</li>" +
       "<li>Submit the public post link and a screenshot/export of platform analytics by the announced deadlines.</li>" +
       "<li>Ties are settled by a pre-announced tie-break rule before final results.</li>" +
@@ -1982,6 +1999,144 @@
   $("weekInfoBtn").addEventListener("click", openWeekInfo);
   $("pclRulebookBtn").addEventListener("click", openRulebook);
   buildWeekOptions();   // only the ONGOING week is selectable
+
+  /* ============================================================================
+     EMPLOYEE SIGN-IN (Google) — participants are employees, so the form offers
+     a Google sign-in restricted to the company domain. The ID token is NEVER
+     trusted client-side: it goes to the backend (Code.gs → employeeLogin_)
+     which verifies it against Google's tokeninfo endpoint, checks the
+     @praper.in domain AND the PCL-Allowlist tab of the league sheet. On
+     success the form prefills the exact roster identity (matchedName).
+     The card stays INVISIBLE until cfg.googleClientId is set in
+     js/gas-endpoint.js — until the league turns sign-in on, the form works
+     exactly as before (Full Name + Reporting Manager identity).
+     ========================================================================== */
+  (function () {
+    var panel = $("gpanel");
+    if (!panel || !cfg.googleClientId) return;   // sign-in not switched on
+    panel.hidden = false;
+
+    var btnWrap = $("gBtn");
+    var stateBox = $("gState");
+    var idLine = $("gId");
+    var errLine = $("gErr");
+    var SESSION_KEY = "pcl_google";
+
+    function showErr(msg) { errLine.textContent = msg || ""; }
+    function renderState(name, email) {
+      stateBox.hidden = false;
+      btnWrap.hidden = true;
+      idLine.textContent = (name ? name + " · " : "") + email;
+    }
+    function clearState() {
+      stateBox.hidden = true;
+      btnWrap.hidden = false;
+      idLine.textContent = "";
+    }
+    function sessionSave(s) {
+      try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
+      catch (e) { /* private mode — chip is per-page-load then */ }
+    }
+    function sessionClear() {
+      try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ok */ }
+    }
+
+    function b64UrlDecode(part) {
+      var b = part.replace(/-/g, "+").replace(/_/g, "/");
+      while (b.length % 4) b += "=";
+      return JSON.parse(decodeURIComponent(Array.prototype.map.call(
+        atob(b), function (c) {
+          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join("")));
+    }
+
+    function accept(entry) {
+      renderState(entry.name, entry.email);
+      showErr("");
+      sessionSave({ email: entry.email, name: entry.name || "",
+                    at: Date.now() });
+      /* prefill the ledger identity ONLY when the name field is empty —
+         whatever a human typed always wins */
+      if (entry.matchedName && !fullName.value.trim()) {
+        fullName.value = entry.matchedName;
+        fullName.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+
+    function onCred(resp) {
+      var cred = resp && resp.credential;
+      if (!cred) { showErr("Google sign-in did not complete — try again."); return; }
+      var claims;
+      try { claims = b64UrlDecode(cred.split(".")[1]); }
+      catch (e) { showErr("Could not read the Google sign-in."); return; }
+      var email = String(claims.email || "").toLowerCase();
+      var dom = "@" + String(cfg.employeeDomain || "praper.in").toLowerCase();
+      if (!email || email.slice(-dom.length) !== dom) {
+        window.google && google.accounts.id.disableAutoSelect();
+        showErr("Employees only — sign in with your " + dom + " work account.");
+        return;
+      }
+      showErr("Verifying your employee status…");
+      jsonpGet({ action: "employeeLogin", token: cred })
+        .then(function (res) {
+          if (res && res.ok) {
+            accept({ email: res.email || email, name: res.name || "",
+                     matchedName: res.matchedName || "" });
+          } else {
+            window.google && google.accounts.id.disableAutoSelect();
+            sessionClear();
+            clearState();
+            showErr((res && res.error) ||
+              "Sign-in could not be verified — try again.");
+          }
+        })
+        .catch(function () {
+          showErr("Could not reach the league server — sign-in not confirmed.");
+        });
+    }
+
+    /* the GIS one-tap/button script — loaded only now that sign-in is on */
+    var lib = document.createElement("script");
+    lib.src = "https://accounts.google.com/gsi/client";
+    lib.async = true;
+    lib.defer = true;
+    lib.onload = function () {
+      if (!window.google || !google.accounts || !google.accounts.id) return;
+      google.accounts.id.initialize({
+        client_id: cfg.googleClientId,
+        callback: onCred,
+        ux_mode: "popup"
+      });
+      google.accounts.id.renderButton(btnWrap, {
+        theme: "outline", size: "large", text: "signin_with",
+        shape: "pill", logo_alignment: "left", width: 260
+      });
+    };
+    lib.onerror = function () {
+      /* script blocked / offline — silently put the card away */
+      panel.hidden = true;
+    };
+    document.head.appendChild(lib);
+
+    $("gOut").addEventListener("click", function () {
+      window.google && google.accounts.id.disableAutoSelect();
+      sessionClear();
+      clearState();
+      showErr("");
+    });
+
+    /* soft session restore — the chip re-appears; re-verification happens
+       server-side on the next actual sign-in */
+    (function restore() {
+      var raw = "";
+      try { raw = String(localStorage.getItem(SESSION_KEY) || ""); } catch (e) { /* ok */ }
+      if (!raw) return;
+      try {
+        var s = JSON.parse(raw);
+        if (s && s.email) renderState(s.name, s.email);
+      } catch (e) { /* corrupt chip — ignore */ }
+    })();
+  })();
 
   /* ============================================================================
      DRAFT PERSISTENCE — accidental-reload insurance.

@@ -71,6 +71,29 @@ policy is absolute:
   no code path that could draw it. Rank, name, designation, impressions,
   points — nothing else ever.
 
+### Optional: Google employee sign-in (@praper.in)
+
+The form carries an **Employee Sign-In** card (section 0) that is
+*invisible until switched on* — with no OAuth client configured, the form
+behaves exactly as described above (Full Name + Reporting Manager). To
+turn it on:
+
+1. Google Cloud Console → Credentials → **OAuth 2.0 Client ID (Web app)**;
+   add the site origin under *Authorized JavaScript origins*.
+2. Paste the client ID in **two places**: `googleClientId` in
+   `js/gas-endpoint.js` AND `GOOGLE_OAUTH_CLIENT_ID` in `gas/Code.gs`.
+3. Paste the active-employee emails into the **`PCL-Allowlist` tab** of the
+   league sheet — one `@praper.in` email per row, from row 2 down. The tab
+   auto-creates on first use; admins edit it directly, no redeploy.
+
+Sign-in is then accepted only when ALL of these hold — every one checked
+SERVER-SIDE (`employeeLogin_` in Code.gs): Google's tokeninfo endpoint
+verifies the ID token, the email is verified, the address ends in
+`@praper.in` **and** it is on the allowlist (case/space-tolerant). On
+success the form prefills the exact roster identity (never overwriting
+what a human typed) and shows a signed-in chip with SIGN OUT. A blank or
+missing allowlist denies everyone — employees only, by design.
+
 ---
 
 ## 3 · The rulebook → what the code enforces
@@ -271,6 +294,32 @@ nothing.
   string, `NaN` or `Infinity` — the "string as view" class of bug is dead
   at both layers (33-assertion sanitize suite proves it).
 
+## 10.5 · The Screening Room — the Director's private theatre
+
+`director.html` (not linked anywhere public; reachable from the Control
+Room header) is a dark, cinematic, one-entry-at-a-time player for **only
+the current week's weekly-challenge uploads**. It exists so the Director
+/CEO can screen entries in a premium experience:
+
+- **Passcode-gated, nobody else.** The feed endpoint (`directorFeed_` in
+  Code.gs) refuses every request that does not carry the screening
+  passcode — wrong code leaks nothing. The passcode lives server-side:
+  Script Property **`CEO_CODE`**, default `director@123` until you set
+  the property. It is deliberately separate from the six admin passwords.
+  The page offers "remember on this device" so the CEO types it once.
+- **What plays**: weekly-challenge submissions of the live week only,
+  deduped per post (the newest analytics snapshot wins), collab partners
+  merged onto one entry, in submission order. YouTube plays inline
+  (privacy-enhanced embed), Instagram Reels/posts embed in the stage,
+  LinkedIn falls back to a calm link card — plus OPEN ORIGINAL POST and
+  ANALYTICS SHOT chips.
+- **Judging, not scoring**: this room shows content, not claimed counts —
+  weekly challenges are judged on liking/disliking (see §3), and the
+  reward itself is granted from the Control Room's REPORTS tab.
+- Navigate with PREV/NEXT, the numbered squares, or the ← → keys.
+
+---
+
 ## 11 · Data-integrity guarantees — the "no corruption, no loss" list
 
 1. **Identity uniqueness** — Media-ID ownership: one link → one owner;
@@ -340,7 +389,7 @@ history covers the rest. Nothing in this system deletes.
 
 | Suite | Proves | Run |
 |---|---|---|
-| `scripts/test_do_post_collab.js` | ~65 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats verified strip, review-first reorder with data survival | `node scripts/test_do_post_collab.js` |
+| `scripts/test_do_post_collab.js` | ~75 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats verified strip, review-first reorder with data survival, CEO screening feed (passcode gate, week filter, dedupe, collab merge) and employee sign-in (tokeninfo stub, domain + allowlist gating) | `node scripts/test_do_post_collab.js` |
 | `scripts/test_ocr_parse.js` | 34 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection | `node scripts/test_ocr_parse.js` |
 | `scripts/test_leaderboard_rollup.js` | 16: dedup-by-media, verified-over-claimed, weekly buckets | `node scripts/test_leaderboard_rollup.js` |
 | `scripts/test_url_diag.js` | 24: every accepted URL shape | `node scripts/test_url_diag.js` |
@@ -363,6 +412,11 @@ history covers the rest. Nothing in this system deletes.
   it by referrer in Google Cloud if you ever want belt-and-suspenders.
 - **Identity is spelling-sensitive by nature** — the hint chip + roster
   autofill prevent most; the reviewer's PLAYERS tab is the final net.
+- **Screening passcode** — `director@123` works only until a `CEO_CODE`
+  Script Property is set; set it to rotate. Until the C1 paste, the OLD
+  deployed backend does not know `directorFeed`/`employeeLogin` at all.
+- **The sign-in card is invisible until a client ID is pasted** — that is
+  deliberate; the form never depends on Google being reachable.
 
 *Everything else — every chip, badge, tab and number — is described
 inline in the code where it happens; `docs/ARCHITECTURE.md` carries the

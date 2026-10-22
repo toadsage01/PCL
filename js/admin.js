@@ -82,7 +82,7 @@
   function collabBadgeHtml(r) {
     if (r.collabStatus === "CONFIRMED") {
       return '<span class="pcl-tag pcl-tag--collab" title="Confirmed collab with ' +
-        esc(r.collabWith || "partner") + " — verified points split 50:50\">COLLAB · ½</span>";
+        esc(r.collabWith || "partner") + " — FULL points credited to EACH collaborator (shared, never split)\">COLLAB · FULL</span>";
     }
     if (r.collabStatus === "PENDING") {
       return '<span class="pcl-tag pcl-tag--collabpend" title="Tagged as collab with ' +

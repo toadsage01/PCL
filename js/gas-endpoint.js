@@ -26,5 +26,22 @@ window.PCL_CONFIG = {
   // leg uses). Lets the form read the OFFICIAL view count the moment a
   // YouTube link lands, so YouTube posts need nothing typed at all.
   // Leave "" to disable the client-side auto-read.
-  ytApiKey: "AIzaSyChPgXr6U4MICfIPtdobUFTQHp_uS9veog"
+  ytApiKey: "AIzaSyChPgXr6U4MICfIPtdobUFTQHp_uS9veog",
+
+  // ---- EMPLOYEE SIGN-IN (Google) — optional, off until YOU turn it on ----
+  // 1. Google Cloud Console → Credentials → OAuth 2.0 Client ID (Web app).
+  // 2. Add your site origin (e.g. https://praper-contest-league.vercel.app)
+  //    under "Authorized JavaScript origins".
+  // 3. Paste the client ID here AND in gas/Code.gs (GOOGLE_OAUTH_CLIENT_ID).
+  // 4. Paste the active-employee emails into the PCL-Allowlist tab of the
+  //    league sheet (one @praper.in email per row from row 2 down).
+  // Sign-in is then accepted ONLY for @praper.in accounts that are on that
+  // list — verified server-side against Google's tokeninfo endpoint.
+  // Leave "" to hide the sign-in card completely (the form works exactly
+  // as before — Full Name + Reporting Manager identity).
+  googleClientId: "",
+
+  // The only work domain accepted at sign-in. Must match EMPLOYEE_DOMAIN
+  // in gas/Code.gs.
+  employeeDomain: "praper.in"
 };

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-pcl-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PCL — Screening Room</title>
+  <link rel="icon" type="image/png" href="assets/brand/pcl-logo-web.png" />
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- Apply saved/system theme BEFORE first paint. The Screening Room
+       defaults to DARK — it is the Director's private theatre. -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("pcl_theme");
+        var sysDark = window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.setAttribute(
+          "data-pcl-theme", saved || (sysDark ? "dark" : "dark"));
+        var font = "sf";
+        try {
+          font = localStorage.getItem("pcl_font") || "sf";
+          if (font !== "sf") font = "og";
+        } catch (e) { /* ok */ }
+        document.documentElement.setAttribute("data-pcl-font", font);
+      } catch (e) { /* keep defaults */ }
+    })();
+  </script>
+
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/director.css" />
+</head>
+<body>
+  <div class="pcl-marquee">
+    <header class="pcl-header">
+      <a class="pcl-header-brand" href="index.html"
+         aria-label="Praper Content League — entry form"
+         title="Praper Content League">
+        <img class="pcl-logo" src="assets/brand/pcl-logo-web.png"
+             alt="Praper Content League" />
+        <span class="pcl-season">SCREENING ROOM</span>
+      </a>
+      <span class="pcl-board-links">
+        <span class="pcl-board-chip">PRIVATE · CEO ONLY</span>
+      </span>
+      <button id="pclThemeToggle" class="pcl-toggle" type="button"
+              aria-label="Toggle light / dark theme" title="Toggle theme">
+        <span class="pcl-px-icon pcl-px-sun" aria-hidden="true"></span>
+        <span class="pcl-px-icon pcl-px-moon" aria-hidden="true"></span>
+      </button>
+    </header>
+  </div>
+
+  <main class="dir-main">
+
+    <!-- ---------- GATE: passcode only the CEO holds ---------- -->
+    <section class="dir-gate" id="dirGate">
+      <div class="dir-gatecard">
+        <div class="dir-lock" aria-hidden="true">
+          <svg viewBox="0 0 16 16" shape-rendering="crispEdges">
+            <rect x="3"  y="7" width="10" height="7" fill="#e8a200"/>
+            <rect x="3"  y="7" width="10" height="2" fill="#ffd76b"/>
+            <rect x="5"  y="3" width="6"  height="4" fill="none" stroke="#e8a200" stroke-width="2"/>
+            <rect x="7"  y="9" width="2"  height="3" fill="#14235f"/>
+          </svg>
+        </div>
+        <h1 class="dir-title">DIRECTOR'S SCREENING ROOM</h1>
+        <p class="dir-sub">Private weekly-challenge screening — one passcode,
+          one viewer. Entries of the <b>current week only</b>, in submission order.</p>
+        <form id="dirGateForm" novalidate>
+          <label class="pcl-label" for="dirCode">Screening passcode</label>
+          <input class="pcl-input dir-code" id="dirCode" type="password"
+                 placeholder="••••••••••••" autocomplete="off" spellcheck="false" />
+          <label class="dir-remember">
+            <input type="checkbox" id="dirRemember" checked />
+            Remember on this device
+          </label>
+          <button type="submit" class="dir-unlock" id="dirUnlock">UNLOCK &#9656;</button>
+          <p class="dir-err" id="dirErr" role="alert"></p>
+        </form>
+      </div>
+      <p class="dir-foot">This room is not linked anywhere public. Entries live here
+        only for the current week's challenge.</p>
+    </section>
+
+    <!-- ---------- THEATRE: one entry at a time, big and calm ---------- -->
+    <section class="dir-theatre" id="dirTheatre" hidden>
+      <div class="dir-banner" id="dirBanner">
+        <span class="dir-banner-week" id="dirWeekTag">WEEK 1</span>
+        <span class="dir-banner-name" id="dirWeekName">—</span>
+        <span class="pcl-wk-tag">LIVE</span>
+        <span class="dir-count" id="dirCount">ENTRY 0 / 0</span>
+      </div>
+
+      <article class="dir-stagecard">
+        <div class="dir-stage" id="dirStage">
+          <!-- media embed or fallback card renders here -->
+        </div>
+        <div class="dir-who" id="dirWho">
+          <!-- participant chips render here -->
+        </div>
+        <div class="dir-actions" id="dirActions">
+          <!-- OPEN POST / ANALYTICS chips render here -->
+        </div>
+      </article>
+
+      <nav class="dir-nav" aria-label="Screening navigation">
+        <button type="button" class="dir-navbtn" id="dirPrev"
+                aria-label="Previous entry">&#8249; PREV</button>
+        <div class="dir-dots" id="dirDots"></div>
+        <button type="button" class="dir-navbtn" id="dirNext"
+                aria-label="Next entry">NEXT &#8250;</button>
+      </nav>
+      <p class="dir-hint">Use ← → arrow keys · entries play in submission order</p>
+    </section>
+
+    <section class="dir-empty" id="dirEmpty" hidden>
+      <div class="dir-emptycard">
+        <h2 class="dir-title">NOTHING TO SCREEN YET</h2>
+        <p class="dir-sub" id="dirEmptyMsg">No weekly-challenge entries for the
+          current week. The room fills up as submissions land.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pcl-footer">
+    <p>Praper Content League · Season 2 — private screening for the Director.
+       Content stays confidential: no client names, faces or timelines.</p>
+  </footer>
+
+  <script src="js/director.js"></script>
+</body>
+</html>
