@@ -395,7 +395,10 @@
      ========================================================================== */
   function validChipHtml(p, i) {
     var f = FORMATS[p.format];
-    return '<span class="pcl-chip" data-kind="post" title="' + esc(p.url) + '">' +
+    var clash = p.takenBy && !p.collab;
+    return '<span class="pcl-chip' + (clash ? " is-error" : "") +
+      '" data-kind="post" title="' +
+      esc(p.takenBy ? "Already uploaded by " + p.takenBy : p.url) + '">' +
       '<span class="pcl-chip-label"><span class="pcl-chip-brand" data-fmt="' +
       p.format + '">' + logoSvg(p.format) +
       '<span class="pcl-fmtword">' + esc(f.word) + "</span></span> · " +
@@ -537,6 +540,7 @@
         id: c.mediaId, url: c.url, format: c.format, mediaId: c.mediaId,
         views: "", shot: null, errViews: false, errShotMsg: "",
         collab: false, collabWith: "", errCollab: false,
+        takenBy: "", collabFor: "",
         ctype: "PRAPER",
         ocrN: 0, ocrSolid: false, ocrAll: [], ocrStatus: "",
         autoN: 0, ytTried: false
@@ -548,6 +552,7 @@
     renderRows();
     renderDetailsHead();
     posts.forEach(ytAutoRead_);   // YouTube links self-read their view count
+    posts.forEach(checkLink_);    // every link asks the ledger who owns it
     dups.forEach(addDupChip);
     lastInputSnap = snapLinks();
     if (added > 0 || chipErrors.length > 0) clearFieldErr("postLinks");
@@ -582,6 +587,46 @@
     renderChips();
     renderRows();
     renderDetailsHead();
+  });
+
+  /* ============================================================================
+     LINK OWNERSHIP CHECK — the ledger is asked who posted a link the moment
+     it is committed, so a clash surfaces as a friendly row banner instead of
+     a failed submission at the very end of the form:
+       taken     → red banner "This video is ALREADY UPLOADED BY {name}"
+                   (submission stays blocked while the link is untagged)
+       collabFor → green banner "This video was COLLABED WITH YOU by {name}
+                   — confirm below" with a one-tap CONFIRM that tags the
+                   collab; the pair then earns FULL points on both sides
+     Collab matching is name-based, so every check re-runs when the Full
+     Name field commits. The ingest re-validates authoritatively anyway —
+     this leg only makes the truth visible EARLY.
+     ========================================================================== */
+  function checkLink_(p) {
+    if (!cfg.gasWebAppUrl) return;            // local mode: nothing to ask
+    var name = fullName.value.trim();
+    if (!name || !p.url) return;
+    var want = p.url + "|" + name;
+    if (p.__chk === want) return;             // same question already asked
+    p.__chk = want;
+    jsonpGet({ action: "checklink", url: p.url, format: p.format, name: name })
+      .then(function (out) {
+        if (!out || out.ok !== true) return;
+        if (p.__chk !== want) return;         // link/name changed meanwhile
+        p.takenBy = out.taken ? String(out.uploader || "another player") : "";
+        p.collabFor = out.collabFor ? String(out.collabFor) : "";
+        renderChips();
+        renderRows();
+      })
+      .catch(function () { /* offline, or the live backend predates the
+                               action — ingest re-checks at submit */ });
+  }
+  function checkAllLinks_() {
+    posts.forEach(function (p) { p.__chk = null; checkLink_(p); });
+  }
+  /* a changed identity re-matches every collab/ownership verdict */
+  fullName.addEventListener("change", function () {
+    if (fullName.value.trim()) checkAllLinks_();
   });
 
   linkInput.addEventListener("keydown", function (ev) {
@@ -718,20 +763,47 @@
              solid: false };
   }
 
-  /* shrink huge screenshots before recognition (speed; accuracy unaffected
-     for UI text down to 2000px on the long edge) */
-  function downscaleForOcr_(file) {
+  /* decode + scale to a working size for recognition. Screenshots arrive
+     from phones, tablets and PCs, and sometimes they are only a CROPPED
+     REGION (just the stats strip), so the scale cuts BOTH ways:
+       · huge desktop screenshots cap at maxEdge (recognition speed;
+         accuracy is unaffected for UI text down to 2000px on the edge)
+       · tiny region crops pull UP to minEdge — Tesseract's accuracy
+         collapses when glyph height drops under ~20px, and a cropped
+         stats strip can be a few hundred pixels wide
+       · invert=true re-inkers dark-mode screenshots (white text on black)
+         into the black-on-white shape the reader is trained on — a manual
+         pixel pass, because ctx.filter has no Safari support */
+  function prepOcr_(file, maxEdge, minEdge, invert) {
     return new Promise(function (res, rej) {
       var fr = new FileReader();
       fr.onload = function () {
         var img = new Image();
         img.onload = function () {
           var w = img.naturalWidth, h = img.naturalHeight;
-          var sc = Math.min(1, 2000 / Math.max(w, h));
-          if (sc >= 1) { res(fr.result); return; }
+          if (!w || !h) { rej(new Error("image decode failed")); return; }
+          var mx = Math.max(w, h);
+          var sc = mx > maxEdge ? maxEdge / mx
+                 : (mx < minEdge ? minEdge / mx : 1);
           var cv = document.createElement("canvas");
-          cv.width = Math.round(w * sc); cv.height = Math.round(h * sc);
-          cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+          cv.width = Math.max(1, Math.round(w * sc));
+          cv.height = Math.max(1, Math.round(h * sc));
+          var ctx = cv.getContext("2d");
+          ctx.fillStyle = "#ffffff";       // alpha → white before JPEG
+          ctx.fillRect(0, 0, cv.width, cv.height);
+          ctx.drawImage(img, 0, 0, cv.width, cv.height);
+          if (invert) {
+            try {
+              var d = ctx.getImageData(0, 0, cv.width, cv.height);
+              var px = d.data;
+              for (var i = 0; i < px.length; i += 4) {
+                px[i] = 255 - px[i];
+                px[i + 1] = 255 - px[i + 1];
+                px[i + 2] = 255 - px[i + 2];
+              }
+              ctx.putImageData(d, 0, 0);
+            } catch (e) { /* tainted canvas can't happen on data: URLs */ }
+          }
           res(cv.toDataURL("image/jpeg", 0.92));
         };
         img.onerror = function () { rej(new Error("image decode failed")); };
@@ -740,6 +812,120 @@
       fr.onerror = function () { rej(new Error("file read failed")); };
       fr.readAsDataURL(file);
     });
+  }
+
+  /* dark-mode probe — a 64px thumbnail's mean luminance tells whether the
+     inverted retry pass is worth one more recognition run */
+  function isDarkShot_(file) {
+    return prepOcr_(file, 64, 0, false).then(function (url) {
+      return new Promise(function (res) {
+        var img = new Image();
+        img.onload = function () {
+          try {
+            var cv = document.createElement("canvas");
+            cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+            var ctx = cv.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            var d = ctx.getImageData(0, 0, cv.width, cv.height).data;
+            var sum = 0, n = 0;
+            for (var i = 0; i < d.length; i += 16) {   // every 4th pixel
+              sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+              n++;
+            }
+            res(n ? (sum / n) < 110 : false);
+          } catch (e) { res(false); }
+        };
+        img.onerror = function () { res(false); };
+        img.src = url;
+      });
+    }).catch(function () { return false; });
+  }
+
+  /* ---------- COMPLIANCE READS — boost flags + platform fingerprints ----------
+     Pure text functions (unit-tested): the OCR words themselves police the
+     two hard rules of the league.
+
+     1. BOOSTED / SPONSORED content is not allowed (rulebook §6). The
+        screenshot gives it away: IG stamps the post "Boosted", LinkedIn
+        "Promoted", Meta/FB "Sponsored", partner content reads "paid
+        partnership / paid promotion", and ad badges stand alone on their
+        own line. A standalone "ad" line counts; the word inside "add"
+        or a name never does.
+
+     2. The screenshot must be of the platform the link points to. Every
+        app carries its own vocabulary — strong marks are near-
+        unmistakable ("instagram", "youtube", "linkedin", "subscribe",
+        "reposts"…), weak marks only corroborate. A region crop of just
+        the stats strip carries NO chrome words at all, so a block fires
+        ONLY when another platform's STRONG mark shows up and the
+        expected platform's is absent ("youtube" in an IG upload). */
+  function detectBoost_(text) {
+    var t = String(text || "").toLowerCase();
+    if (!t) return "";
+    var hit = t.match(/\b(boosts?(?:ed|ing)?|sponsored|promoted|paid partnership|paid promotion)\b/);
+    if (hit) return hit[0];
+    if (/^[ \t\W]*ad[ \t\W]*$/im.test(t) && !/\badd(ing|ed|s)?\b/.test(t)) return "ad";
+    return "";
+  }
+
+  var PLATFORM_MARKS = {
+    ig: { strong: ["instagram", "reels", "instagram insights"],
+          weak: ["likes", "followers", "saves", "threads", "follow"] },
+    yt: { strong: ["youtube", "subscribe", "subscribers", "shorts"],
+          weak: ["share", "download", "premiere", "video"] },
+    li: { strong: ["linkedin", "reposts", "members reached"],
+          weak: ["connections", "impressions", "promote"] }
+  };
+  function platformCheck_(text, fmt) {
+    var t = String(text || "").toLowerCase();
+    var fam = !fmt ? "" : (fmt.indexOf("ig_") === 0 ? "ig"
+            : (fmt.indexOf("yt_") === 0 ? "yt"
+            : (fmt === "li_post" ? "li" : "")));
+    if (!t || !fam) return { ok: true };
+    function marks(m) {
+      var n = 0;
+      m.strong.forEach(function (w) { if (t.indexOf(w) >= 0) n += 2; });
+      m.weak.forEach(function (w) { if (t.indexOf(w) >= 0) n += 1; });
+      return n;
+    }
+    var ownStrong = PLATFORM_MARKS[fam].strong.filter(function (w) {
+      return t.indexOf(w) >= 0;
+    }).length;
+    var foreign = "";
+    var foreignStrong = 0;
+    Object.keys(PLATFORM_MARKS).forEach(function (k) {
+      if (k === fam) return;
+      var s = PLATFORM_MARKS[k].strong.filter(function (w) {
+        return t.indexOf(w) >= 0;
+      }).length;
+      if (s > foreignStrong) { foreignStrong = s; foreign = k; }
+    });
+    if (foreign && foreignStrong > 0 && ownStrong === 0) {
+      return { ok: false, looks: foreign, score: marks(PLATFORM_MARKS[foreign]) };
+    }
+    return { ok: true, score: marks(PLATFORM_MARKS[fam]) };
+  }
+  function platformLabel_(fam) {
+    return fam === "yt" ? "YouTube" : (fam === "ig" ? "Instagram"
+         : (fam === "li" ? "LinkedIn" : "the linked platform"));
+  }
+  function readFlags_(text, fmt) {
+    return { boost: detectBoost_(text), plat: platformCheck_(text, fmt) };
+  }
+  /* the verdicts land in the shot cell's error line — the same slot the
+     form already blocks submission on. Replacing the screenshot clears it
+     (the attach handler resets errShotMsg), so the loop is: replace →
+     re-read → re-judge. The reviewer's own SCAN button re-reads the shot
+     server-side, so the flag travels in the ledger's OCR columns too. */
+  function applyShotFlags_(p) {
+    if (p.ocrFlag === "boost") {
+      p.errShotMsg = "Boosted / sponsored content is not allowed — attach a different post\u2019s screenshot.";
+      return;
+    }
+    if (p.ocrFlag === "platform") {
+      p.errShotMsg = "This screenshot doesn\u2019t look like " +
+        platformLabel_(p.ocrLooks) + " — attach the correct platform\u2019s analytics.";
+    }
   }
 
   /* payload-safe image copy — ≤maxEdge JPEG; a phone screenshot drops from
@@ -869,19 +1055,65 @@
       .catch(function () { /* silent — the manual field still works */ });
   }
 
-  /* OCR leg — runs once per attached screenshot; replaces a previous read */
+  /* OCR leg — up to THREE passes per attached screenshot, stopping at the
+     first solid read (a boost verdict short-circuits everything): the
+     plain screenshot → an inverted retry for dark-mode shots → a 2×
+     upscale read as one uniform block for small region crops. */
   function runOcr_(p, file) {
     p.ocrN = 0; p.ocrSolid = false; p.ocrAll = []; p.ocrStatus = "";
+    p.ocrFlag = ""; p.ocrLooks = "";
     if (!file || !/^image\/(png|jpe?g|webp)$/i.test(file.type)) return;
     p.ocrStatus = "working";
     patchSug_(p);
+    var flags = { boost: "", plat: { ok: true } };
     loadOcrLib_()
-      .then(function () { return downscaleForOcr_(file); })
-      .then(function (img) {
-        return window.Tesseract.recognize(img, "eng", {});
+      .then(function () {
+        /* PASS 1 — the plain screenshot at reading size (≤2000px) */
+        return prepOcr_(file, 2000, 0, false)
+          .then(function (img) { return window.Tesseract.recognize(img, "eng", {}); });
       })
       .then(function (res) {
         var text = (res && res.data && res.data.text) || "";
+        var cands = parseCounts_(text);
+        flags = readFlags_(text, p.format);
+        if (flags.boost || cands.some(function (c) { return c.solid; })) return text;
+        /* PASS 2 — dark-mode screenshot (white-on-black): invert and retry */
+        return isDarkShot_(file).then(function (dark) {
+          if (!dark) return text;
+          return prepOcr_(file, 2000, 0, true).then(function (img) {
+            return window.Tesseract.recognize(img, "eng", {});
+          }).then(function (r2) {
+            var t2 = (r2 && r2.data && r2.data.text) || "";
+            if (parseCounts_(t2).some(function (c) { return c.solid; })) {
+              flags = readFlags_(t2, p.format);
+              return t2;
+            }
+            return text;
+          });
+        });
+      })
+      .then(function (text) {
+        var cands = parseCounts_(text);
+        /* PASS 3 — still nothing solid and nothing disqualifying: the shot
+           may be a SMALL CROP (just the stats strip) — pull it up to at
+           least 1400px and read it as one uniform block (PSM 6) */
+        if (flags.boost || cands.some(function (c) { return c.solid; }) ||
+            !file) return text;
+        return prepOcr_(file, 2600, 1400, false).then(function (img) {
+          return window.Tesseract.recognize(img, "eng",
+                  { tessedit_pageseg_mode: "6" }).then(function (r3) {
+            var t3 = (r3 && r3.data && r3.data.text) || "";
+            var c3 = parseCounts_(t3);
+            if (c3.length > cands.length ||
+                c3.some(function (c) { return c.solid; })) {
+              flags = readFlags_(t3, p.format);
+              return t3;
+            }
+            return text;
+          });
+        }).catch(function () { return text; });
+      })
+      .then(function (text) {
         if (window.console && console.log) {
           console.log("[PCL OCR]", JSON.stringify(text).slice(0, 400));
         }
@@ -890,6 +1122,9 @@
         var picked = pickCount_(cands, viewsNum_(p));
         p.ocrN = picked.n; p.ocrSolid = picked.solid;
         p.ocrStatus = cands.length ? "done" : "none";
+        p.ocrFlag = flags.boost ? "boost" : (flags.plat && flags.plat.ok ? "" : "platform");
+        p.ocrLooks = flags.plat && !flags.plat.ok ? String(flags.plat.looks || "") : "";
+        applyShotFlags_(p);
         sugLanded_(p);
       })
       .catch(function () {
@@ -903,6 +1138,33 @@
      ========================================================================== */
   function fmtHtml(fmt) {
     return brandHtml(fmt, true);
+  }
+
+  /* link-ownership verdicts, rendered as a full-width banner inside the
+     post row — the visual twin of the backend's checklink answer:
+       collabFor → "this video was collabed with you — confirm below": one
+                   tap tags the collab with the partner's ledger name and
+                   the pair scores FULL points on both sides
+       takenBy   → "already uploaded by {name}": the link cannot be
+                   entered again untagged — replace it, or tag it as a
+                   collab with the named player if it truly is one
+     (the backend re-checks authoritatively at ingest either way) */
+  function ownershipHtml_(p) {
+    if (p.collabFor) {
+      return '<div class="pcl-owned is-collab">' +
+        '<span class="pcl-owned-txt">This video was COLLABED WITH YOU by ' +
+        esc(p.collabFor) + " — confirm below. Both of you earn the post\u2019s " +
+        "full points.</span>" +
+        '<button type="button" class="pcl-owned-btn" data-act="confcollab" data-id="' +
+        esc(p.id) + '">CONFIRM</button></div>';
+    }
+    if (p.takenBy) {
+      return '<div class="pcl-owned is-taken">' +
+        '<span class="pcl-owned-txt">This video is ALREADY UPLOADED BY ' +
+        esc(p.takenBy) + " — replace this link. If it is your collab with " +
+        "them, tag it COLLAB and enter their name.</span></div>";
+    }
+    return "";
   }
 
   function editRowHtml(p, i) {
@@ -961,7 +1223,9 @@
       "</button>" +
       (p.collab
         ? '<div class="pcl-collabpop">' +
-          '<span class="pcl-collab-title">Collab · full points for both</span>' +
+          '<span class="pcl-collab-title">Collab · full points for both' +
+          (p.collabWith.trim()
+            ? '<span class="pcl-collab-set">\u2713 SET</span>' : "") + "</span>" +
           '<input class="pcl-input pcl-collab-input' + (p.errCollab ? " is-error" : "") +
           '" data-act="collabname" data-id="' + esc(p.id) +
           '" type="text" placeholder="Partner\u2019s full name" value="' +
@@ -978,7 +1242,8 @@
       '<div class="pcl-post-main"><a class="pcl-post-link" href="' + esc(p.url) +
       '" target="_blank" rel="noopener" title="' + esc(p.url) + '">#' +
       esc(postHash(p)) + "</a>" +
-      fmtHtml(p.format) + ctToggle + "</div>" + cellViews + cellShot + collab + "</div>";
+      fmtHtml(p.format) + ctToggle + "</div>" + cellViews + cellShot + collab +
+      ownershipHtml_(p) + "</div>";
   }
 
   function viewRowHtml(p, i) {
@@ -998,7 +1263,8 @@
     return '<div class="pcl-vrow" data-id="' + esc(p.id) + '">' +
       '<span class="pcl-vnum">' + n + "</span>" +
       '<a class="pcl-vlink" href="' + esc(p.url) + '" target="_blank" rel="noopener" title="' +
-      esc(p.url) + '">#' + esc(postHash(p)) + "</a>" + fmtHtml(p.format) + ctTag + collabTag + btn + "</div>";
+      esc(p.url) + '">#' + esc(postHash(p)) + "</a>" + fmtHtml(p.format) + ctTag + collabTag + btn +
+      ownershipHtml_(p) + "</div>";
   }
 
   /* collab partner names — managers + every roster participant, so the
@@ -1103,6 +1369,22 @@
     }
   });
 
+  /* Enter inside the collab partner field confirms THAT FIELD ONLY — it
+     must never fire the submit button (the reported bug: typing the
+     partner's name and pressing Enter submitted the whole form). The
+     picker's own Enter (choose a suggestion) runs first; this then blurs
+     the field, which is the confirmation. The manager + designation
+     autocompletes had the same accident class — same fix. */
+  postRows.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Enter" || ev.isComposing) return;
+    if (ev.target.closest(".pcl-collab-input")) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.target.blur();
+      renderRows();               // the ✓ SET tick is render-derived
+    }
+  });
+
   /* screenshot + collab buttons */
   postRows.addEventListener("click", function (ev) {
     var btn = ev.target.closest("[data-act]");
@@ -1131,6 +1413,22 @@
           '"] .pcl-collab-input');
         if (pop) pop.focus();
       }
+    } else if (act === "confcollab") {
+      /* the checklink banner's one-tap confirm — this video was collabed
+         with the player, so tag it as collab with the LEDGER's canonical
+         name and drop both flags (ingest will stamp CONFIRMED) */
+      var fp = postById(id);
+      if (!fp) return;
+      fp.collab = true;
+      fp.collabWith = fp.collabFor || fp.collabWith;
+      fp.collabFor = "";
+      fp.takenBy = "";
+      fp.errCollab = false;
+      fp.__chk = null;
+      renderRows();
+      var pop2 = postRows.querySelector('.pcl-post[data-id="' + id +
+        '"] .pcl-collab-input');
+      if (pop2) pop2.focus();
     } else if (act === "ctype") {
       /* in-place flip — no re-render so the row keeps its scroll/caret */
       var cp = postById(id);
@@ -2242,6 +2540,7 @@
                views: String(p.views || ""), shot: null, errViews: false,
                errShotMsg: "", collab: !!p.collab,
                collabWith: String(p.collabWith || ""), errCollab: false,
+               takenBy: "", collabFor: "",
                ctype: p.ctype === "PERSONAL" ? "PERSONAL" : "PRAPER" };
     });
     if (raw.week) {   // only if that week is STILL open (options come from the clock)
@@ -2298,6 +2597,9 @@
     }, 3200);
     if (fullName.value.trim().length >= 2) lookupPhoto();
     refreshPhoto();
+    /* the restored links re-ask the ledger who owns them — a draft can be
+       hours old and someone may have posted the same link meanwhile */
+    checkAllLinks_();
   }
   /* every keystroke/change anywhere in the form queues a draft save */
   form.addEventListener("input", noteDraft, true);
@@ -2603,6 +2905,16 @@
     "No match — keep the name as typed.");
   var DesigAc = makeAutocomplete(desig, $("desigAc"), DESIGNATIONS,
     "Free text is fine — keep it as typed.", DESIGNATIONS.slice(0, 6));
+  /* Enter in these two assist fields confirms the field (blur) — the same
+     never-submit-the-form rule as the collab partner input */
+  [manager, desig].forEach(function (inp) {
+    inp.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Enter" || ev.isComposing) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      inp.blur();
+    });
+  });
 
   /* ---------- Desg. capsule inside the Full name field -------------------
      The chosen designation renders as a small capsule BEFORE the name,
@@ -2699,7 +3011,8 @@
       p.errViews = !(viewsNum > 0);
       if (!p.shot && !p.errShotMsg) p.errShotMsg = "Required";
       p.errCollab = !!p.collab && !p.collabWith.trim();
-      if (!firstPostId && (p.errViews || p.errShotMsg || p.errCollab)) {
+      var taken = !!p.takenBy && !(p.collab && p.collabWith.trim());
+      if (!firstPostId && (p.errViews || p.errShotMsg || p.errCollab || taken)) {
         firstPostId = p.id;
       }
     });
@@ -2713,7 +3026,8 @@
     /* if anything post-level failed, make sure the editable view is on
        screen before marking rows (setMode/renderRows re-render) */
     var postBad = posts.some(function (p) {
-      return p.errViews || p.errShotMsg || p.errCollab;
+      return p.errViews || p.errShotMsg || p.errCollab ||
+             (!!p.takenBy && !(p.collab && p.collabWith.trim()));
     });
     if (postBad && viewMode !== "edit") setMode("edit");
     else renderRows();
@@ -2932,6 +3246,33 @@
   /* ---------- boot: bring back any surviving draft ---------- */
   restoreDraft();
   lastInputSnap = snapLinks();
+
+  /* ---------- logo = back to the form, content intact ----------
+     From the other portals the header already links to index.html and the
+     draft restores on load. On the form page itself the #pclForm anchor
+     jump covers it — EXCEPT after a successful submit, when the DONE
+     screen is up and the form is hidden: clicking the logo then brings
+     the filled form back instead of scrolling to a hidden element.
+     Resubmitting the same links is safe — the ledger treats a player's
+     own link as a view-count UPDATE, never a duplicate. */
+  var brandLink = document.querySelector(".pcl-header-brand");
+  if (brandLink) brandLink.addEventListener("click", function (ev) {
+    if (!form.hidden) return;                 // native #pclForm jump
+    ev.preventDefault();
+    doneScreen.hidden = true;
+    form.hidden = false;
+    saveDraft();                              // the entry survives reloads too
+    saveState.hidden = false;
+    saveState.classList.remove("is-fail");
+    saveState.textContent = "YOUR ENTRY — EDIT OR RESUBMIT";
+    setTimeout(function () {
+      if (saveState.textContent === "YOUR ENTRY — EDIT OR RESUBMIT") {
+        saveState.hidden = true;
+        saveState.textContent = "";
+      }
+    }, 3200);
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   /* ---------- debug / automation handle ---------- */
   window.PCL = {

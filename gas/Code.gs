@@ -366,10 +366,16 @@ function doPostLocked_(e) {
           });
         }
         if (!matched) {
+          // name the uploader(s) — the form can finally say WHO posted it
+          var owners = [];
+          priorOthers.forEach(function (r) {
+            if (r.name && owners.indexOf(r.name) < 0) owners.push(r.name);
+          });
           return json_({ ok: false, error:
-            'This link was already submitted by another player. If it is a ' +
-            'collab post, tag it as COLLAB and enter the partner\u2019s full ' +
-            'name exactly as they registered.' });
+            'This link was already submitted by ' +
+            (owners.length ? owners.join(', ') : 'another player') +
+            '. If it is a collab post, tag it as COLLAB and enter the ' +
+            'partner\u2019s full name exactly as they registered.' });
         }
         partner = matched.name;               // the ledger's canonical name
         status = COLLAB_CONFIRMED;
@@ -474,6 +480,7 @@ function doGet(e) {
     if (p.action === 'ledger') return ledgerEndpoint_(p);
     if (p.action === 'ocr')    return ocrEndpoint_(p);
     if (p.action === 'subcheck') return subcheckEndpoint_(p);
+    if (p.action === 'checklink') return checklinkEndpoint_(p);
     if (p.action === 'playerPhoto') return playerPhotoEndpoint_(p);
     if (p.action === 'directorFeed') return directorFeed_(p);
     if (p.action === 'employeeLogin') return employeeLogin_(p);
@@ -576,6 +583,56 @@ function subcheckEndpoint_(p) {
     }
   }
   return reply_(p, { ok: true, found: found });
+}
+
+/** ---------- LINK OWNERSHIP PRE-CHECK (the form's "who uploaded this?" ask) ----------
+ *  The moment a participant commits a link, the form asks the ledger who
+ *  owns it BEFORE any submission exists. Three answers:
+ *    taken     — another player posted this link with no collab tag for the
+ *                asker → the form blocks it and names the uploader.
+ *    collabFor — another player posted it AND tagged the asker as partner
+ *                → the form shows "this video was collabed with you,
+ *                confirm below" and the asker confirms in one tap.
+ *    otherwise — free to enter (own earlier rows = a snapshot UPDATE).
+ *  Read-only, keyed on the same Media ID / URL key the ingest dedupes
+ *  with. Public like subcheck: it only ever returns a participant's name
+ *  for a link — the same names the public leaderboard already shows. */
+function checklinkEndpoint_(p) {
+  var url = str_(p.url).trim();
+  var fmt = str_(p.format);
+  var who = normName_(str_(p.name));
+  var key = mediaId_(url, fmt) || urlKey_(url);
+  if (!key || !who) {
+    // nothing to compare yet (no name typed / unknown link shape) — the
+    // form treats this as "no objection" and the ingest re-checks anyway
+    return reply_(p, { ok: true, checkable: false, taken: false });
+  }
+  var index = ledgerIndex_(getSheet_());
+  var rows = index.byKey[key] || [];
+  var mine = false;
+  var uploader = '';
+  var collabFor = '';
+  rows.forEach(function (r) {
+    if (normName_(r.name) === who) { mine = true; return; }
+    if (!uploader) uploader = r.name;                  // first poster wins
+    if (!collabFor && normName_(r.collabWith) === who) collabFor = r.name;
+  });
+  // the asker's OWN rows always win — their resubmission is a view-count
+  // UPDATE and the collab state is already on file, so no banner is needed
+  if (mine) {
+    return reply_(p, { ok: true, checkable: true, taken: false, mine: true });
+  }
+  // a collab tag aimed at THIS player beats a plain "taken" — the whole
+  // point of the feature: one tap to confirm and both sides score
+  if (collabFor) {
+    return reply_(p, { ok: true, checkable: true,
+                       taken: false, collabFor: collabFor });
+  }
+  if (uploader) {
+    return reply_(p, { ok: true, checkable: true,
+                       taken: true, uploader: uploader });
+  }
+  return reply_(p, { ok: true, checkable: true, taken: false });
 }
 
 /** ---------- WEEKLY CHALLENGE AWARDS (rulebook §4) ---------- */

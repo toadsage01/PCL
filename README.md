@@ -82,6 +82,10 @@ turn it on:
    add the site origin under *Authorized JavaScript origins*.
 2. Paste the client ID in **two places**: `googleClientId` in
    `js/gas-endpoint.js` AND `GOOGLE_OAUTH_CLIENT_ID` in `gas/Code.gs`.
+   **The Client Secret is never needed and must never be pasted anywhere**
+   — not in chat, not in the repo, not in the sheet. The sign-in uses
+   Google Identity Services with a signed ID token (no code exchange), so
+   the secret has no role; keep it inside the Google Cloud Console only.
 3. Paste the active-employee emails into the **`PCL-Allowlist` tab** of the
    league sheet — one `@praper.in` email per row, from row 2 down. The tab
    auto-creates on first use; admins edit it directly, no redeploy.
@@ -104,8 +108,8 @@ missing allowlist denies everyone — employees only, by design.
 | **Fractional points round UP** | every points write goes through `Math.ceil` (9,863 reel views → 12,329 pts, never 12,328) |
 | **Collab = FULL points each** (§6 rule 2: *"Both employees will receive 1,250 leaderboard points each"*) | Both rows share one `Media ID`; each scores its own player the FULL `ceil(views × mult)`. There is **no halving anywhere** — the roll-up credits every CONFIRMED row to its own player explicitly |
 | One Post, One Platform (§6 rule 4) | identical content on multiple platforms → admin reviews; the ledger keeps every link for the audit |
-| No paid boosting (§6 rule 3) | the review pipeline (Cross-Check = BOOST?) flags suspected paid spikes before points are verified |
-| Redundant-URL protection (no self-duplicate point spikes) | every link is fingerprinted to a `Media ID`; the same player resubmitting the same link is an **UPDATE** (snapshot refresh, never a second score); a *different* player claiming the same link untagged is **REJECTED**; tagged both ways it becomes a **CONFIRMED collab** |
+| No paid boosting (§6 rule 3) | the review pipeline (Cross-Check = BOOST?) flags suspected paid spikes before points are verified; the form's OCR now ALSO reads the screenshot itself and **hard-blocks Boosted / Sponsored / Promoted / Paid-partnership screenshots** at attach time |
+| Redundant-URL protection (no self-duplicate point spikes) | every link is fingerprinted to a `Media ID`; the same player resubmitting the same link is an **UPDATE** (snapshot refresh, never a second score); a *different* player claiming the same link untagged is **REJECTED — with the uploader's name in the message**; tagged both ways it becomes a **CONFIRMED collab**. The form also asks the ledger WHO owns every link the moment it is committed (`checklink`), so a clash shows as a banner BEFORE submit: red "already uploaded by {name}" or green "collabed with you — confirm below" with a one-tap CONFIRM |
 | 50:50 content balance (§5) | every post carries `Content Type` = PRAPER or PERSONAL (one-tap toggle on the form, admin-editable); the Control Room's PLAYERS tab shows per-platform balance chips (amber when off-balance) |
 | ≥2 platforms, ≥20 posts, weekly challenge deadlines | tracked in the ledger; challenge entries ride the weekly fields |
 | Weekly challenge rewards (§4: +6000…+12000) | `PCL-Awards` tab + the REPORTS tab's **GIVE** control; award points ride on top of post multipliers in season totals and weekly buckets |
@@ -117,7 +121,12 @@ missing allowlist denies everyone — employees only, by design.
 
 ```
 Player form (index.html)
-  1. paste links            → chips, format auto-detected, duplicates flagged
+  1. paste links            → chips, format auto-detected, duplicates flagged;
+                              each committed link asks the ledger WHO owns it
+                              (JSONP action=checklink) → instant banner:
+                              red "ALREADY UPLOADED BY {name}" (submit blocked
+                              until replaced or collab-tagged) / green
+                              "COLLABED WITH YOU by {name} — confirm below"
   2. type views OR let the machine read them (see §8)
   3. attach screenshot      → downscaled to ≤1600px JPEG (~130KB, was ~2.7MB raw)
   4. SUBMIT                 → payload = identity + posts[] + screenshots + OCR reads
@@ -248,6 +257,19 @@ filled → points verified`.
 data (OAuth-locked). The research phase listed them as an ideal-to-have;
 the working key made them moot — YT participants type and screenshot
 nothing.
+
+**OCR compliance reads (form-side, on every attached screenshot):** the
+recognition now runs up to three passes — the plain image, an **inverted
+retry for dark-mode screenshots** (white-on-black phones), and an
+**upscaled PSM-6 retry for small region crops** (a phone crop of just the
+stats strip, which carries no UI words at all). The extracted text is then
+policed by two unit-tested detectors: `detectBoost_` (Boosted / Sponsored /
+Promoted / Paid partnership / a standalone "Ad" badge → the row refuses to
+submit: *"Boosted / sponsored content is not allowed"*) and
+`platformCheck_` (another platform's unmistakable chrome on the wrong
+link — "YouTube" on an IG upload — refuses the shot; chrome-less crops and
+matching platforms always pass). Replacing the screenshot re-runs the
+verdict; the reviewer's own server-side SCAN remains the final word.
 
 ---
 
@@ -389,12 +411,13 @@ history covers the rest. Nothing in this system deletes.
 
 | Suite | Proves | Run |
 |---|---|---|
-| `scripts/test_do_post_collab.js` | ~75 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats verified strip, review-first reorder with data survival, CEO screening feed (passcode gate, week filter, dedupe, collab merge) and employee sign-in (tokeninfo stub, domain + allowlist gating) | `node scripts/test_do_post_collab.js` |
-| `scripts/test_ocr_parse.js` | 34 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection | `node scripts/test_ocr_parse.js` |
+| `scripts/test_do_post_collab.js` | ~95 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats verified strip, review-first reorder with data survival, CEO screening feed (passcode gate, week filter, dedupe, collab merge), employee sign-in (tokeninfo stub, domain + allowlist gating) and the **checklink pre-check** (taken/uploader, collabFor for the tagged partner, mine-wins for owners, rejection message names the uploader) | `node scripts/test_do_post_collab.js` |
+| `scripts/test_ocr_parse.js` | ~61 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection, **boost/sponsored/ad-badged text flags** and **platform fingerprints** (wrong-platform chrome refused, chrome-less region crops never blocked) | `node scripts/test_ocr_parse.js` |
 | `scripts/test_leaderboard_rollup.js` | 16: dedup-by-media, verified-over-claimed, weekly buckets | `node scripts/test_leaderboard_rollup.js` |
 | `scripts/test_url_diag.js` | 24: every accepted URL shape | `node scripts/test_url_diag.js` |
 | `scripts/test_leaderboard_sanitize.js` | 33: the board can never render a raw string/NaN/Infinity as a view count (comma strings, NBSP, garbage, old payload shapes) | `node scripts/test_leaderboard_sanitize.js` |
 | `scripts/save_e2e.sh` + `fixture_save.js` | browser E2E of the transport chain against the REAL wire shapes (Vercel-healthy / GAS-302 / dead-route) | `bash scripts/save_e2e.sh` |
+| `scripts/round27_e2e.sh` + `fixture_form.js` | browser E2E of the ownership banners (taken + collab-for + one-tap CONFIRM), the collab Enter field-confirm fix (picker-open Enter still chooses), and logo→form with content after the DONE screen | `bash scripts/round27_e2e.sh` |
 | `scripts/ocr_e2e.sh`, `save_e2e.sh`, prior rounds | agent-browser E2E across all 3 portals (form flows, admin gate/tabs/awards, leaderboard) | see scripts/ |
 
 ## 15 · Known limits & gotchas

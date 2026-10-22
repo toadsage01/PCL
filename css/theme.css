@@ -1861,6 +1861,59 @@ html[data-pcl-theme="dark"] .pcl-collab-half { color: #02020d; border-color: #02
   margin: 0;
 }
 .pcl-collabrow .pcl-err { margin: 0; }
+/* the ✓ SET tick once a partner name sits in the field (Enter = confirm) */
+.pcl-collab-set {
+  color: #1d9e57;
+  margin-left: 8px;
+  letter-spacing: 0.6px;
+}
+/* ---- link-ownership banners (checklink verdicts) --------------------------
+   A full-width lane inside the post row: red when the link is already
+   uploaded by another player, green when it was collabed with you and
+   waits for the one-tap confirm. */
+.pcl-owned {
+  grid-column: 1 / -1;              /* spans the 5-col edit grid */
+  flex-basis: 100%;                 /* wraps the flex view row */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 11px;
+  margin-top: 2px;
+  border: 2px solid var(--pcl-line);
+  background: var(--pcl-surface-3, var(--pcl-surface));
+}
+.pcl-owned.is-taken {
+  border-color: var(--pcl-error);
+  background: var(--pcl-error-soft, rgba(216, 27, 78, 0.08));
+}
+.pcl-owned.is-collab {
+  border-color: #1d9e57;
+  background: rgba(29, 158, 87, 0.09);
+}
+.pcl-owned-txt {
+  flex: 1 1 220px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--pcl-text);
+}
+.pcl-owned.is-taken .pcl-owned-txt { color: var(--pcl-error); }
+.pcl-owned-btn {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #fff;
+  background: #1d9e57;
+  border: 2px solid transparent;
+  padding: 7px 14px 6px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.pcl-owned-btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--pcl-hard); }
+.pcl-owned-btn:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--pcl-hard); }
 /* view-mode collab tag (kept from the pill, now just a label) */
 .pcl-collab-toggle {
   font-family: var(--pcl-font-title);

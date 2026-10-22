@@ -475,6 +475,68 @@ goes in the sheet tab — no redeploy needed after the first paste.
 
 ---
 
+## A7 · DONE — link-ownership banners, collab Enter fix, logo-home, OCR compliance reads (23 Oct, user round 6)
+
+**User items shipped:**
+1. **Duplicate-URL ownership messaging** — NEW backend JSONP action
+   `checklink` (read-only, keyed on the same Media ID/urlKey the ingest
+   dedupes with): taken+uploader / collabFor / mine. The form fires it for
+   every committed link (and re-fires all when the Full Name commits or a
+   draft restores). Verdicts render as full-width row banners + a red chip:
+   RED "This video is ALREADY UPLOADED BY {name} — replace this link…"
+   (submit blocked while untagged; the hint explains the collab escape),
+   GREEN "This video was COLLABED WITH YOU by {name} — confirm below" with
+   a one-tap CONFIRM that tags the collab with the LEDGER's canonical name
+   (ingest then stamps CONFIRMED; FULL points each). The ingest rejection
+   message now also NAMES the uploader(s). Priority semantics: an asker's
+   OWN rows always answer mine (their resubmission is an UPDATE — no
+   banner), then collabFor beats taken.
+2. **Collab Enter fix** — Enter inside the partner input confirms ONLY
+   that field: preventDefault + stopPropagation + blur + re-render (the
+   ✓ SET tick is render-derived). Same class fix for the manager +
+   designation autocompletes. Picker-open Enter still chooses the
+   highlighted suggestion (regression-tested).
+3. **Logo → home with content** — from other portals the header already
+   linked to index.html + draft restore; ON the form page the logo now
+   also revives the filled form when the DONE screen was up (form unhidden,
+   values intact, re-drafted, "YOUR ENTRY — EDIT OR RESUBMIT" status).
+   Resubmitting own links is safe — the ledger treats them as UPDATEs.
+4. **Google OAuth guidance** — client secret never leaves the Cloud
+   Console (GIS ID-token flow needs no secret); client ID goes in
+   js/gas-endpoint.js `googleClientId` (+ optional GOOGLE_OAUTH_CLIENT_ID
+   Script Property); origin https://pcl-form.prapermedia.in must match the
+   serving URL exactly; employee emails → PCL-Allowlist tab.
+5. **OCR hardening** — `prepOcr_` scales BOTH ways (≤2000px cap AND a
+   ≥1400px floor for tiny region crops); up to three passes: plain →
+   inverted (dark-mode shots via a mean-luminance probe) → PSM-6 upscale
+   for crops. NEW pure detectors (unit-tested): `detectBoost_` (boosted/
+   boost/boosting/sponsored/promoted/paid partnership + standalone "Ad"
+   line, with "add"/names safe) → hard block "Boosted / sponsored content
+   is not allowed"; `platformCheck_` — strong/weak platform fingerprints
+   (ig/yt/li) — blocks ONLY on another platform's STRONG mark with zero
+   own strong marks (chrome-less crops never block) → "doesn't look like
+   {Platform}". Both land in errShotMsg (submit-blocking), cleared on
+   replace, re-judged on the new read.
+
+**Tests:** harness group 24 (13 checklink assertions + rejection-message
+assert updated to expect the uploader's name) — ALL PASS; OCR suite +27
+(13 boost + 14 platform) — ALL PASS; rollup 16 / sanitize 33 / URL 24
+green; node --check all JS. Browser E2E (scripts/round27_e2e.sh +
+fixture_form.js now serving canned checklink + its own PCL_CONFIG): red
+banner + error chip, green banner + CONFIRM → collab on + partner filled
++ ✓ SET, Enter-in-field blurs without submitting (errCells 0) and the
+picker-open Enter still chooses, logo revives the form with 3 posts +
+name intact after the DONE screen. Found + fixed via E2E: the ✓ SET tick
+needed an explicit renderRows() on the Enter-confirm.
+
+**Deploy note:** checklink + the named rejection ride the SAME pending
+Code.gs paste + New version as A2–A6. Until the paste, the form's
+checklink calls hit the OLD backend → "unknown action" → the catch path
+leaves banners silent (ingest re-checks at submit, exactly as before) —
+no breakage, just no early banners.
+
+---
+
 ## D · POST-DEADLINE / CONTINUOUS OPS (tracked, not urgent)
 1. **Metrics Phases 1–3** roll-out + pilots (the METRICS-RESEARCH.md plan —
    this is the "PCL views" ultimate fix; the fallback chains make it
