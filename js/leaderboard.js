@@ -284,8 +284,6 @@
     var d = state.data;
     var nav = $("pclWeeks");
     nav.innerHTML = "";
-    var info = $("pclWeekInfo");
-    if (info) info.hidden = true;
     if (!d || !d.weeks) return;                 // old backend → ALL-SEASON only
     var cur = d.currentWeek;
     var chs = Array.isArray(cfg.challenges) ? cfg.challenges : [];
@@ -298,7 +296,7 @@
       if (title) b.title = title;               // hover = that week's challenge
       if (cls !== "is-locked") {
         b.addEventListener("click", function () {
-          if (view === "info") { toggleWeekInfo(); return; }
+          if (view === "info") { openWeekInfo(); return; }
           state.view = view;
           syncChipStates();
           render();
@@ -322,36 +320,68 @@
     }
   }
 
-  /* the challenge guide — every week's name, criteria, reward and window */
-  function toggleWeekInfo() {
-    var box = $("pclWeekInfo");
-    if (!box) return;
-    var ico = $("pclWeeks").querySelector(".pcl-wchip.is-info");
-    if (!box.hidden) {
-      box.hidden = true;
-      if (ico) ico.classList.remove("is-open");
-      return;
+  /* ---- the themed modal pop-up — the SAME component the entry form uses
+     for its section-4 info button. Overlay + card, so the guide NEVER
+     pushes the standings down the page. Esc / backdrop / X all close it. */
+  var Modal = (function () {
+    var root = $("pclModal");
+    var body = $("pclModalBody");
+    function open(html) {
+      body.innerHTML = html;
+      root.hidden = false;
+      document.body.style.overflow = "hidden";
+      var chip = $("pclWeeks").querySelector(".pcl-wchip.is-info");
+      if (chip) chip.classList.add("is-open");
+      var btn = root.querySelector(".pcl-lb-close");
+      if (btn) btn.focus();
     }
+    function close() {
+      root.hidden = true;
+      document.body.style.overflow = "";
+      var chip = $("pclWeeks").querySelector(".pcl-wchip.is-info");
+      if (chip) chip.classList.remove("is-open");
+    }
+    root.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-act='close']")) close();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (!root.hidden && ev.key === "Escape") close();
+    });
+    return { open: open, close: close };
+  })();
+
+  /* the challenge guide — IDENTICAL content to the form's section-4 info
+     pop-up: title + intro + one card per week (name / LIVE-CLOSED tag /
+     window / criteria / reward) + the analytics-deadline note. Same shared
+     pcl-wkcard styles, so font sizes stay proper and readable. */
+  function openWeekInfo() {
     var chs = Array.isArray(cfg.challenges) ? cfg.challenges : [];
     var cur = seasonWeek();
-    var html = '<div class="pcl-wi-head">SEASON 2 · WEEKLY CHALLENGES</div>';
+    var html = '<h3 class="pcl-modal-title">WEEKLY CHALLENGES</h3>' +
+      '<p class="pcl-modal-sub">Season 2 · 10 weeks · a new challenge every Monday</p>' +
+      '<p class="pcl-rb-p">Only the week that is live right now can be entered — ' +
+      "the league is on <b>Week " + cur + "</b> until " +
+      esc(weekWindowTxt(cur).split(" → ")[1] || weekWindowTxt(cur)) +
+      ". Upcoming challenges are listed below so you can plan and shoot ahead.</p>";
     for (var w = 1; w <= chs.length; w++) {
       var c = chs[w - 1];
       var tag = w === cur ? '<span class="pcl-wk-tag">LIVE</span>'
         : (w < cur ? '<span class="pcl-wk-tag pcl-wk-tag--past">CLOSED</span>' : "");
-      html += '<div class="pcl-wi-row' + (w === cur ? " is-live" : "") + '">' +
-        '<span class="pcl-wi-week">W' + w + '</span>' +
-        '<span class="pcl-wi-body"><span class="pcl-wi-name">' + esc(c.name) +
-        "</span>" + tag +
-        '<span class="pcl-wi-date">' + esc(weekWindowTxt(w)) + "</span>" +
-        '<span class="pcl-wi-crit">' + esc(c.crit) + "</span>" +
-        '<span class="pcl-wi-pts">Weekly reward +' +
-        Number(c.pts || 0).toLocaleString("en-IN") + " points</span>" +
-        "</span></div>";
+      html += '<div class="pcl-wkcard' + (w === cur ? " is-live" : "") + '">' +
+        '<div class="pcl-wk-head">' +
+          '<span class="pcl-wk-name">WEEK ' + w + " · " + esc(c.name) + "</span>" + tag +
+          '<span class="pcl-wk-date">' + esc(weekWindowTxt(w)) + "</span>" +
+        "</div>" +
+        '<p class="pcl-wk-crit">' + esc(c.crit) + "</p>" +
+        '<p class="pcl-wk-pts">Weekly Reward + ' +
+        Number(c.pts || 0).toLocaleString("en-IN") + " LeaderBoard Points</p>" +
+        "</div>";
     }
-    box.innerHTML = html;
-    box.hidden = false;
-    if (ico) ico.classList.add("is-open");
+    html += '<p class="pcl-rb-note">Analytics are tracked Monday → Saturday. Submit ' +
+      "each week's post analytics by <b>11:00 AM the following Monday</b> to be " +
+      "considered. The winning post gets featured as a collab on Praper Media's " +
+      "official pages.</p>";
+    Modal.open(html);
   }
 
   function syncChipStates() {

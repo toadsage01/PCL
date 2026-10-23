@@ -72,7 +72,6 @@
          the ⓘ chip (right of W10) opens the challenge guide; hovering a
          W chip names that week's challenge -->
     <nav class="pcl-weeks" id="pclWeeks" aria-label="Leaderboard week"></nav>
-    <div class="pcl-weekinfo" id="pclWeekInfo" hidden></div>
 
     <!-- Sync row -->
     <div class="pcl-syncrow">
@@ -116,6 +115,19 @@
     <span class="pcl-footsep" aria-hidden="true">&#9679;</span>
     Praper Content League &middot; Season 2
   </footer>
+
+  <!-- the SAME themed pop-up the entry form uses (section 4 · info button):
+       overlay + card, never a block that pushes the page contents down -->
+  <div class="pcl-modal" id="pclModal" hidden role="dialog" aria-modal="true"
+       aria-label="Information">
+    <div class="pcl-lb-back" data-act="close"></div>
+    <div class="pcl-modal-card">
+      <button type="button" class="pcl-lb-close" data-act="close" aria-label="Close">
+        <span class="pcl-px-x" aria-hidden="true"></span>
+      </button>
+      <div class="pcl-modal-body" id="pclModalBody"></div>
+    </div>
+  </div>
 
   <script src="js/gas-endpoint.js"></script>
   <script src="js/leaderboard.js"></script>
