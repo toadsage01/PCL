@@ -109,54 +109,6 @@
   border-color: var(--pcl-hard);
 }
 
-/* the challenge guide under the week nav */
-.pcl-weekinfo {
-  margin: -4px 0 16px;
-  border: 3px solid var(--pcl-input-border);
-  box-shadow: 3px 3px 0 var(--pcl-hard);
-  background: var(--pcl-surface);
-  padding: 12px 14px;
-}
-.pcl-weekinfo[hidden] { display: none; }
-.pcl-wi-head {
-  font-family: var(--pcl-font-title);
-  font-size: 11px;
-  letter-spacing: 2px;
-  color: var(--pcl-primary);
-  margin: 0 0 10px;
-}
-.pcl-wi-row {
-  display: flex;
-  gap: 10px;
-  padding: 7px 0;
-  border-top: 2px dashed var(--pcl-input-border);
-  align-items: baseline;
-}
-.pcl-wi-row:first-of-type { border-top: 0; }
-.pcl-wi-week {
-  flex: 0 0 34px;
-  font-family: var(--pcl-font-title);
-  font-size: 11px;
-  color: var(--pcl-text);
-}
-.pcl-wi-row.is-live .pcl-wi-week { color: var(--pcl-primary); }
-.pcl-wi-body { display: block; min-width: 0; }
-.pcl-wi-name {
-  font-weight: 700;
-  font-size: 13.5px;
-  color: var(--pcl-text);
-  margin-right: 8px;
-}
-.pcl-wi-date { font-size: 11px; color: var(--pcl-muted); margin-right: 8px; }
-.pcl-wi-crit { display: block; font-size: 12px; color: var(--pcl-muted); margin-top: 2px; }
-.pcl-wi-pts {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--pcl-primary);
-  margin-top: 3px;
-}
-
 /* ---- Sync row ---------------------------------------------------------------- */
 .pcl-syncrow {
   display: flex;
