@@ -373,6 +373,7 @@
   var fullName = $("fullName");
   var manager = $("reportingManager");
   var desig = $("playerDesig");
+  var playerEmail = $("playerEmail");
   var chipBox = $("chipBox");
   var chipList = $("chipList");
   var linkInput = $("linkInput");
@@ -602,9 +603,16 @@
      email (name matching kept for legacy rows). The ingest re-validates
      authoritatively anyway — this leg only makes the truth visible EARLY.
      ========================================================================== */
-  /* the signed-in work email (Google OR the email fallback — both write the
-     same session chip); '' when the visitor never signed in */
+  /* the work email typed in Participant Details — the ONE identity source
+     since the sign-in card left the page. A legacy sign-in chip (Google or
+     the old email fallback) still prefills it so nobody loses their
+     collab pairing. Powers email-keyed collab matching + the Player
+     Email ledger column. */
   function sessionEmail_() {
+    var em = "";
+    try { em = String(playerEmail.value || "").trim().toLowerCase(); }
+    catch (e) { /* field not rendered */ }
+    if (em) return em;
     try {
       var s = JSON.parse(String(localStorage.getItem("pcl_google") || "{}"));
       return String((s && s.email) || "").trim().toLowerCase();
@@ -640,6 +648,9 @@
   /* a changed identity re-matches every collab/ownership verdict */
   fullName.addEventListener("change", function () {
     if (fullName.value.trim()) checkAllLinks_();
+  });
+  playerEmail.addEventListener("change", function () {
+    if (playerEmail.value.trim()) checkAllLinks_();
   });
 
   linkInput.addEventListener("keydown", function (ev) {
@@ -1197,6 +1208,7 @@
      Emails (not names) — the accept banner can then show ONLY to the exact
      people the uploader invited. */
   var COLLAB_DOMAIN = String(cfg.employeeDomain || "praper.in").toLowerCase();
+  var EMAIL_SUFFIX = "@" + COLLAB_DOMAIN;   // the work-email gate
   var COLLAB_EMAIL_RE = new RegExp("^[a-z0-9._%+'-]+@" +
     COLLAB_DOMAIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$");
   function collabList_(p) {
@@ -2369,17 +2381,14 @@
   buildWeekOptions();   // only the ONGOING week is selectable
 
   /* ============================================================================
-     EMPLOYEE SIGN-IN (Google) — participants are employees, so the form offers
-     a Google sign-in restricted to the company domain. The ID token is NEVER
-     trusted client-side: it goes to the backend (Code.gs → employeeLogin_)
-     which verifies it against Google's tokeninfo endpoint, checks the
-     @praper.in domain AND the PCL-Allowlist tab of the league sheet. On
-     success the form prefills the exact roster identity (matchedName).
-     Browsers that break the Google pop-up hand-over have a work-email
-     fallback in the same card — identical server-side gates, no token.
-     The card stays INVISIBLE until cfg.googleClientId is set in
-     js/gas-endpoint.js — until the league turns sign-in on, the form works
-     exactly as before (Full Name + Reporting Manager identity).
+     EMPLOYEE SIGN-IN (Google) — DORMANT. The sign-in card was removed from
+     index.html: the form now collects the work email in Participant Details
+     and any @praper.in address is accepted (domain-checked, no roster).
+     This engine self-disables while #gpanel is absent — restore that HTML
+     section (and cfg.googleClientId) to switch Google sign-in back on.
+     History: the ID token was NEVER trusted client-side — it went to the
+     backend (Code.gs → employeeLogin_) which verified it against Google's
+     tokeninfo endpoint, the @praper.in domain AND the PCL-Allowlist tab.
      ========================================================================== */
   (function () {
     var panel = $("gpanel");
@@ -2649,7 +2658,7 @@
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         v: 1, at: Date.now(),
         fullName: fullName.value, manager: manager.value,
-        desig: desig.value,
+        desig: desig.value, email: playerEmail.value,
         links: linkInput.value,
         posts: posts.map(function (p) {
           return { id: p.id, url: p.url, format: p.format, mediaId: p.mediaId,
@@ -2675,13 +2684,14 @@
     try { raw = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); }
     catch (e) { return; }
     if (!raw || raw.v !== 1) return;
-    var texty = [raw.fullName, raw.manager, raw.desig, raw.links, raw.week,
-                 raw.challengeUrl, raw.notes].join("");
+    var texty = [raw.fullName, raw.manager, raw.desig, raw.email, raw.links,
+                 raw.week, raw.challengeUrl, raw.notes].join("");
     if (!texty && !(raw.posts && raw.posts.length)) return;
 
     fullName.value = String(raw.fullName || "");
     manager.value = String(raw.manager || "");
     desig.value = String(raw.desig || "");
+    playerEmail.value = String(raw.email || "");
     desigOwner = normId(raw.fullName || "");
     desigLocked = !!desig.value.trim();   // draft text yields to a new identity
     updateDesigCapsule();
@@ -3125,7 +3135,7 @@
     if (e && f.__defaultErr) e.textContent = f.__defaultErr;
   }
 
-  [fullName, manager, desig, challengeUrl].forEach(function (inp) {
+  [fullName, manager, desig, challengeUrl, playerEmail].forEach(function (inp) {
     inp.addEventListener("input", function () {
       var f = inp.closest(".pcl-field");
       if (f) f.classList.remove("is-error");
@@ -3153,6 +3163,11 @@
     if (!fullName.value.trim()) bad("fullName");
     if (!manager.value.trim()) bad("reportingManager");
     if (!desig.value.trim()) bad("playerDesig");
+    var em = playerEmail.value.trim().toLowerCase();
+    if (!em) bad("playerEmail");
+    else if (em.slice(-EMAIL_SUFFIX.length) !== EMAIL_SUFFIX) {
+      bad("playerEmail", "Must end with " + EMAIL_SUFFIX);
+    }
     if (!photoShown && !photoState.file) {
       bad("playerPhoto", "Upload your photo.");
     }
@@ -3413,8 +3428,8 @@
   form.addEventListener("submit", function (ev) {
     ev.preventDefault();
     if (linkInput.value.trim()) commitLinks();   // never lose typed links
-    ["fullName", "reportingManager", "playerDesig", "playerPhoto", "postLinks",
-     "challengeWeek", "challengeUrl"].forEach(clearFieldErr);
+    ["fullName", "reportingManager", "playerDesig", "playerEmail", "playerPhoto",
+     "postLinks", "challengeWeek", "challengeUrl"].forEach(clearFieldErr);
     posts.forEach(function (p) {
       p.errViews = false; p.errShotMsg = ""; p.errCollab = false;
     });
@@ -3430,6 +3445,17 @@
   });
 
   /* ---------- boot: bring back any surviving draft ---------- */
+  /* a legacy sign-in chip (Google or the old email fallback) seeds the
+     work-email field once — the field is the single identity source now */
+  if (!playerEmail.value) {
+    try {
+      var legacyChip = JSON.parse(
+        String(localStorage.getItem("pcl_google") || "{}"));
+      if (legacyChip && legacyChip.email) {
+        playerEmail.value = String(legacyChip.email);
+      }
+    } catch (e) { /* no chip */ }
+  }
   restoreDraft();
   lastInputSnap = snapLinks();
 

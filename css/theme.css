@@ -1605,7 +1605,7 @@ button.pcl-board-link {
   grid-template-columns: 84px 1fr 1fr;
   grid-template-areas:
     "photo desig name"
-    "photo manager manager"
+    "photo manager email"
     "cap   cap     cap";
   gap: 10px 16px;
   align-items: start;
@@ -1614,6 +1614,7 @@ button.pcl-board-link {
 .pcl-playergrid .pcl-field[data-field="fullName"] { grid-area: name; }
 .pcl-playergrid .pcl-field[data-field="playerDesig"] { grid-area: desig; }
 .pcl-playergrid .pcl-field[data-field="reportingManager"] { grid-area: manager; }
+.pcl-playergrid .pcl-field[data-field="playerEmail"] { grid-area: email; }
 .pcl-desig-hint { font-size: 12.5px; margin: 5px 2px 0; }
 .pcl-photo-tile {
   width: 84px;
@@ -2288,13 +2289,15 @@ html[data-pcl-theme="light"] .pcl-wk-pts { color: #a06e00; }
       "desig"
       "name"
       "manager"
+      "email"
       "cap";
   }
   .pcl-photofield { justify-self: center; }
   .pcl-photo-caption { justify-content: center; text-align: center; }
   .pcl-playergrid .pcl-field[data-field="fullName"],
   .pcl-playergrid .pcl-field[data-field="playerDesig"],
-  .pcl-playergrid .pcl-field[data-field="reportingManager"] { justify-self: stretch; }
+  .pcl-playergrid .pcl-field[data-field="reportingManager"],
+  .pcl-playergrid .pcl-field[data-field="playerEmail"] { justify-self: stretch; }
   .pcl-collabpop { left: auto; right: 0; }
 
   .pcl-modal-card { padding: 16px 14px; }

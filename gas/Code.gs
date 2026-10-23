@@ -306,12 +306,24 @@ function doPostLocked_(e) {
         '(it must start with https://).' });
     }
     var notes = str_(d.additionalNotes);
-    /* the participant's work email from their sign-in session (may be '' —
-     * sign-in is optional). Powers email-keyed collab matching + the
-     * Player Email column; never trusted for anything but collab pairing. */
+    /* the participant's work email — now TYPED in Participant Details (the
+     * sign-in card is gone). It powers email-keyed collab matching + the
+     * Player Email column; never trusted for anything but collab pairing.
+     * An absent email (stale pre-email cached page) still lands — collab
+     * then falls back to name matching — but a NON-praper address is
+     * refused outright: the league is employees only. */
     var myEmail = String(d.email || '').trim().toLowerCase();
     if (myEmail && !/^[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(myEmail)) {
       myEmail = '';   // junk session value — collab falls back to name matching
+    }
+    if (myEmail) {
+      var emDom = '@' + (EMPLOYEE_DOMAIN || 'praper.in');
+      if (myEmail.slice(-emDom.length) !== emDom) {
+        return json_({ ok: false, error:
+          'Entries must carry a @' + (EMPLOYEE_DOMAIN || 'praper.in') +
+          ' work email — fix the Work email field in Participant Details ' +
+          'and resubmit.' });
+      }
     }
 
     var sheet = getSheet_();
@@ -2423,7 +2435,7 @@ function buildAdminGuide() {
     ['Verified Points', 'Form→admin (automatic)', 'Verified Count × multiplier — written for you, never edit by hand.'],
     ['Player Photo', 'Form (automatic)', 'One photo per player, reused on every entry.'],
     ['Collab With / Collab Status', 'Form (automatic)', 'COLLAB pairs. Collab lists carry WORK EMAILS (comma-separated). CONFIRMED = the pair matched by email (either side) or legacy name → each scores FULL points (rulebook §6 rule 2).'],
-    ['Player Email', 'Form (automatic)', "The participant's signed-in work email — powers email-keyed collab matching and the accept-invite banner. Blank for unsigned-in players."],
+    ['Player Email', 'Form (automatic)', "The participant's work email, typed in Participant Details — powers email-keyed collab matching and the accept-invite banner. Blank only for stale pre-email pages (collab then matches by name)."],
     ['Player Designation', 'Player (first time)', 'Job title shown on the leaderboard. Reused automatically afterwards.'],
     ['Player Verified', 'Admin', 'VERIFIED = photo + designation checked against name · manager · designation (PLAYERS tab → CONFIRM ID). Green tick shows everywhere. Empty = no badge.'],
     ['PCL-Snapshots tab', 'Automatic (YouTube tracking)', 'The SYNC NOW pipeline appends every platform-observed count here: Timestamp · Media ID · Source · Views. Ledger rows show the latest as an AUTO tag in the feed.'],

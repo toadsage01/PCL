@@ -56,6 +56,24 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  /* Employees-only gate — the form collects a @praper.in work email in
+     Participant Details and the ledger ties every row to it (email-keyed
+     collab pairing, ownership checks). An ABSENT email is tolerated so a
+     stale pre-email cached page can still land (collab then falls back to
+     name matching), but a NON-praper address is refused here before it can
+     touch the sheet. Domain overridable via the EMPLOYEE_DOMAIN env var. */
+  const domain = String(process.env.EMPLOYEE_DOMAIN || "praper.in").toLowerCase();
+  const email = String(
+    (((req.body || {}).data || {}).email) || "").trim().toLowerCase();
+  if (email && !email.endsWith("@" + domain)) {
+    res.status(422).json({
+      ok: false,
+      error: "Entries must carry a @" + domain + " work email — fix the " +
+             "Work email field in Participant Details and resubmit."
+    });
+    return;
+  }
+
   /* Kill the upstream call BEFORE Vercel kills the function, and answer
      the abort in plain text: the frontend reads a non-JSON answer as a
      network drop and falls through to the direct-GAS leg, whereas a JSON
