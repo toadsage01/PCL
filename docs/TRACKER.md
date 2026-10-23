@@ -628,3 +628,108 @@ with analytics + participant details + per-video views, minimum manual OCR
 🧑 STILL ON THE USER (unchanged): **D1 paste Code.gs + New version** (this
 round's directorFeed_ rides the same paste) · D2 domain fix · D4
 allowlist emails. D6 packaging stays on the cloned repo.
+
+## A10 · Round 30 — OAuth pop-up fix + work-email fallback (2026-10-23)
+
+**Report:** `Cross-Origin-Opener-Policy policy would block the
+window.postMessage call` on the sign-in button — the Google pop-up signs
+the employee in but the credential hand-over to the form is severed
+(Brave shields / COOP isolation in the pop-up chain), so the button spins
+forever. Live-verified flow: GIS popup → GeneralOAuthFlow → hand-over
+blocked.
+
+- **ROOT FIX**: new `vercel.json` serves every route with
+  `Cross-Origin-Opener-Policy: same-origin-allow-popups` — the
+  Google-documented remedy; ships automatically with the next Vercel
+  deploy, nothing to paste.
+- **FALLBACK (interim until OAuth is trusted everywhere)**: the sign-in
+  card always carries a **work-email row** under the Google button — type
+  `you@praper.in` → CONTINUE or Enter (Enter checks, never submits; the
+  round-28 form-level Enter guard is explicitly bypassed for this field
+  only). Backend: `employeeLogin_` now routes `email=` to a new
+  `emailLogin_` leg with the SAME two gates as the token path — company
+  domain + `PCL-Allowlist` roster — and `rosterEmailToName_` maps
+  `first.last@praper.in` onto the exact roster identity for the Full
+  Name prefill. No token, no client-side trust; a non-employee address
+  gets the verbatim allowlist refusal.
+- **GRACEFUL GIS FAILURE**: if the GIS script cannot load (offline /
+  shields), the Google button goes away but the card STAYS with an
+  explanatory note — the fallback never depended on Google being
+  reachable.
+- SESSION UNCHANGED: same `pcl_google` chip, same SIGN OUT cycle, same
+  prefill rule (a human-typed name always wins).
+- TESTS: harness 23j–23n2 (6 new asserts — blank/malformed/gmail/
+  ghost-email refusals, allowlisted acceptance, first.last roster map);
+  NEW round30_e2e.sh (8 checks: card renders, Enter-never-submits,
+  roster + format guards, email sign-in + prefill, sign-out cycle) with
+  the fixture now able to serve a client id (PCL_FIXTURE_CLIENT_ID=1) +
+  canned employeeLogin roster. All unit suites + round27/round28
+  regressions green; vercel.json schema-validated.
+
+🧑 STILL ON THE USER: **D1 paste Code.gs + New version** (emailLogin_
+rides the same paste — until then the live backend refuses the email
+fallback) · add BOTH origins in Google Cloud → Authorized JavaScript
+origins (`https://praper-contest-league.vercel.app` +
+`https://pcl-form.prapermedia.in`) · D4 allowlist emails. Trust model
+note: the email fallback is roster-gated (same people the Google path
+accepts) but does not prove possession of the mailbox — flip it off
+anytime by hiding the card section once the pop-up flow is confirmed
+stable for everyone.
+
+## A11 · Round 31 — leaderboard polish + YT freshness + Director's desk + email collab (2026-10-23)
+
+Six user items, all shipped:
+
+- **Leaderboard**: footer "PLAY — SUBMIT YOUR RUN" link REMOVED (header's
+  SUBMIT ENTRY is the one path back); the refresh button's stray pixel
+  glyph REMOVED (clean REFRESH text); NEW **ⓘ chip right of W10** (same
+  chip dimensions) opens the challenge guide — all ten weeks with name,
+  criteria, reward and date window, LIVE/CLOSED tags; **every W chip
+  shows its week's challenge on hover** (title attribute). Challenge
+  names live in `js/gas-endpoint.js` (`challenges` + `seasonStartIso`).
+- **YouTube freshness**: the existing twice-daily sync (09:00 & 21:00,
+  self-healing, also on SYNC NOW) already wrote platform viewCounts into
+  PCL-Snapshots — the missing piece was the PUBLIC board. The rollup now
+  **lifts every `yt_` post to the snapshot count when it outruns the
+  ledger**, and points follow (lifted × multiplier, ceil). Admin-set
+  verified points resume whenever HR re-verifies higher. Instagram and
+  LinkedIn stay MANUAL (OCR) — snapshots never touch them; HRs check
+  those on whatever rhythm they keep.
+- **Director's Desk** (Screening Room): a **★ PICK THIS ENTRY** toggle per
+  post + a **note pad** scoped WEEK n / SEASON by tab. Writes ride the
+  passcode-gated `directorNote` action into the new **Director-Log** tab
+  (append-only, latest-wins, cellSafe_-guarded, audit-logged); the feed
+  returns `picks[]`, `noteWeeks`, `noteSeason` + per-entry `mediaId`, so
+  his marks survive reloads and season ends.
+- **Collab = emails, multi, short banners**: the collab list is now
+  comma-separated WORK EMAILS with a chip UI (ADD button + Enter commits
+  a chip — never submits; non-`@praper.in` refused; × removes; legacy
+  name rows still pair). The ledger grows a **Player Email** column
+  (col 30, appended last — no reader shifts). Ingest pairs rows d1
+  (their list has my email) / d2 (my chips have their Player Email) /
+  legacy name fallback; the partner backfill writes the acceptor's
+  email. checklink returns `collabForEmail`/`uploaderEmail`/`mine`, so
+  the form shows: "Uploaded by you" (mine) · "Video uploaded by
+  {firstName}." + tiny hint (taken) · "Collab invite for you — ACCEPT"
+  (ONLY the invited session email). The long red submit rejection is
+  now one short line. The name-picker autocomplete is gone from the
+  collab field (managers/designations keep theirs).
+- **Tests**: harness groups 30–33 (27 new asserts → ~168 total: email
+  pairing d1/d2 + case tolerance, Player Email column, short rejection,
+  checklink email legs, YT lift with/without snapshots + IG isolation,
+  director desk writes/reads/gates); NEW round31_e2e.sh (9 checks:
+  board trio + guide + tooltips, desk render/pick/note/reload/scope);
+  round27_e2e.sh rewritten for the email flow; round28/29/30 + CEO-room
+  + final + save + ocr E2E all green; all six unit suites green;
+  node --check on every touched JS.
+- Fixture upgrades: canned checklink now email-keyed (invite only for
+  priya@praper.in), director fixture speaks directorNote + picks/notes
+  + mediaId, form fixture serves the season config (challenges +
+  seasonStartIso) for the board E2E.
+
+🧑 STILL ON THE USER: **D1 paste Code.gs + New version** (email collab,
+Player Email column, YT lift, directorNote all ride the pending paste) ·
+run **setupMetricsTriggers()** once from the editor (or press SYNC NOW
+once after the paste) so the twice-daily YT refresh is scheduled · fill
+the **PCL-Allowlist** tab so sign-in (and therefore session emails for
+collab invites) works for everyone.

@@ -260,20 +260,45 @@
     show("rows");
   }
 
+  /* ---------- season clock + challenge guide (cfg.challenges) ---------- */
+  function seasonWeek() {
+    var start = Date.parse(cfg.seasonStartIso || "");
+    if (!isFinite(start)) return 0;
+    var t = Date.now();
+    if (t < start) return 1;               // warm-up posts land in Week 1
+    return Math.min(cfg.challenges ? cfg.challenges.length : 10,
+                    Math.floor((t - start) / 604800000) + 1);
+  }
+  function weekWindowTxt(w) {
+    var start = Date.parse(cfg.seasonStartIso || "");
+    if (!isFinite(start)) return "";
+    var a = new Date(start + (w - 1) * 604800000);
+    var b = new Date(start + w * 604800000);
+    var M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    function d(x) { return x.getDate() + " " + M[x.getMonth()]; }
+    return d(a) + " → " + d(b);
+  }
+
   function buildWeekChips() {
     var d = state.data;
     var nav = $("pclWeeks");
     nav.innerHTML = "";
+    var info = $("pclWeekInfo");
+    if (info) info.hidden = true;
     if (!d || !d.weeks) return;                 // old backend → ALL-SEASON only
     var cur = d.currentWeek;
-    function chip(label, view, cls) {
+    var chs = Array.isArray(cfg.challenges) ? cfg.challenges : [];
+    function chip(label, view, cls, title) {
       var b = document.createElement("button");
       b.type = "button";
       b.className = "pcl-wchip" + (cls ? " " + cls : "");
       b.textContent = label;
       b.dataset.view = String(view);
+      if (title) b.title = title;               // hover = that week's challenge
       if (cls !== "is-locked") {
         b.addEventListener("click", function () {
+          if (view === "info") { toggleWeekInfo(); return; }
           state.view = view;
           syncChipStates();
           render();
@@ -287,8 +312,46 @@
       if (state.view === w) cls.push("is-active");
       if (w === cur) cls.push("is-live");
       if (w > cur) cls.push("is-locked");
-      chip("W" + w, w, cls.join(" "));
+      var ch = chs[w - 1];
+      chip("W" + w, w, cls.join(" "),
+        ch ? "Week " + w + " · " + ch.name : "");
     }
+    /* the ⓘ chip — same size as a W chip, right of W10; opens the guide */
+    if (chs.length) {
+      chip("\u24D8", "info", "is-info", "All weekly challenges");
+    }
+  }
+
+  /* the challenge guide — every week's name, criteria, reward and window */
+  function toggleWeekInfo() {
+    var box = $("pclWeekInfo");
+    if (!box) return;
+    var ico = $("pclWeeks").querySelector(".pcl-wchip.is-info");
+    if (!box.hidden) {
+      box.hidden = true;
+      if (ico) ico.classList.remove("is-open");
+      return;
+    }
+    var chs = Array.isArray(cfg.challenges) ? cfg.challenges : [];
+    var cur = seasonWeek();
+    var html = '<div class="pcl-wi-head">SEASON 2 · WEEKLY CHALLENGES</div>';
+    for (var w = 1; w <= chs.length; w++) {
+      var c = chs[w - 1];
+      var tag = w === cur ? '<span class="pcl-wk-tag">LIVE</span>'
+        : (w < cur ? '<span class="pcl-wk-tag pcl-wk-tag--past">CLOSED</span>' : "");
+      html += '<div class="pcl-wi-row' + (w === cur ? " is-live" : "") + '">' +
+        '<span class="pcl-wi-week">W' + w + '</span>' +
+        '<span class="pcl-wi-body"><span class="pcl-wi-name">' + esc(c.name) +
+        "</span>" + tag +
+        '<span class="pcl-wi-date">' + esc(weekWindowTxt(w)) + "</span>" +
+        '<span class="pcl-wi-crit">' + esc(c.crit) + "</span>" +
+        '<span class="pcl-wi-pts">Weekly reward +' +
+        Number(c.pts || 0).toLocaleString("en-IN") + " points</span>" +
+        "</span></div>";
+    }
+    box.innerHTML = html;
+    box.hidden = false;
+    if (ico) ico.classList.add("is-open");
   }
 
   function syncChipStates() {

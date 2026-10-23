@@ -67,26 +67,11 @@
     <form id="pclForm" class="pcl-form" novalidate autocomplete="off">
       <p class="pcl-form-note">Fields marked <span class="pcl-req-star">*</span> are required.</p>
 
-      <!-- 0 · EMPLOYEE SIGN-IN (Google) — rendered ONLY when a Google OAuth
-             Client ID is configured in js/gas-endpoint.js. Employees sign in
-             with their @praper.in account; the backend verifies the token
-             AND the PCL-Allowlist tab before the form accepts the identity.
-             No client ID configured → this card stays invisible and the
-             form works exactly as before. -->
-      <section class="pcl-panel pcl-gpanel" id="gpanel" hidden>
-        <h2 class="pcl-panel-title">0 &middot; Employee Sign-In</h2>
-        <div class="pcl-grow">
-          <div class="pcl-gbtnwrap" id="gBtn"><noscript>JavaScript is required for Google sign-in.</noscript></div>
-          <div class="pcl-gstate" id="gState" hidden>
-            <span class="pcl-gcheck" aria-hidden="true">&#10003;</span>
-            <span class="pcl-gid" id="gId"></span>
-            <button type="button" class="pcl-gout" id="gOut">SIGN OUT</button>
-          </div>
-          <p class="pcl-gerr" id="gErr" role="alert"></p>
-        </div>
-        <p class="pcl-hint">Praper employees only — sign in with your
-          <b>@praper.in</b> work account. Your entry stays tied to you.</p>
-      </section>
+      <!-- EMPLOYEE SIGN-IN CARD REMOVED — the form is open: any
+             @praper.in work email typed in Participant Details below ties
+             the entry to its owner (the backend re-checks the domain).
+             The dormant sign-in engine still lives in js/app.js; restore
+             that section there to turn Google sign-in back on. -->
 
       <!-- 1 · PLAYER DETAILS — the photo is a circular avatar INLINE with the
              name fields, one row (mobile: avatar moves above them, centred).
@@ -155,6 +140,13 @@
                      aria-autocomplete="list" aria-controls="managerAc" />
               <div class="pcl-ac" id="managerAc" role="listbox" hidden></div>
             </div>
+            <p class="pcl-err">Required</p>
+          </div>
+          <div class="pcl-field" data-field="playerEmail">
+            <label class="pcl-label" for="playerEmail">Work email <span class="pcl-req-star">*</span></label>
+            <input class="pcl-input" id="playerEmail" name="playerEmail"
+                   type="email" placeholder="name@praper.in" autocomplete="email"
+                   spellcheck="false" />
             <p class="pcl-err">Required</p>
           </div>
           <p class="pcl-photo-caption"><span class="pcl-photostate" id="photoState"

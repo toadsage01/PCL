@@ -99,9 +99,62 @@
     code: "", idx: 0,
     mode: "challenge",            // "challenge" = weekly tab (default) · "all" = season
     mediaMode: null,              // "post" | "shot" — per-entry, null = auto
-    feed: { challenge: [], all: [] }
+    feed: { challenge: [], all: [] },
+    picks: {},                    // mediaId → picked? (the Director's wishes)
+    pickCount: 0,
+    notes: { weeks: {}, season: "" }
   };
   var CODE_KEY = "pcl_dir_code";
+
+  /* ---------- the Director's desk (picks + notes) -------------------------
+     Every write is passcode-gated server-side (directorNote action) and
+     lands in the Director-Log tab; the feed carries the merged state. */
+  function deskNoteFor() {
+    return state.mode === "all"
+      ? String(state.notes.season || "")
+      : String(state.notes.weeks[String(state.week || currentWeek())] || "");
+  }
+  function entryKey(e) {
+    return String((e && (e.mediaId || e.url)) || "");
+  }
+  function renderDesk() {
+    var list = listFor(state.mode);
+    var e = list[state.idx];
+    var desk = $("dirDesk");
+    if (!e || !desk) { if (desk) desk.hidden = true; return; }
+    desk.hidden = false;
+    var picked = !!state.picks[entryKey(e)];
+    var btn = $("dirPick");
+    btn.setAttribute("aria-pressed", String(picked));
+    btn.classList.toggle("is-on", picked);
+    btn.innerHTML = picked ? "&#9733; PICKED" : "&#9734; PICK THIS ENTRY";
+    $("dirPickCount").textContent = state.pickCount
+      ? state.pickCount + " PICKED THIS SEASON" : "";
+    var label = $("dirNoteLabel");
+    label.textContent = state.mode === "all"
+      ? "NOTES · SEASON"
+      : "NOTES · WEEK " + (state.week || currentWeek());
+    if (document.activeElement !== $("dirNote")) {
+      $("dirNote").value = deskNoteFor();
+    }
+    $("dirNoteStatus").textContent = "";
+  }
+  function deskBusy(on) {
+    var b = $("dirNoteSave");
+    if (b) { b.disabled = on; b.textContent = on ? "SAVING…" : "SAVE NOTE"; }
+    var p = $("dirPick");
+    if (p) p.disabled = on;
+  }
+  function deskStatus(msg, isErr) {
+    var el = $("dirNoteStatus");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.classList.toggle("is-err", !!isErr);
+  }
+  function sendDeskNote(params) {
+    return jsonp(Object.assign({ action: "directorNote", code: state.code },
+      params));
+  }
 
   var gate = $("dirGate");
   var theatre = $("dirTheatre");
@@ -320,6 +373,7 @@
     $("dirDots").innerHTML = dots;
     $("dirPrev").disabled = state.idx === 0;
     $("dirNext").disabled = state.idx === list.length - 1;
+    renderDesk();
   }
   function renderEmptyMode() {       // this tab has nothing — the other may
     var stage = $("dirStage");
@@ -340,6 +394,8 @@
     $("dirDots").innerHTML = "";
     $("dirPrev").disabled = true;
     $("dirNext").disabled = true;
+    var desk = $("dirDesk");
+    if (desk) desk.hidden = true;
     var sa = $("dirSeeAll");
     if (sa) sa.addEventListener("click", function () { setMode("all"); });
   }
@@ -374,9 +430,21 @@
           return;
         }
         state.code = code;
+        state.week = Number(res.week) || currentWeek();
         state.feed = {
           challenge: Array.isArray(res.entries) ? res.entries : [],
           all: Array.isArray(res.regular) ? res.regular : []
+        };
+        /* the Director's own marks — picks + latest note per scope */
+        state.picks = {};
+        (Array.isArray(res.picks) ? res.picks : []).forEach(function (mid) {
+          if (mid) state.picks[String(mid)] = true;
+        });
+        state.pickCount = state.picks ? Object.keys(state.picks).length : 0;
+        state.notes = {
+          weeks: (res.noteWeeks && typeof res.noteWeeks === "object")
+            ? res.noteWeeks : {},
+          season: String(res.noteSeason || "")
         };
         if (!state.feed.challenge.length && !state.feed.all.length) {
           showEmpty("No submissions for Week " + res.week +
@@ -435,6 +503,60 @@
   });
   $("dirSwShot").addEventListener("click", function () {
     if (state.mediaMode !== "shot") { state.mediaMode = "shot"; renderStage(); }
+  });
+
+  /* ---------- the Director's desk wiring ---------- */
+  $("dirPick").addEventListener("click", function () {
+    var list = listFor(state.mode);
+    var e = list[state.idx];
+    if (!e || !state.code) return;
+    var key = entryKey(e);
+    if (!key) return;
+    var nowPicked = !state.picks[key];
+    deskBusy(true);
+    deskStatus("");
+    sendDeskNote({ type: nowPicked ? "pick" : "unpick", target: key })
+      .then(function (res) {
+        deskBusy(false);
+        if (res && res.ok) {
+          if (nowPicked) state.picks[key] = true;
+          else delete state.picks[key];
+          state.pickCount = Object.keys(state.picks).length;
+          renderDesk();
+          deskStatus(nowPicked ? "PICKED — saved." : "Unpicked — saved.");
+        } else {
+          deskStatus((res && res.error) || "Could not save — try again.", true);
+        }
+      })
+      .catch(function () {
+        deskBusy(false);
+        deskStatus("Could not reach the league server — try again.", true);
+      });
+  });
+  $("dirNoteSave").addEventListener("click", function () {
+    if (!state.code) return;
+    var txt = String($("dirNote").value || "").trim();
+    var isSeason = state.mode === "all";
+    deskBusy(true);
+    deskStatus("");
+    var params = isSeason
+      ? { type: "note", scope: "season", text: txt }
+      : { type: "note", scope: "week", week: state.week || currentWeek(), text: txt };
+    sendDeskNote(params)
+      .then(function (res) {
+        deskBusy(false);
+        if (res && res.ok) {
+          if (isSeason) state.notes.season = txt;
+          else state.notes.weeks[String(state.week || currentWeek())] = txt;
+          deskStatus("Saved.");
+        } else {
+          deskStatus((res && res.error) || "Could not save — try again.", true);
+        }
+      })
+      .catch(function () {
+        deskBusy(false);
+        deskStatus("Could not reach the league server — try again.", true);
+      });
   });
   /* a photo Drive refuses to serve (permissions revoked, deep-link change)
      hides itself — the initials disc underneath takes over seamlessly */

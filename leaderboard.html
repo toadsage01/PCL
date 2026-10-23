@@ -68,15 +68,16 @@
   <main class="pcl-main pcl-board">
     <h1 class="pcl-board-title">LEADERBOARD</h1>
 
-    <!-- Week selector — chips appear once the backend reports season weeks -->
+    <!-- Week selector — chips appear once the backend reports season weeks;
+         the ⓘ chip (right of W10) opens the challenge guide; hovering a
+         W chip names that week's challenge -->
     <nav class="pcl-weeks" id="pclWeeks" aria-label="Leaderboard week"></nav>
+    <div class="pcl-weekinfo" id="pclWeekInfo" hidden></div>
 
     <!-- Sync row -->
     <div class="pcl-syncrow">
       <span class="pcl-sync" id="pclSync" role="status">SYNCING&hellip;</span>
-      <button type="button" id="pclRefresh" class="pcl-rbtn">
-        <span class="pcl-px-rf" aria-hidden="true"></span>REFRESH
-      </button>
+      <button type="button" id="pclRefresh" class="pcl-rbtn">REFRESH</button>
     </div>
 
     <!-- The board — five columns, exactly like the league sheet -->
@@ -99,9 +100,6 @@
       <div class="pcl-state" id="pclEmpty" hidden>
         <span class="pcl-state-big">NO RUNS YET</span>
         <p class="pcl-state-sub">The arcade awaits its first player.</p>
-        <a class="pcl-state-cta" href="index.html">
-          <span class="pcl-px-play" aria-hidden="true"></span>PLAY — SUBMIT YOUR RUN
-        </a>
       </div>
       <div class="pcl-state pcl-state--err" id="pclError" hidden>
         <span class="pcl-state-big">SIGNAL LOST</span>
@@ -114,10 +112,6 @@
   </main>
 
   <footer class="pcl-footer pcl-footer--board">
-    <a class="pcl-footlink pcl-footlink--play" href="index.html">
-      <span class="pcl-px-play" aria-hidden="true"></span>PLAY — SUBMIT YOUR RUN
-    </a>
-    <span class="pcl-footsep" aria-hidden="true">&#9679;</span>
     <a class="pcl-footlink" href="admin.html">Control Room</a>
     <span class="pcl-footsep" aria-hidden="true">&#9679;</span>
     Praper Content League &middot; Season 2

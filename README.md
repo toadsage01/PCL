@@ -98,6 +98,28 @@ success the form prefills the exact roster identity (never overwriting
 what a human typed) and shows a signed-in chip with SIGN OUT. A blank or
 missing allowlist denies everyone — employees only, by design.
 
+**Pop-up fix + work-email fallback.** Google's pop-up hands the signed
+token back to the form with `window.postMessage`; some browsers (Brave
+shields, aggressive Cross-Origin-Opener-Policy isolation) sever that
+hand-over and the button spins forever. Two layers of defence:
+
+* `vercel.json` serves every page with
+  `Cross-Origin-Opener-Policy: same-origin-allow-popups` — the
+  Google-documented fix; it ships with the next Vercel deploy, no manual
+  step.
+* The sign-in card ALWAYS carries a work-email fallback under the Google
+  button: type your `@praper.in` email, CONTINUE (or press Enter — it
+  never submits the form). The backend applies the SAME two gates as the
+  token path — company domain + allowlist (`employeeLogin_` email leg,
+  `emailLogin_` in Code.gs) — and maps `first.last@praper.in` onto the
+  roster identity when it can. If the GIS script itself cannot load
+  (offline, shields), the Google button goes away and the fallback
+  carries the card alone.
+
+Add BOTH origins (`https://praper-contest-league.vercel.app` and
+`https://pcl-form.prapermedia.in`) under *Authorized JavaScript origins*
+— sign-in fails with an origin mismatch on any other origin.
+
 ---
 
 ## 3 · The rulebook → what the code enforces
@@ -109,7 +131,7 @@ missing allowlist denies everyone — employees only, by design.
 | **Collab = FULL points each** (§6 rule 2: *"Both employees will receive 1,250 leaderboard points each"*) | Both rows share one `Media ID`; each scores its own player the FULL `ceil(views × mult)`. There is **no halving anywhere** — the roll-up credits every CONFIRMED row to its own player explicitly |
 | One Post, One Platform (§6 rule 4) | identical content on multiple platforms → admin reviews; the ledger keeps every link for the audit |
 | No paid boosting (§6 rule 3) | the review pipeline (Cross-Check = BOOST?) flags suspected paid spikes before points are verified; the form's OCR now ALSO reads the screenshot itself and **hard-blocks Boosted / Sponsored / Promoted / Paid-partnership screenshots** at attach time |
-| Redundant-URL protection (no self-duplicate point spikes) | every link is fingerprinted to a `Media ID`; the same player resubmitting the same link is an **UPDATE** (snapshot refresh, never a second score); a *different* player claiming the same link untagged is **REJECTED — with the uploader's name in the message**; tagged both ways it becomes a **CONFIRMED collab**. The form also asks the ledger WHO owns every link the moment it is committed (`checklink`), so a clash shows as a banner BEFORE submit: red "already uploaded by {name}" or green "collabed with you — confirm below" with a one-tap CONFIRM |
+| Redundant-URL protection (no self-duplicate point spikes) | every link is fingerprinted to a `Media ID`; the same player resubmitting the same link is an **UPDATE** (snapshot refresh, never a second score); a *different* player claiming the same link untagged is **REJECTED — short and plain: "Already uploaded by {firstName}. Your collab? Tag it COLLAB and add their email."**; tagged both ways it becomes a **CONFIRMED collab**. The form also asks the ledger WHO owns every link the moment it is committed (`checklink`), so a clash shows as a SHORT banner BEFORE submit: red "Video uploaded by {firstName}." (+ a tiny collab hint), calm "Uploaded by you" for the owner, and a green "Collab invite for you — ACCEPT" shown **only to the session email the uploader actually invited** |
 | 50:50 content balance (§5) | every post carries `Content Type` = PRAPER or PERSONAL (one-tap toggle on the form, admin-editable); the Control Room's PLAYERS tab shows per-platform balance chips (amber when off-balance) |
 | ≥2 platforms, ≥20 posts, weekly challenge deadlines | tracked in the ledger; challenge entries ride the weekly fields |
 | Weekly challenge rewards (§4: +6000…+12000) | `PCL-Awards` tab + the REPORTS tab's **GIVE** control; award points ride on top of post multipliers in season totals and weekly buckets |
@@ -271,6 +293,12 @@ without opening a second tab:
 | **Instagram** | none possible without a reviewed Meta app (impressions are author-private) | screenshot + OCR; snapshot sync stub awaits the Meta app |
 | **LinkedIn** | no public API at all (option (c) decision) | screenshot + OCR floor |
 
+**The board follows YouTube daily:** the sync leg feeds PCL-Snapshots and
+the public rollup lifts every `yt_` post to the platform count when it
+outruns the ledger (views + points × multiplier). HRs never have to
+re-verify YouTube for freshness — IG/LI remain the manual OCR lanes, on
+whatever rhythm the review team keeps (weekly, end-of-season, whenever).
+
 **Why "impressions" was never needed for YouTube:** the Data API's public
 `viewCount` is the scored metric; Studio impressions are author-private
 data (OAuth-locked). The research phase listed them as an ideal-to-have;
@@ -324,7 +352,17 @@ verdict; the reviewer's own server-side SCAN remains the final word.
 
 - JSONP read of the stats endpoint with a cache-buster (Google's /exec CDN
   would otherwise serve stale numbers); 60s client guard, REFRESH button.
-- ALL-SEASON + W1…W10 tabs; LAST SYNC stamp.
+- ALL-SEASON + W1…W10 tabs; LAST SYNC stamp. **Hovering a W chip names
+  that week's challenge**; the **ⓘ chip right of W10** (same size) opens
+  the season's challenge guide — every week's name, criteria, reward and
+  date window, the live week tagged.
+- The footer "PLAY — SUBMIT YOUR RUN" link is gone (the header's
+  SUBMIT ENTRY link is the one path back to the form).
+- **YouTube stays fresh automatically**: the twice-daily sync writes the
+  platform's own viewCount into PCL-Snapshots, and the rollup **lifts
+  every `yt_` post to that number** when it outruns the ledger — views
+  AND points (lifted count × multiplier, rounded up). Instagram and
+  LinkedIn stay manual (OCR) by design; snapshots never touch them.
 - **Shows**: RANK · NAME · DESIGNATION · TOTAL IMPRESSIONS · TOTAL POINTS.
 - **Never shows**: verification status (stripped server-side), photos,
   manager names, collab details, OCR/machine values, admin anything.
@@ -366,6 +404,15 @@ so the Director /CEO can screen entries in a premium experience:
   counts — weekly challenges are judged on liking/disliking (see §3),
   and the reward itself is granted from the Control Room's REPORTS tab.
 - Navigate with PREV/NEXT, the numbered squares, or the ← → keys.
+- **The Director's Desk (notes + picks).** Under the player sits a private
+  desk only the passcode can write to: a **★ PICK THIS ENTRY** toggle per
+  post (his final wishes — a season-wide pick counter rides along) and a
+  **note pad** scoped to the tab he is on (WEEK n on the weekly tab,
+  SEASON on the ALL-CONTENTS tab). Writes go through the passcode-gated
+  `directorNote` action into the **Director-Log** tab of the league sheet
+  (append-only, `cellSafe_`-guarded, audit-logged) and read back through
+  the feed — his picks and notes survive reloads and are ready for the
+  weekly judging call.
 - The Control Room's **review modal** (admins/HRs) uses the same media
   contract — embed + POST/SCREENSHOT switch — wrapped around the
   verification workflow (see §3).
@@ -441,17 +488,19 @@ history covers the rest. Nothing in this system deletes.
 
 | Suite | Proves | Run |
 |---|---|---|
-| `scripts/test_do_post_collab.js` | ~135 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats strip (verified **and manager**), review-first reorder with data survival, CEO screening feed (current-week entries **+ season ALL list**, per-person photo/view arrays, newest-snapshot OCR wins, comma-cell parsing), employee sign-in (tokeninfo stub incl. **aud mismatch**), checklink pre-check, **hardening groups 25–29: cellSafe_ formula defusal, safeUrl_ scheme rejection, javascript:-link ingest refusal, non-image screenshot REJECTED, daily backup naming/dedupe/prune** | `node scripts/test_do_post_collab.js` |
+| `scripts/test_do_post_collab.js` | ~168 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats strip (verified **and manager**), review-first reorder with data survival, CEO screening feed (current-week entries **+ season ALL list**, per-person photo/view arrays, newest-snapshot OCR wins, comma-cell parsing, **per-entry mediaId + picks/notes**), employee sign-in (tokeninfo stub incl. **aud mismatch**, + work-email fallback legs 23j–23n2), **email-keyed collab (d1/d2 pairing, Player Email column, short named rejection, checklink invite/mine-by-email legs 30–31), YT auto-lift (snapshot lifts views + points ×mult; IG untouched — 32), Director's desk (passcode-gated notes/picks + feed read-back — 33)**, checklink pre-check, **hardening groups 25–29: cellSafe_ formula defusal, safeUrl_ scheme rejection, javascript:-link ingest refusal, non-image screenshot REJECTED, daily backup naming/dedupe/prune** | `node scripts/test_do_post_collab.js` |
 | `scripts/test_threat_matrix.js` | 107 adversarial assertions: JSONP callback charset (10 injection shapes), formula-injection vectors, hostile URL schemes (javascript/data/vbscript/file/blob, IDN homoglyphs, userinfo tricks, spoofed subdomains), esc() coverage on all four renderers, csvCell CSV-injection guard, safeHref in admin + director, hostile number shapes (Indian grouping, dot-thousands, >1e10) | `node scripts/test_threat_matrix.js` |
 | `scripts/test_ocr_parse.js` | 63 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection, **boost/sponsored/ad-badged text flags** (bare "boost" = the universal button → never flags; only the Boosted/Sponsored/Promoted STATE does), and **platform fingerprints** (wrong-platform chrome refused, chrome-less region crops never blocked) | `node scripts/test_ocr_parse.js` |
 | `scripts/test_leaderboard_rollup.js` | 16: dedup-by-media, verified-over-claimed, weekly buckets | `node scripts/test_leaderboard_rollup.js` |
 | `scripts/test_url_diag.js` | 24: every accepted URL shape | `node scripts/test_url_diag.js` |
 | `scripts/test_leaderboard_sanitize.js` | 33: the board can never render a raw string/NaN/Infinity as a view count (comma strings, NBSP, garbage, old payload shapes) | `node scripts/test_leaderboard_sanitize.js` |
 | `scripts/save_e2e.sh` + `fixture_save.js` | browser E2E of the transport chain against the REAL wire shapes (Vercel-healthy / GAS-302 / dead-route) | `bash scripts/save_e2e.sh` |
-| `scripts/round27_e2e.sh` + `fixture_form.js` | browser E2E of the ownership banners (taken + collab-for + one-tap CONFIRM), the collab Enter field-confirm fix (picker-open Enter still chooses), and logo→form with content after the DONE screen | `bash scripts/round27_e2e.sh` |
+| `scripts/round27_e2e.sh` + `fixture_form.js` | browser E2E of the ownership + collab flow, EMAIL edition: short "Video uploaded by {firstName}." banner + hint, email-keyed "Collab invite for you — ACCEPT" (only the invited session email sees it), ACCEPT prefills the uploader's email CHIP, Enter/ADD commits email chips (never submits), non-email refused, × removes, logo→form with content after the DONE screen | `bash scripts/round27_e2e.sh` |
 | `scripts/round28_e2e.sh` + `fixture_form.js` | browser E2E of the hardening round: Enter-in-name/challenge never submits (links Enter still commits chips), leaderboard og-font mapping, admin mock FULL collab points + review-modal meta, dark theme + 390px mobile no-h-scroll | `bash scripts/round28_e2e.sh` |
 | `scripts/round_e2e.sh` + `fixture_director.js` | browser E2E of the Screening Room round: gate deny/open, YT embed + pfp disc + hint-text removal, POST/SCREENSHOT switch, IG collab merge, LinkedIn shot stage, WEEKLY → ALL CONTENTS tabs (regular post tagged with views, no week), weekly restore, keyboard nav | `bash scripts/round_e2e.sh` |
 | `scripts/round29_admin_e2e.sh` + `fixture_form.js` | browser E2E of the admin screening view: embed stage + switch inside the review modal, participant card, per-video list with the open row highlighted, live score preview (verified × multiplier, rounded up), arrow-key stepping | `bash scripts/round29_admin_e2e.sh` |
+| `scripts/round30_e2e.sh` + `fixture_form.js` (PCL_FIXTURE_CLIENT_ID=1) | browser E2E of the sign-in card: fallback visible alongside the Google button, Enter checks the email and never submits, format + roster guards with the backend's verbatim refusal, allowlisted `@praper.in` email signs in + prefills the roster identity, SIGN OUT restores the fallback | `bash scripts/round30_e2e.sh` |
+| `scripts/round31_e2e.sh` + both fixtures | browser E2E of round 31: footer PLAY link gone, refresh glyph gone, ⓘ chip (last, right of W10) opens the 10-week challenge guide with the LIVE tag, W-chip hover titles, Director's desk (note prefilled per scope, PICK toggle + counter, save status, state survives reload, SEASON scope flip) | `bash scripts/round31_e2e.sh` |
 | `scripts/probe_live.sh` | READ-ONLY live probes (GAS stats/subcheck/checklink JSONP, wrong-password refusal, hostile-callback echo check, the four portals, YT key, GSI client) — zero sheet writes by design | `bash scripts/probe_live.sh` |
 | `scripts/ocr_e2e.sh`, `save_e2e.sh`, prior rounds | agent-browser E2E across all 3 portals (form flows, admin gate/tabs/awards, leaderboard) | see scripts/ |
 

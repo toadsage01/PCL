@@ -125,6 +125,24 @@
         <button type="button" class="dir-navbtn" id="dirNext"
                 aria-label="Next entry">NEXT &#8250;</button>
       </nav>
+
+      <!-- ---------- DIRECTOR'S DESK: pick his wishes + write his notes ----------
+           Writes go to the passcode-gated Director-Log tab of the league
+           sheet; the room reads them back on every load. -->
+      <section class="dir-desk" id="dirDesk" hidden>
+        <div class="dir-desk-pick">
+          <button type="button" class="dir-pickbtn" id="dirPick"
+                  aria-pressed="false">&#9734; PICK THIS ENTRY</button>
+          <span class="dir-pickcount" id="dirPickCount" aria-hidden="true"></span>
+        </div>
+        <label class="dir-desk-label" id="dirNoteLabel" for="dirNote">NOTES</label>
+        <textarea class="dir-note" id="dirNote" rows="4" maxlength="1500"
+                  placeholder="Scores, verdicts, final wishes — saved privately to the league sheet."></textarea>
+        <div class="dir-desk-row">
+          <button type="button" class="dir-savenote" id="dirNoteSave">SAVE NOTE</button>
+          <span class="dir-note-status" id="dirNoteStatus" role="status"></span>
+        </div>
+      </section>
     </section>
 
     <section class="dir-empty" id="dirEmpty" hidden>

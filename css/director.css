@@ -396,3 +396,94 @@ html[data-pcl-theme="dark"] .dir-stage { border-color: #0c0d14; }
 html[data-pcl-theme="dark"] .dir-fallback-sub { color: #8b93b4; }
 html[data-pcl-theme="dark"] .dir-shot-sub { color: #8b93b4; }
 html[data-pcl-theme="dark"] .dir-tabbtn { border-color: var(--pcl-line); }
+
+/* ---------- the Director's desk (picks + notes) --------------------------- */
+.dir-desk {
+  margin: 18px 0 0;
+  border: 3px solid var(--pcl-input-border);
+  box-shadow: 4px 4px 0 var(--pcl-hard);
+  background: var(--pcl-surface);
+  padding: 14px 16px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dir-desk[hidden] { display: none; }
+.dir-desk-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dir-pickbtn {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--pcl-text);
+  background: var(--pcl-surface-2);
+  border: 2px solid var(--pcl-gold);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.dir-pickbtn:hover { border-color: var(--pcl-primary); color: var(--pcl-primary); }
+.dir-pickbtn:active { transform: translate(2px, 2px); box-shadow: none; }
+.dir-pickbtn.is-on {
+  color: #14235f;
+  background: var(--pcl-gold);
+  border-color: var(--pcl-gold);
+}
+.dir-pickbtn[disabled] { opacity: 0.6; cursor: wait; }
+.dir-pickcount {
+  font-family: var(--pcl-font-title);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--pcl-muted);
+}
+.dir-desk-label {
+  font-family: var(--pcl-font-title);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--pcl-primary);
+}
+.dir-note {
+  font-family: var(--pcl-font-body);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--pcl-text);
+  background: var(--pcl-input-bg);
+  border: 2px solid var(--pcl-line);
+  box-shadow: 3px 3px 0 var(--pcl-inset);
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 84px;
+}
+.dir-note:focus { outline: none; border-color: var(--pcl-primary); }
+.dir-desk-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dir-savenote {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #fff;
+  background: var(--pcl-primary);
+  border: 2px solid var(--pcl-primary-deep);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 9px 16px;
+  cursor: pointer;
+}
+.dir-savenote:active { transform: translate(2px, 2px); box-shadow: none; }
+.dir-savenote[disabled] { opacity: 0.6; cursor: wait; }
+.dir-note-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1d9e57;
+}
+.dir-note-status.is-err { color: var(--pcl-error); }
+
+html[data-pcl-theme="dark"] .dir-pickbtn { background: #1c1f2e; }
+html[data-pcl-theme="dark"] .dir-note { background: #14162a; }

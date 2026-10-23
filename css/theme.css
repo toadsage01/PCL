@@ -1605,7 +1605,7 @@ button.pcl-board-link {
   grid-template-columns: 84px 1fr 1fr;
   grid-template-areas:
     "photo desig name"
-    "photo manager manager"
+    "photo manager email"
     "cap   cap     cap";
   gap: 10px 16px;
   align-items: start;
@@ -1614,6 +1614,7 @@ button.pcl-board-link {
 .pcl-playergrid .pcl-field[data-field="fullName"] { grid-area: name; }
 .pcl-playergrid .pcl-field[data-field="playerDesig"] { grid-area: desig; }
 .pcl-playergrid .pcl-field[data-field="reportingManager"] { grid-area: manager; }
+.pcl-playergrid .pcl-field[data-field="playerEmail"] { grid-area: email; }
 .pcl-desig-hint { font-size: 12.5px; margin: 5px 2px 0; }
 .pcl-photo-tile {
   width: 84px;
@@ -1861,16 +1862,68 @@ html[data-pcl-theme="dark"] .pcl-collab-half { color: #02020d; border-color: #02
   margin: 0;
 }
 .pcl-collabrow .pcl-err { margin: 0; }
-/* the ✓ SET tick once a partner name sits in the field (Enter = confirm) */
+/* the ✓ SET tick once at least one partner email sits in the list */
 .pcl-collab-set {
   color: #1d9e57;
   margin-left: 8px;
   letter-spacing: 0.6px;
 }
+/* --- collab email chips (one chip per partner) -------------------------- */
+.pcl-collab-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pcl-collab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pcl-text);
+  background: var(--pcl-surface-3, var(--pcl-surface));
+  border: 2px solid var(--pcl-line);
+  padding: 3px 4px 3px 9px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.pcl-collab-chip.is-bad { border-color: var(--pcl-error); color: var(--pcl-error); }
+.pcl-collab-del {
+  flex: 0 0 auto;
+  width: 18px; height: 18px;
+  line-height: 1;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pcl-text);
+  background: var(--pcl-surface);
+  border: 2px solid var(--pcl-line);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.pcl-collab-del:hover { border-color: var(--pcl-error); color: var(--pcl-error); }
+.pcl-collab-addrow { display: flex; gap: 6px; }
+.pcl-collab-addrow .pcl-collab-input { flex: 1 1 auto; min-width: 0; max-width: none; width: auto; }
+.pcl-collab-add {
+  flex: 0 0 auto;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #fff;
+  background: var(--pcl-primary);
+  border: 2px solid var(--pcl-primary-deep);
+  box-shadow: 2px 2px 0 var(--pcl-hard);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.pcl-collab-add:active { transform: translate(2px, 2px); box-shadow: none; }
 /* ---- link-ownership banners (checklink verdicts) --------------------------
    A full-width lane inside the post row: red when the link is already
-   uploaded by another player, green when it was collabed with you and
-   waits for the one-tap confirm. */
+   uploaded by another player, green when the session email was invited as
+   a collaborator, calm green when it is the asker's own post. */
 .pcl-owned {
   grid-column: 1 / -1;              /* spans the 5-col edit grid */
   flex-basis: 100%;                 /* wraps the flex view row */
@@ -1891,6 +1944,10 @@ html[data-pcl-theme="dark"] .pcl-collab-half { color: #02020d; border-color: #02
   border-color: #1d9e57;
   background: rgba(29, 158, 87, 0.09);
 }
+.pcl-owned.is-mine {
+  border-color: #1d9e57;
+  background: rgba(29, 158, 87, 0.06);
+}
 .pcl-owned-txt {
   flex: 1 1 220px;
   font-size: 12.5px;
@@ -1899,6 +1956,14 @@ html[data-pcl-theme="dark"] .pcl-collab-half { color: #02020d; border-color: #02
   color: var(--pcl-text);
 }
 .pcl-owned.is-taken .pcl-owned-txt { color: var(--pcl-error); }
+/* the tiny hint line — carries the "what now" without shouting */
+.pcl-owned-sub {
+  flex: 1 1 180px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--pcl-muted);
+}
+.pcl-owned.is-taken .pcl-owned-sub { color: var(--pcl-text); opacity: 0.78; }
 .pcl-owned-btn {
   font-family: var(--pcl-font-title);
   font-weight: 700;
@@ -2224,13 +2289,15 @@ html[data-pcl-theme="light"] .pcl-wk-pts { color: #a06e00; }
       "desig"
       "name"
       "manager"
+      "email"
       "cap";
   }
   .pcl-photofield { justify-self: center; }
   .pcl-photo-caption { justify-content: center; text-align: center; }
   .pcl-playergrid .pcl-field[data-field="fullName"],
   .pcl-playergrid .pcl-field[data-field="playerDesig"],
-  .pcl-playergrid .pcl-field[data-field="reportingManager"] { justify-self: stretch; }
+  .pcl-playergrid .pcl-field[data-field="reportingManager"],
+  .pcl-playergrid .pcl-field[data-field="playerEmail"] { justify-self: stretch; }
   .pcl-collabpop { left: auto; right: 0; }
 
   .pcl-modal-card { padding: 16px 14px; }
@@ -2524,3 +2591,64 @@ html[data-pcl-theme="dark"] .pcl-highnote { color: #ffd9a0; }
 }
 .pcl-gout:active { transform: translate(2px, 2px); box-shadow: none; }
 .pcl-gerr { color: var(--pcl-error); font-size: 12.5px; min-height: 1em; margin: 0; }
+
+/* --- work-email fallback (browsers that block the Google pop-up) ------- */
+.pcl-gor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  color: var(--pcl-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.pcl-gor::before, .pcl-gor::after {
+  content: "";
+  flex: 1;
+  border-top: 2px dashed var(--pcl-line);
+}
+.pcl-gfb {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.pcl-gfb[hidden] { display: none; }
+.pcl-gfb-row { display: flex; gap: 8px; width: 100%; }
+.pcl-gfb-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--pcl-font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pcl-text);
+  background: var(--pcl-input-bg);
+  border: 2px solid var(--pcl-line);
+  box-shadow: 3px 3px 0 var(--pcl-inset);
+  padding: 9px 11px;
+}
+.pcl-gfb-input:focus { outline: none; border-color: var(--pcl-primary); }
+.pcl-gfb-input::placeholder { color: var(--pcl-muted); font-weight: 500; }
+.pcl-gfb-go {
+  flex: 0 0 auto;
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #fff;
+  background: var(--pcl-primary);
+  border: 2px solid var(--pcl-primary-deep);
+  box-shadow: 2px 2px 0 var(--pcl-primary-deep);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.pcl-gfb-go:active { transform: translate(2px, 2px); box-shadow: none; }
+.pcl-gfb-go[disabled] { opacity: 0.65; cursor: wait; }
+.pcl-gfb-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--pcl-muted);
+}
