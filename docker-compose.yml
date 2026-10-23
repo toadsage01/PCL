@@ -1,0 +1,15 @@
+# PCL internal portal — single-container deploy.
+#   cp .env.example .env   (paste the GAS /exec URL)   then:
+#   docker compose up -d --build
+services:
+  pcl-web:
+    build: .
+    image: pcl-web:latest
+    container_name: pcl-web
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      EMPLOYEE_DOMAIN: praper.in
+      GOOGLE_SCRIPT_WEBAPP_URL: ${GOOGLE_SCRIPT_WEBAPP_URL:?set it in .env}
+    restart: unless-stopped

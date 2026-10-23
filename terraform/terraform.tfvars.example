@@ -1,0 +1,6 @@
+# cp terraform.tfvars.example terraform.tfvars, then fill in the real value.
+# The /exec URL is the same one stored in the Vercel env var
+# GOOGLE_SCRIPT_WEBAPP_URL. Never commit the real terraform.tfvars.
+gas_web_app_url = "https://script.google.com/macros/s/XXXX/exec"
+host_port       = 3000
+container_name  = "pcl-web"

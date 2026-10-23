@@ -1,5 +1,13 @@
 # Praper Content League — Season 2 · The Complete System Guide
 
+> **This copy = company-internal hosting.** The public repo
+> (`Praper-Contest-League`) stays on Vercel; this PCL repo carries the
+> Docker / docker-compose / Terraform setup for the internal portal.
+> See **[INTERNAL-HOSTING.md](INTERNAL-HOSTING.md)** to run it.
+> Code flows one-way from the public repo (`git fetch upstream`); the
+> public repo never receives these infra files.
+
+
 **This document explains everything that was built, how it fits together,
 what it enforces, and how to run it for the next 10 weeks without losing
 or corrupting a single data point.**

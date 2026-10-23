@@ -12,3 +12,8 @@ node_modules/
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# terraform state + real values
+terraform/.terraform/
+terraform/terraform.tfstate*
+terraform/terraform.tfvars

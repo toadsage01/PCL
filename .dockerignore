@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+.env*
+*.md
+docs/
+terraform/
+scratchpad.txt
+manager.txt
+serve.sh
+api/
+gas/
+node_modules/
