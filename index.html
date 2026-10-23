@@ -71,6 +71,9 @@
              Client ID is configured in js/gas-endpoint.js. Employees sign in
              with their @praper.in account; the backend verifies the token
              AND the PCL-Allowlist tab before the form accepts the identity.
+             Some browsers (shields / COOP isolation) block the Google
+             pop-up hand-over, so the card ALWAYS carries a work-email
+             fallback — same server-side gates, no token involved.
              No client ID configured → this card stays invisible and the
              form works exactly as before. -->
       <section class="pcl-panel pcl-gpanel" id="gpanel" hidden>
@@ -83,6 +86,18 @@
             <button type="button" class="pcl-gout" id="gOut">SIGN OUT</button>
           </div>
           <p class="pcl-gerr" id="gErr" role="alert"></p>
+          <div class="pcl-gor" aria-hidden="true">or use your work email</div>
+          <div class="pcl-gfb" id="gFb">
+            <div class="pcl-gfb-row">
+              <input type="email" class="pcl-gfb-input" id="fEmail"
+                     placeholder="you@praper.in" autocomplete="email"
+                     spellcheck="false" aria-label="Your @praper.in work email">
+              <button type="button" class="pcl-gfb-go" id="fGo">CONTINUE</button>
+            </div>
+            <p class="pcl-gfb-note" id="gFbNote">Google pop-up not working? Just
+              type your work email — the league server checks it against the
+              active employee list before the form opens.</p>
+          </div>
         </div>
         <p class="pcl-hint">Praper employees only — sign in with your
           <b>@praper.in</b> work account. Your entry stays tied to you.</p>

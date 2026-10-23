@@ -628,3 +628,50 @@ with analytics + participant details + per-video views, minimum manual OCR
 🧑 STILL ON THE USER (unchanged): **D1 paste Code.gs + New version** (this
 round's directorFeed_ rides the same paste) · D2 domain fix · D4
 allowlist emails. D6 packaging stays on the cloned repo.
+
+## A10 · Round 30 — OAuth pop-up fix + work-email fallback (2026-10-23)
+
+**Report:** `Cross-Origin-Opener-Policy policy would block the
+window.postMessage call` on the sign-in button — the Google pop-up signs
+the employee in but the credential hand-over to the form is severed
+(Brave shields / COOP isolation in the pop-up chain), so the button spins
+forever. Live-verified flow: GIS popup → GeneralOAuthFlow → hand-over
+blocked.
+
+- **ROOT FIX**: new `vercel.json` serves every route with
+  `Cross-Origin-Opener-Policy: same-origin-allow-popups` — the
+  Google-documented remedy; ships automatically with the next Vercel
+  deploy, nothing to paste.
+- **FALLBACK (interim until OAuth is trusted everywhere)**: the sign-in
+  card always carries a **work-email row** under the Google button — type
+  `you@praper.in` → CONTINUE or Enter (Enter checks, never submits; the
+  round-28 form-level Enter guard is explicitly bypassed for this field
+  only). Backend: `employeeLogin_` now routes `email=` to a new
+  `emailLogin_` leg with the SAME two gates as the token path — company
+  domain + `PCL-Allowlist` roster — and `rosterEmailToName_` maps
+  `first.last@praper.in` onto the exact roster identity for the Full
+  Name prefill. No token, no client-side trust; a non-employee address
+  gets the verbatim allowlist refusal.
+- **GRACEFUL GIS FAILURE**: if the GIS script cannot load (offline /
+  shields), the Google button goes away but the card STAYS with an
+  explanatory note — the fallback never depended on Google being
+  reachable.
+- SESSION UNCHANGED: same `pcl_google` chip, same SIGN OUT cycle, same
+  prefill rule (a human-typed name always wins).
+- TESTS: harness 23j–23n2 (6 new asserts — blank/malformed/gmail/
+  ghost-email refusals, allowlisted acceptance, first.last roster map);
+  NEW round30_e2e.sh (8 checks: card renders, Enter-never-submits,
+  roster + format guards, email sign-in + prefill, sign-out cycle) with
+  the fixture now able to serve a client id (PCL_FIXTURE_CLIENT_ID=1) +
+  canned employeeLogin roster. All unit suites + round27/round28
+  regressions green; vercel.json schema-validated.
+
+🧑 STILL ON THE USER: **D1 paste Code.gs + New version** (emailLogin_
+rides the same paste — until then the live backend refuses the email
+fallback) · add BOTH origins in Google Cloud → Authorized JavaScript
+origins (`https://praper-contest-league.vercel.app` +
+`https://pcl-form.prapermedia.in`) · D4 allowlist emails. Trust model
+note: the email fallback is roster-gated (same people the Google path
+accepts) but does not prove possession of the mailbox — flip it off
+anytime by hiding the card section once the pop-up flow is confirmed
+stable for everyone.

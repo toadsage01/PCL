@@ -98,6 +98,28 @@ success the form prefills the exact roster identity (never overwriting
 what a human typed) and shows a signed-in chip with SIGN OUT. A blank or
 missing allowlist denies everyone — employees only, by design.
 
+**Pop-up fix + work-email fallback.** Google's pop-up hands the signed
+token back to the form with `window.postMessage`; some browsers (Brave
+shields, aggressive Cross-Origin-Opener-Policy isolation) sever that
+hand-over and the button spins forever. Two layers of defence:
+
+* `vercel.json` serves every page with
+  `Cross-Origin-Opener-Policy: same-origin-allow-popups` — the
+  Google-documented fix; it ships with the next Vercel deploy, no manual
+  step.
+* The sign-in card ALWAYS carries a work-email fallback under the Google
+  button: type your `@praper.in` email, CONTINUE (or press Enter — it
+  never submits the form). The backend applies the SAME two gates as the
+  token path — company domain + allowlist (`employeeLogin_` email leg,
+  `emailLogin_` in Code.gs) — and maps `first.last@praper.in` onto the
+  roster identity when it can. If the GIS script itself cannot load
+  (offline, shields), the Google button goes away and the fallback
+  carries the card alone.
+
+Add BOTH origins (`https://praper-contest-league.vercel.app` and
+`https://pcl-form.prapermedia.in`) under *Authorized JavaScript origins*
+— sign-in fails with an origin mismatch on any other origin.
+
 ---
 
 ## 3 · The rulebook → what the code enforces
@@ -441,7 +463,7 @@ history covers the rest. Nothing in this system deletes.
 
 | Suite | Proves | Run |
 |---|---|---|
-| `scripts/test_do_post_collab.js` | ~135 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats strip (verified **and manager**), review-first reorder with data survival, CEO screening feed (current-week entries **+ season ALL list**, per-person photo/view arrays, newest-snapshot OCR wins, comma-cell parsing), employee sign-in (tokeninfo stub incl. **aud mismatch**), checklink pre-check, **hardening groups 25–29: cellSafe_ formula defusal, safeUrl_ scheme rejection, javascript:-link ingest refusal, non-image screenshot REJECTED, daily backup naming/dedupe/prune** | `node scripts/test_do_post_collab.js` |
+| `scripts/test_do_post_collab.js` | ~141 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats strip (verified **and manager**), review-first reorder with data survival, CEO screening feed (current-week entries **+ season ALL list**, per-person photo/view arrays, newest-snapshot OCR wins, comma-cell parsing), employee sign-in (tokeninfo stub incl. **aud mismatch**, + work-email fallback legs 23j–23n2), checklink pre-check, **hardening groups 25–29: cellSafe_ formula defusal, safeUrl_ scheme rejection, javascript:-link ingest refusal, non-image screenshot REJECTED, daily backup naming/dedupe/prune** | `node scripts/test_do_post_collab.js` |
 | `scripts/test_threat_matrix.js` | 107 adversarial assertions: JSONP callback charset (10 injection shapes), formula-injection vectors, hostile URL schemes (javascript/data/vbscript/file/blob, IDN homoglyphs, userinfo tricks, spoofed subdomains), esc() coverage on all four renderers, csvCell CSV-injection guard, safeHref in admin + director, hostile number shapes (Indian grouping, dot-thousands, >1e10) | `node scripts/test_threat_matrix.js` |
 | `scripts/test_ocr_parse.js` | 63 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection, **boost/sponsored/ad-badged text flags** (bare "boost" = the universal button → never flags; only the Boosted/Sponsored/Promoted STATE does), and **platform fingerprints** (wrong-platform chrome refused, chrome-less region crops never blocked) | `node scripts/test_ocr_parse.js` |
 | `scripts/test_leaderboard_rollup.js` | 16: dedup-by-media, verified-over-claimed, weekly buckets | `node scripts/test_leaderboard_rollup.js` |
@@ -452,6 +474,7 @@ history covers the rest. Nothing in this system deletes.
 | `scripts/round28_e2e.sh` + `fixture_form.js` | browser E2E of the hardening round: Enter-in-name/challenge never submits (links Enter still commits chips), leaderboard og-font mapping, admin mock FULL collab points + review-modal meta, dark theme + 390px mobile no-h-scroll | `bash scripts/round28_e2e.sh` |
 | `scripts/round_e2e.sh` + `fixture_director.js` | browser E2E of the Screening Room round: gate deny/open, YT embed + pfp disc + hint-text removal, POST/SCREENSHOT switch, IG collab merge, LinkedIn shot stage, WEEKLY → ALL CONTENTS tabs (regular post tagged with views, no week), weekly restore, keyboard nav | `bash scripts/round_e2e.sh` |
 | `scripts/round29_admin_e2e.sh` + `fixture_form.js` | browser E2E of the admin screening view: embed stage + switch inside the review modal, participant card, per-video list with the open row highlighted, live score preview (verified × multiplier, rounded up), arrow-key stepping | `bash scripts/round29_admin_e2e.sh` |
+| `scripts/round30_e2e.sh` + `fixture_form.js` (PCL_FIXTURE_CLIENT_ID=1) | browser E2E of the sign-in card: fallback visible alongside the Google button, Enter checks the email and never submits, format + roster guards with the backend's verbatim refusal, allowlisted `@praper.in` email signs in + prefills the roster identity, SIGN OUT restores the fallback | `bash scripts/round30_e2e.sh` |
 | `scripts/probe_live.sh` | READ-ONLY live probes (GAS stats/subcheck/checklink JSONP, wrong-password refusal, hostile-callback echo check, the four portals, YT key, GSI client) — zero sheet writes by design | `bash scripts/probe_live.sh` |
 | `scripts/ocr_e2e.sh`, `save_e2e.sh`, prior rounds | agent-browser E2E across all 3 portals (form flows, admin gate/tabs/awards, leaderboard) | see scripts/ |
 

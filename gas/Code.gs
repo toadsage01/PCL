@@ -1239,8 +1239,15 @@ function rosterNameFor_(profileName) {
  *  Google's tokeninfo endpoint, then gates on BOTH the company domain AND
  *  the active-employee allowlist. GET:
  *  ?action=employeeLogin&token=<ID_TOKEN> →
- *    { ok, email, name, matchedName }  or  { ok:false, error } */
+ *    { ok, email, name, matchedName }  or  { ok:false, error }
+ *  ?action=employeeLogin&email=<WORK_EMAIL> →
+ *    INTERIM fallback while some browsers block the Google pop-up hand-over
+ *    (COOP / shields): the employee types only their work email and the
+ *    backend applies the SAME two gates — company domain + allowlist.
+ *    No token, no client-side trust; a non-employee address never gets in. */
 function employeeLogin_(p) {
+  var email = str_(p.email).trim().toLowerCase();
+  if (email) return emailLogin_(p, email);
   var token = str_(p.token);
   if (!token) return reply_(p, { ok: false, error: 'Missing Google token.' });
   var info;
@@ -1273,6 +1280,36 @@ function employeeLogin_(p) {
   }
   return reply_(p, { ok: true, email: email, name: str_(info.name),
                      matchedName: rosterNameFor_(info.name) });
+}
+
+/** The email fallback leg of employeeLogin_ (see the doc above). Gated on
+ *  the exact same two checks the token path applies — the @praper.in
+ *  domain and the PCL-Allowlist roster — so the fallback can never wave
+ *  anyone through whom the Google path would refuse. */
+function emailLogin_(p, email) {
+  var dom = '@' + String(EMPLOYEE_DOMAIN).toLowerCase();
+  var re = new RegExp('^[a-z0-9._%+\'-]+@' +
+    String(EMPLOYEE_DOMAIN).toLowerCase().replace(/[.\-]/g, '\\$&') + '$');
+  if (!re.test(email)) {
+    return reply_(p, { ok: false,
+      error: 'Enter your full @' + EMPLOYEE_DOMAIN + ' work email.' });
+  }
+  if (!allowlistHas_(email)) {
+    return reply_(p, { ok: false,
+      error: 'Your email is not on the active employee list yet — ask an admin to add it to the PCL-Allowlist tab of the league sheet.' });
+  }
+  return reply_(p, { ok: true, email: email, name: '',
+                     matchedName: rosterEmailToName_(email) });
+}
+
+/** Best-effort ledger identity from a work email — "first.last@praper.in"
+ *  → "First Last" → matched against the roster like the Google path does.
+ *  Returns '' when the guess does not match; the employee then types their
+ *  name as before. */
+function rosterEmailToName_(email) {
+  var local = String(email || '').split('@')[0] || '';
+  var guess = local.split(/[._\-]+/).filter(String).join(' ');
+  return rosterNameFor_(guess);
 }
 
 /** CEO SCREENING ROOM feed — the private passcode-gated viewer. Without the

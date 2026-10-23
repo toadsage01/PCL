@@ -2310,6 +2310,8 @@
      which verifies it against Google's tokeninfo endpoint, checks the
      @praper.in domain AND the PCL-Allowlist tab of the league sheet. On
      success the form prefills the exact roster identity (matchedName).
+     Browsers that break the Google pop-up hand-over have a work-email
+     fallback in the same card — identical server-side gates, no token.
      The card stays INVISIBLE until cfg.googleClientId is set in
      js/gas-endpoint.js — until the league turns sign-in on, the form works
      exactly as before (Full Name + Reporting Manager identity).
@@ -2335,6 +2337,7 @@
       stateBox.hidden = true;
       btnWrap.hidden = false;
       idLine.textContent = "";
+      var fb = $("gFb"); if (fb) fb.hidden = false;
     }
     function sessionSave(s) {
       try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
@@ -2356,6 +2359,8 @@
     function accept(entry) {
       renderState(entry.name, entry.email);
       showErr("");
+      var fb = $("gFb"); if (fb) fb.hidden = true;   // signed in — put the
+                                                     // fallback row away
       sessionSave({ email: entry.email, name: entry.name || "",
                     at: Date.now() });
       /* prefill the ledger identity ONLY when the name field is empty —
@@ -2398,13 +2403,24 @@
         });
     }
 
-    /* the GIS one-tap/button script — loaded only now that sign-in is on */
+    /* the GIS one-tap/button script — loaded only now that sign-in is on.
+       If it never loads (shields, offline, corporate proxy) the Google
+       button goes away but the card STAYS — the work-email fallback below
+       it does not depend on Google being reachable at all. */
+    function gisDown(msg) {
+      btnWrap.hidden = true;
+      var note = $("gFbNote");
+      if (note) note.textContent = msg;
+    }
     var lib = document.createElement("script");
     lib.src = "https://accounts.google.com/gsi/client";
     lib.async = true;
     lib.defer = true;
     lib.onload = function () {
-      if (!window.google || !google.accounts || !google.accounts.id) return;
+      if (!window.google || !google.accounts || !google.accounts.id) {
+        gisDown("Google sign-in did not load — use your work email below.");
+        return;
+      }
       google.accounts.id.initialize({
         client_id: cfg.googleClientId,
         callback: onCred,
@@ -2416,10 +2432,72 @@
       });
     };
     lib.onerror = function () {
-      /* script blocked / offline — silently put the card away */
-      panel.hidden = true;
+      gisDown("Google sign-in is unavailable right now (blocked or " +
+              "offline) — use your work email below.");
     };
     document.head.appendChild(lib);
+
+    /* ---- WORK-EMAIL FALLBACK -------------------------------------------
+       Some browsers (Brave shields, aggressive COOP isolation) block the
+       Google pop-up's postMessage hand-over, so the button spins forever.
+       Until that settles, employees can continue with their work email
+       alone: the SAME two server-side gates apply — the @praper.in domain
+       AND the PCL-Allowlist roster (employeeLogin_ → email path). No
+       token, no client-side trust; a non-employee address never gets in. */
+    var fbInput = $("fEmail");
+    var fbGo = $("fGo");
+    var fbDomain = String(cfg.employeeDomain || "praper.in").toLowerCase();
+    var fbDom = "@" + fbDomain;
+    var fbRe = new RegExp("^[a-z0-9._%+'-]+@" +
+      fbDomain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$");
+
+    function fbBusy(on) {
+      if (!fbGo) return;
+      fbGo.disabled = on;
+      fbGo.textContent = on ? "CHECKING" : "CONTINUE";
+    }
+
+    function fbSubmit() {
+      if (!fbInput) return;
+      var email = fbInput.value.trim().toLowerCase();
+      if (!email) {
+        showErr("Type your work email first.");
+        fbInput.focus();
+        return;
+      }
+      if (!fbRe.test(email)) {
+        showErr("That is not a " + fbDom + " work address — check the spelling.");
+        return;
+      }
+      showErr("Checking the employee list…");
+      fbBusy(true);
+      jsonpGet({ action: "employeeLogin", email: email })
+        .then(function (res) {
+          fbBusy(false);
+          if (res && res.ok) {
+            fbInput.value = "";
+            accept({ email: res.email || email, name: res.name || "",
+                     matchedName: res.matchedName || "" });
+          } else {
+            showErr((res && res.error) ||
+              "The employee list refused this email — ask an admin to check " +
+              "the PCL-Allowlist tab of the league sheet.");
+          }
+        })
+        .catch(function () {
+          fbBusy(false);
+          showErr("Could not reach the league server — try again.");
+        });
+    }
+    if (fbGo) fbGo.addEventListener("click", fbSubmit);
+    if (fbInput) fbInput.addEventListener("keydown", function (e) {
+      /* Enter checks the email — it NEVER submits the form */
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        fbSubmit();
+      }
+    });
 
     $("gOut").addEventListener("click", function () {
       window.google && google.accounts.id.disableAutoSelect();
