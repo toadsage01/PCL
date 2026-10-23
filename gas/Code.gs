@@ -184,8 +184,14 @@ var HEADERS = [
   'Verified Count', 'Verified Points', 'Projected Points',
   'Screenshot File', 'Screenshot Link',
   'Challenge URL', 'Notes',
-  'Submission ID', 'Snapshot #', 'Raw JSON'
+  'Submission ID', 'Snapshot #', 'Raw JSON',
+  'Player Email'
 ];
+/* 'Player Email' (col 30, appended last so no existing reader shifts) — the
+ * participant's work email from their sign-in session, carried on every row
+ * they own. Powers the EMAIL collab flow: partners are invited by email,
+ * the accept banner shows ONLY to the invited mail, and the ingest pairs
+ * rows by email (legacy name matching still honoured for old rows). */
 
 /** Player identity (per PLAYER, not per post — the same value repeats on
  *  every row the player owns):
@@ -300,6 +306,13 @@ function doPostLocked_(e) {
         '(it must start with https://).' });
     }
     var notes = str_(d.additionalNotes);
+    /* the participant's work email from their sign-in session (may be '' —
+     * sign-in is optional). Powers email-keyed collab matching + the
+     * Player Email column; never trusted for anything but collab pairing. */
+    var myEmail = String(d.email || '').trim().toLowerCase();
+    if (myEmail && !/^[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(myEmail)) {
+      myEmail = '';   // junk session value — collab falls back to name matching
+    }
 
     var sheet = getSheet_();
 
@@ -363,31 +376,46 @@ function doPostLocked_(e) {
       var partner = '';
       var status = '';
       if (priorOthers.length) {
-        // confirm the collab: the partner tagged THIS player, or THIS player
-        // tags the partner by their exact registered name
+        // confirm the collab — EMAIL first (the collab list now carries work
+        // emails), the registered-name match kept for legacy rows:
+        //   d1: the other row's collab list contains MY email
+        //   d2: my collab list contains the other row's Player Email
         var matched = null;
         priorOthers.forEach(function (r) {
-          if (!matched && normName_(r.collabWith) === who) matched = r;
+          if (matched) return;
+          if (myEmail && chipEmails_(r.collabWith).indexOf(myEmail) >= 0) {
+            matched = r;
+          }
         });
-        var pn = normName_(str_(p.collabWith));
+        var pn = normName_(str_(p.collabWith).replace(/[a-z0-9._%+'-]+@[a-z0-9.-]+/gi, ''));
         if (!matched && pn) {
           priorOthers.forEach(function (r) {
             if (!matched && normName_(r.name) === pn) matched = r;
           });
         }
+        if (!matched && myEmail) {
+          var myChips = chipEmails_(p.collabWith);
+          if (myChips.length) {
+            priorOthers.forEach(function (r) {
+              if (!matched && r.playerEmail && myChips.indexOf(r.playerEmail) >= 0) {
+                matched = r;
+              }
+            });
+          }
+        }
         if (!matched) {
-          // name the uploader(s) — the form can finally say WHO posted it
+          // short + plain — the form's banner already explains the collab path
           var owners = [];
           priorOthers.forEach(function (r) {
             if (r.name && owners.indexOf(r.name) < 0) owners.push(r.name);
           });
           return json_({ ok: false, error:
-            'This link was already submitted by ' +
-            (owners.length ? owners.join(', ') : 'another player') +
-            '. If it is a collab post, tag it as COLLAB and enter the ' +
-            'partner\u2019s full name exactly as they registered.' });
+            'Already uploaded by ' +
+            (owners.length ? firstName_(owners[0]) : 'another player') +
+            '. Your collab? Tag it COLLAB and add their email.' });
         }
-        partner = matched.name;               // the ledger's canonical name
+        // the ledger's canonical identity: email when known, name otherwise
+        partner = matched.playerEmail || matched.name;
         status = COLLAB_CONFIRMED;
       } else {
         partner = str_(p.collabWith).trim();
@@ -458,6 +486,7 @@ function doPostLocked_(e) {
       row['Collab Status'] = b.status;
       row['Player Designation'] = cellSafe_(designation);
       row['Player Verified'] = index.verifiedByName[who] ? 'VERIFIED' : '';
+      row['Player Email'] = cellSafe_(myEmail);
         // carry the player's existing verification onto new rows so a single
         // read pass always sees it (the Control Room can flip it any time)
 
@@ -467,12 +496,19 @@ function doPostLocked_(e) {
       // A confirmed pair also flips the PARTNER's prior rows to CONFIRMED
       // (their Collab With is filled in when blank) so both sides score.
       if (b.status === COLLAB_CONFIRMED) {
-        var partnerWho = normName_(b.partner);
+        var partnerIsEmail = String(b.partner).indexOf('@') >= 0;
+        var partnerWho = normName_(partnerIsEmail ? '' : b.partner);
         b.priorOthers.forEach(function (r) {
-          if (normName_(r.name) !== partnerWho) return;
+          var isPartner = partnerIsEmail
+            ? String(r.playerEmail || '').toLowerCase() ===
+              String(b.partner).toLowerCase()
+            : normName_(r.name) === partnerWho;
+          if (!isPartner) return;
           sheet.getRange(r.row, colStatus).setValue(COLLAB_CONFIRMED);
           if (!r.collabWith) {
-            sheet.getRange(r.row, colWith).setValue(cellSafe_(fullName));
+            // backfill the partner's side with the ACCEPTOR's identity —
+            // email when the session has one, ledger name otherwise
+            sheet.getRange(r.row, colWith).setValue(cellSafe_(myEmail || fullName));
           }
         });
       }
@@ -493,6 +529,7 @@ function doGet(e) {
     if (p.action === 'checklink') return checklinkEndpoint_(p);
     if (p.action === 'playerPhoto') return playerPhotoEndpoint_(p);
     if (p.action === 'directorFeed') return directorFeed_(p);
+    if (p.action === 'directorNote') return directorNote_(p);
     if (p.action === 'employeeLogin') return employeeLogin_(p);
     return statsEndpoint_(p);
   } catch (err) {
@@ -615,21 +652,37 @@ function checklinkEndpoint_(p) {
   var url = str_(p.url).trim();
   var fmt = str_(p.format);
   var who = normName_(str_(p.name));
+  var myEmail = str_(p.email).trim().toLowerCase();
+  if (myEmail && !/^[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(myEmail)) myEmail = '';
   var key = mediaId_(url, fmt) || urlKey_(url);
-  if (!key || !who) {
-    // nothing to compare yet (no name typed / unknown link shape) — the
-    // form treats this as "no objection" and the ingest re-checks anyway
+  if (!key || (!who && !myEmail)) {
+    // nothing to compare yet (no identity / unknown link shape) — the form
+    // treats this as "no objection" and the ingest re-checks anyway
     return reply_(p, { ok: true, checkable: false, taken: false });
   }
   var index = ledgerIndex_(getSheet_());
   var rows = index.byKey[key] || [];
   var mine = false;
   var uploader = '';
+  var uploaderEmail = '';
   var collabFor = '';
+  var collabForEmail = '';
   rows.forEach(function (r) {
-    if (normName_(r.name) === who) { mine = true; return; }
-    if (!uploader) uploader = r.name;                  // first poster wins
-    if (!collabFor && normName_(r.collabWith) === who) collabFor = r.name;
+    var own = (who && normName_(r.name) === who) ||
+              (myEmail && r.playerEmail && r.playerEmail === myEmail);
+    if (own) { mine = true; return; }
+    if (!uploader) {
+      uploader = r.name;                               // first poster wins
+      uploaderEmail = r.playerEmail || '';
+    }
+    // the invite leg: their collab list carries MY email (legacy rows may
+    // still carry my NAME — both count)
+    if (!collabFor && ((myEmail &&
+        chipEmails_(r.collabWith).indexOf(myEmail) >= 0) ||
+        (who && normName_(r.collabWith) === who))) {
+      collabFor = r.name;
+      collabForEmail = r.playerEmail || '';
+    }
   });
   // the asker's OWN rows always win — their resubmission is a view-count
   // UPDATE and the collab state is already on file, so no banner is needed
@@ -637,14 +690,15 @@ function checklinkEndpoint_(p) {
     return reply_(p, { ok: true, checkable: true, taken: false, mine: true });
   }
   // a collab tag aimed at THIS player beats a plain "taken" — the whole
-  // point of the feature: one tap to confirm and both sides score
+  // point of the feature: one tap to accept and both sides score
   if (collabFor) {
-    return reply_(p, { ok: true, checkable: true,
-                       taken: false, collabFor: collabFor });
+    return reply_(p, { ok: true, checkable: true, taken: false,
+                       collabFor: collabFor, collabForEmail: collabForEmail,
+                       uploader: uploader, uploaderEmail: uploaderEmail });
   }
   if (uploader) {
-    return reply_(p, { ok: true, checkable: true,
-                       taken: true, uploader: uploader });
+    return reply_(p, { ok: true, checkable: true, taken: true,
+                       uploader: uploader, uploaderEmail: uploaderEmail });
   }
   return reply_(p, { ok: true, checkable: true, taken: false });
 }
@@ -890,6 +944,20 @@ function collect_() {
   // credited explicitly because latestByMedia keeps only the newest
   // snapshot per media.
   var latestByMedia = {}, firstByMedia = {};
+  // ---- YouTube AUTO lift — the twice-daily sync leg (syncYouTube_) writes
+  // the platform's own viewCount into PCL-Snapshots; the board lifts every
+  // yt_ post to that number when it outruns what the ledger holds. Points
+  // follow the lifted count × the row's multiplier. Instagram and LinkedIn
+  // stay MANUAL (OCR) by design — snapshots never touch them.
+  var ytSnaps = {};
+  try {
+    var snapAll = latestSnapshots_();
+    Object.keys(snapAll).forEach(function (mid) {
+      if (mid.indexOf('yt_') === 0 && isFinite(Number(snapAll[mid].views))) {
+        ytSnaps[mid] = Number(snapAll[mid].views);
+      }
+    });
+  } catch (ignore) { /* snapshots absent — the board runs on ledger numbers */ }
   rows.forEach(function (r) {
     var k = r.mediaId || 'row:' + r.row;
     if (!latestByMedia[k] ||
@@ -932,13 +1000,26 @@ function collect_() {
       var views = numOrBlank_(row.verified);
       if (views === '') views = toCount_(row.claimed);
       if (views === '') views = 0;
+      // the YT lift — platform truth (PCL-Snapshots) when it is higher
+      var ytLift = (row.mediaId && ytSnaps[row.mediaId] > views)
+        ? ytSnaps[row.mediaId] : 0;
+      if (ytLift) views = ytLift;
       var pts = numOrBlank_(row.verifiedPoints);
-      var ptsFromVerified = pts !== '';
-      if (pts === '') pts = numOrBlank_(row.projected);
-      if (pts === '' && views > 0 && row.mult !== '' && !isNaN(Number(row.mult))) {
-        pts = Math.ceil(views * Number(row.mult));
+      if (ytLift) {
+        // the platform number outruns the stored one — points recompute
+        // from the lifted count × multiplier (the console can always
+        // re-verify; its explicit verified points resume when it does)
+        pts = (row.mult !== '' && !isNaN(Number(row.mult)))
+          ? Math.ceil(views * Number(row.mult))
+          : numOrBlank_(row.projected);
+        if (pts === '') pts = 0;
+      } else {
+        if (pts === '') pts = numOrBlank_(row.projected);
+        if (pts === '' && views > 0 && row.mult !== '' && !isNaN(Number(row.mult))) {
+          pts = Math.ceil(views * Number(row.mult));
+        }
+        if (pts === '') pts = 0;
       }
-      if (pts === '') pts = 0;
       var d = dedup[row.name] ||
         (dedup[row.name] = { imp: 0, pts: 0, proj: 0, ver: 0 });
       d.imp += views;
@@ -1078,6 +1159,24 @@ function normName_(s) {
   return str_(s).toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/** The work emails inside a Collab-With cell — the collab list now carries
+ *  comma-separated emails ("a@praper.in, b@praper.in"); anything without an
+ *  @ (a legacy partner NAME) is ignored here, the name-matching leg still
+ *  honours it. */
+function chipEmails_(cell) {
+  var out = [];
+  String(cell || '').split(/[,;\s]+/).forEach(function (tok) {
+    tok = tok.trim().toLowerCase();
+    if (tok.indexOf('@') > 0 && out.indexOf(tok) < 0) out.push(tok);
+  });
+  return out;
+}
+
+/** "Rohit Kharal" → "Rohit" — banners stay short. */
+function firstName_(name) {
+  return String(name || '').trim().split(/\s+/)[0] || '';
+}
+
 /** Fallback ownership key when no Media ID could be extracted: the URL
  *  stripped of protocol, www, query string and trailing slashes. */
 function urlKey_(url) {
@@ -1089,7 +1188,8 @@ function urlKey_(url) {
 
 /** One read pass over the ledger for the submission checks:
  *  subIds — every Submission ID seen (retried-submission guard);
- *  byKey  — Media ID / URL → [{row, name, snapshot, collabWith, status}]. */
+ *  byKey  — Media ID / URL → [{row, name, snapshot, collabWith, status,
+ *                             playerEmail}]. */
 function ledgerIndex_(sheet) {
   var out = { byKey: {}, subIds: {}, desigByName: {}, verifiedByName: {} };
   var lastRow = sheet.getLastRow();
@@ -1117,7 +1217,9 @@ function ledgerIndex_(sheet) {
       name: str_(r[c['Full Name']]),
       snapshot: Number(r[c['Snapshot #']]) || 1,
       collabWith: c['Collab With'] !== undefined ? str_(r[c['Collab With']]) : '',
-      status: c['Collab Status'] !== undefined ? str_(r[c['Collab Status']]) : ''
+      status: c['Collab Status'] !== undefined ? str_(r[c['Collab Status']]) : '',
+      playerEmail: c['Player Email'] !== undefined
+        ? str_(r[c['Player Email']]).trim().toLowerCase() : ''
     });
   });
   return out;
@@ -1320,7 +1422,10 @@ function rosterEmailToName_(email) {
  *    regular — the WHOLE season: every post, challenge or not, any week
  *  Each entry carries parallel per-person arrays (names/designations/photos/
  *  views) so the theatre chips can show the player photo and their OCR-view
- *  count without a second round-trip. Both lists play in submission order. */
+ *  count without a second round-trip. Both lists play in submission order.
+ *  Also carries the Director's own marks from the Director-Log tab:
+ *    picks[] — media IDs starred by the Director (his final wishes)
+ *    noteWeeks / noteSeason — his latest written note per scope. */
 function directorFeed_(p) {
   if (String(p.code || '').trim() !== directorCode_()) {
     return reply_(p, { ok: false, error: 'Access denied — wrong screening passcode.' });
@@ -1328,7 +1433,14 @@ function directorFeed_(p) {
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
   var out = { ok: true, week: currentWeek_(), entries: [], regular: [],
+              picks: [], noteWeeks: {}, noteSeason: '',
               generatedAt: new Date().toISOString() };
+  try {
+    var log = readDirectorLog_();
+    out.picks = log.picks;
+    out.noteWeeks = log.noteWeeks;
+    out.noteSeason = log.noteSeason;
+  } catch (ignore) { /* log absent — the room runs without marks */ }
   if (lastRow < 2) return reply_(p, out);
   var vals = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
   var c = {};
@@ -1356,6 +1468,7 @@ function directorFeed_(p) {
     var entry = allByMedia[key];
     if (!entry) {
       entry = allByMedia[key] = {
+        mediaId: key,
         people: {},
         order: [],
         platform: str_(vals[i][c['Platform']]),
@@ -1389,6 +1502,7 @@ function directorFeed_(p) {
   }
   function toOut_(entry) {
     return {
+      mediaId: entry.mediaId,
       names: entry.order.map(function (k) { return entry.people[k].name; }),
       designations: entry.order.map(function (k) { return entry.people[k].designation; }),
       photos: entry.order.map(function (k) { return entry.people[k].photo; }),
@@ -1414,6 +1528,108 @@ function directorFeed_(p) {
   out.entries.sort(chrono_);       // submission order — the default tab
   out.regular.sort(chrono_);       // the ALL CONTENTS tab
   return reply_(p, out);
+}
+
+/** ---------- THE DIRECTOR'S LOG (his notes + final wishes) ----------
+ *  A private append-only tab, written ONLY through the passcode-gated
+ *  directorNote action. The Screening Room reads it back via directorFeed:
+ *    Scope  'week:N' | 'season'      — which panel the note belongs to
+ *    Type   NOTE | PICK | UNPICK     — what the Director did
+ *    Target media ID (picks) / ''    — which post a pick toggles
+ *    Text   the note (NOTE only)     — scores, verdicts, anything
+ *  Latest note per scope wins; PICK/UNPICK toggle per media (latest wins).
+ *  cellSafe_ guards every write; the passcode gates every write. */
+var DIRLOG_SHEET = 'Director-Log';
+var DIRLOG_HEADERS = ['Timestamp', 'Scope', 'Type', 'Target', 'Text'];
+
+function getDirectorLogSheet_() {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(DIRLOG_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(DIRLOG_SHEET);
+    sheet.appendRow(DIRLOG_HEADERS);
+    sheet.setFrozenRows(1);
+    try { ss.setTabColor(DIRLOG_SHEET, '#0d9dd6'); } catch (ignore) { /* ok */ }
+  }
+  return sheet;
+}
+
+/** Latest-per-scope notes + the current pick set, in one read pass. */
+function readDirectorLog_() {
+  var out = { picks: [], noteWeeks: {}, noteSeason: '' };
+  var sheet = getDirectorLogSheet_();
+  var last = sheet.getLastRow();
+  if (last < 2) return out;
+  var vals = sheet.getRange(2, 1, last - 1, DIRLOG_HEADERS.length).getValues();
+  var pickState = {};                  // mediaId → picked?
+  vals.forEach(function (r) {
+    var scope = str_(r[1]);
+    var type = str_(r[2]).toUpperCase();
+    var target = str_(r[3]);
+    var text = str_(r[4]);
+    if (type === 'PICK') pickState[target] = true;
+    else if (type === 'UNPICK') pickState[target] = false;
+    else if (type === 'NOTE') {
+      if (scope === 'season') out.noteSeason = text;
+      else {
+        var m = scope.match(/^week:(\d+)$/);
+        if (m) out.noteWeeks[m[1]] = text;
+      }
+    }
+  });
+  Object.keys(pickState).forEach(function (mid) {
+    if (pickState[mid]) out.picks.push(mid);
+  });
+  return out;
+}
+
+/** WRITE leg — ?action=directorNote&code=…&type=note|pick|unpick
+ *  &scope=week|season&week=N&target=<mediaId>&text=…
+ *  The Director's panel calls it on SAVE NOTE / star toggles. */
+function directorNote_(p) {
+  if (String(p.code || '').trim() !== directorCode_()) {
+    return reply_(p, { ok: false, error: 'Access denied — wrong screening passcode.' });
+  }
+  var type = String(p.type || '').trim().toLowerCase();
+  if (['note', 'pick', 'unpick'].indexOf(type) < 0) {
+    return reply_(p, { ok: false, error: 'Unknown note action.' });
+  }
+  var scopeKey;
+  if (type === 'note') {
+    var scope = String(p.scope || '').trim().toLowerCase();
+    if (scope === 'season') scopeKey = 'season';
+    else {
+      var w = Number(p.week);
+      if (!(w >= 1 && w <= LEAGUE_WEEKS)) {
+        return reply_(p, { ok: false, error: 'Unknown week for the note.' });
+      }
+      scopeKey = 'week:' + w;
+    }
+  } else {
+    scopeKey = '';                     // picks carry their media id instead
+  }
+  var target = type === 'note' ? '' : str_(p.target).slice(0, 120);
+  if (type !== 'note' && !target) {
+    return reply_(p, { ok: false, error: 'Missing post reference.' });
+  }
+  var text = type === 'note' ? cellSafe_(str_(p.text).slice(0, 1500)) : '';
+  try {
+    getDirectorLogSheet_().appendRow([
+      new Date(),
+      type === 'note' ? scopeKey : '',
+      type.toUpperCase(),
+      cellSafe_(target),
+      text
+    ]);
+    try {
+      logAdmin_('director', 'NOTE', type.toUpperCase(),
+        (type === 'note' ? scopeKey : target) +
+        (text ? ' — ' + text.slice(0, 60) : ''));
+    } catch (ignore) { /* audit is best-effort */ }
+    return reply_(p, { ok: true });
+  } catch (err) {
+    return reply_(p, { ok: false, error: 'Could not save the note — try again.' });
+  }
 }
 
 // Admin write-back: {action:'adminVerify', adminKey, updates:[
@@ -2206,7 +2422,8 @@ function buildAdminGuide() {
     ['Verified Count', 'Admin', 'What the screenshot REALLY shows. This is the number the league trusts.'],
     ['Verified Points', 'Form→admin (automatic)', 'Verified Count × multiplier — written for you, never edit by hand.'],
     ['Player Photo', 'Form (automatic)', 'One photo per player, reused on every entry.'],
-    ['Collab With / Collab Status', 'Form (automatic)', 'COLLAB pairs. CONFIRMED = both players submitted the same link → each scores FULL points (rulebook §6 rule 2).'],
+    ['Collab With / Collab Status', 'Form (automatic)', 'COLLAB pairs. Collab lists carry WORK EMAILS (comma-separated). CONFIRMED = the pair matched by email (either side) or legacy name → each scores FULL points (rulebook §6 rule 2).'],
+    ['Player Email', 'Form (automatic)', "The participant's signed-in work email — powers email-keyed collab matching and the accept-invite banner. Blank for unsigned-in players."],
     ['Player Designation', 'Player (first time)', 'Job title shown on the leaderboard. Reused automatically afterwards.'],
     ['Player Verified', 'Admin', 'VERIFIED = photo + designation checked against name · manager · designation (PLAYERS tab → CONFIRM ID). Green tick shows everywhere. Empty = no badge.'],
     ['PCL-Snapshots tab', 'Automatic (YouTube tracking)', 'The SYNC NOW pipeline appends every platform-observed count here: Timestamp · Media ID · Source · Views. Ledger rows show the latest as an AUTO tag in the feed.'],

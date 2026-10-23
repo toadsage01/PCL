@@ -539,8 +539,8 @@
       posts.push({
         id: c.mediaId, url: c.url, format: c.format, mediaId: c.mediaId,
         views: "", shot: null, errViews: false, errShotMsg: "",
-        collab: false, collabWith: "", errCollab: false,
-        takenBy: "", collabFor: "",
+        collab: false, collabWith: "", errCollab: false, errCollabMsg: "",
+        takenBy: "", collabFor: "", collabForEmail: "", mine: false,
         ctype: "PRAPER",
         ocrN: 0, ocrSolid: false, ocrAll: [], ocrStatus: "",
         autoN: 0, ytTried: false
@@ -593,28 +593,41 @@
      LINK OWNERSHIP CHECK — the ledger is asked who posted a link the moment
      it is committed, so a clash surfaces as a friendly row banner instead of
      a failed submission at the very end of the form:
-       taken     → red banner "This video is ALREADY UPLOADED BY {name}"
-                   (submission stays blocked while the link is untagged)
-       collabFor → green banner "This video was COLLABED WITH YOU by {name}
-                   — confirm below" with a one-tap CONFIRM that tags the
-                   collab; the pair then earns FULL points on both sides
-     Collab matching is name-based, so every check re-runs when the Full
-     Name field commits. The ingest re-validates authoritatively anyway —
-     this leg only makes the truth visible EARLY.
+       mine      → calm chip "Uploaded by you" (a resubmission is an update)
+       taken     → short red banner "Video uploaded by {firstName}" + a tiny
+                   hint (submission stays blocked while the link is untagged)
+       collabFor → short green banner "Collab invite for you — ACCEPT": the
+                   asker's work email sits in the uploader's collab list.
+     Collab lists are EMAILS now; matching runs on the signed-in session
+     email (name matching kept for legacy rows). The ingest re-validates
+     authoritatively anyway — this leg only makes the truth visible EARLY.
      ========================================================================== */
+  /* the signed-in work email (Google OR the email fallback — both write the
+     same session chip); '' when the visitor never signed in */
+  function sessionEmail_() {
+    try {
+      var s = JSON.parse(String(localStorage.getItem("pcl_google") || "{}"));
+      return String((s && s.email) || "").trim().toLowerCase();
+    } catch (e) { return ""; }
+  }
   function checkLink_(p) {
     if (!cfg.gasWebAppUrl) return;            // local mode: nothing to ask
     var name = fullName.value.trim();
-    if (!name || !p.url) return;
-    var want = p.url + "|" + name;
+    var email = sessionEmail_();
+    if ((!name && !email) || !p.url) return;
+    var want = p.url + "|" + name + "|" + email;
     if (p.__chk === want) return;             // same question already asked
     p.__chk = want;
-    jsonpGet({ action: "checklink", url: p.url, format: p.format, name: name })
+    jsonpGet({ action: "checklink", url: p.url, format: p.format,
+               name: name, email: email })
       .then(function (out) {
         if (!out || out.ok !== true) return;
         if (p.__chk !== want) return;         // link/name changed meanwhile
         p.takenBy = out.taken ? String(out.uploader || "another player") : "";
         p.collabFor = out.collabFor ? String(out.collabFor) : "";
+        p.collabForEmail = out.collabForEmail
+          ? String(out.collabForEmail) : "";
+        p.mine = !!out.mine;
         renderChips();
         renderRows();
       })
@@ -1147,29 +1160,92 @@
 
   /* link-ownership verdicts, rendered as a full-width banner inside the
      post row — the visual twin of the backend's checklink answer:
-       collabFor → "this video was collabed with you — confirm below": one
-                   tap tags the collab with the partner's ledger name and
-                   the pair scores FULL points on both sides
-       takenBy   → "already uploaded by {name}": the link cannot be
-                   entered again untagged — replace it, or tag it as a
-                   collab with the named player if it truly is one
+       collabFor → "Collab invite for you — ACCEPT": one tap tags the
+                   collab with the uploader's email and both sides score
+                   FULL points
+       takenBy   → "Video uploaded by {firstName}.": short and plain —
+                   the hint line carries the collab path
+       mine      → "Uploaded by you": a resubmission updates the entry
      (the backend re-checks authoritatively at ingest either way) */
+  function firstName_(name) {
+    return String(name || "").trim().split(/\s+/)[0] || "";
+  }
   function ownershipHtml_(p) {
+    if (p.mine) {
+      return '<div class="pcl-owned is-mine">' +
+        '<span class="pcl-owned-txt">Uploaded by you</span>' +
+        '<span class="pcl-owned-sub">Resubmitting updates your entry.</span></div>';
+    }
     if (p.collabFor) {
       return '<div class="pcl-owned is-collab">' +
-        '<span class="pcl-owned-txt">This video was COLLABED WITH YOU by ' +
-        esc(p.collabFor) + " — confirm below. Both of you earn the post\u2019s " +
-        "full points.</span>" +
+        '<span class="pcl-owned-txt">Collab invite for you — accept to share ' +
+        "this post with " + esc(firstName_(p.collabFor)) + ".</span>" +
         '<button type="button" class="pcl-owned-btn" data-act="confcollab" data-id="' +
-        esc(p.id) + '">CONFIRM</button></div>';
+        esc(p.id) + '">ACCEPT</button></div>';
     }
     if (p.takenBy) {
       return '<div class="pcl-owned is-taken">' +
-        '<span class="pcl-owned-txt">This video is ALREADY UPLOADED BY ' +
-        esc(p.takenBy) + " — replace this link. If it is your collab with " +
-        "them, tag it COLLAB and enter their name.</span></div>";
+        '<span class="pcl-owned-txt">Video uploaded by ' +
+        esc(firstName_(p.takenBy)) + ".</span>" +
+        '<span class="pcl-owned-sub">Your collab? Tag COLLAB and add their email.</span></div>';
     }
     return "";
+  }
+
+  /* ---- COLLAB LIST — work emails, one chip per partner -------------------
+     p.collabWith stores the comma-joined emails; the input is transient.
+     Emails (not names) — the accept banner can then show ONLY to the exact
+     people the uploader invited. */
+  var COLLAB_DOMAIN = String(cfg.employeeDomain || "praper.in").toLowerCase();
+  var COLLAB_EMAIL_RE = new RegExp("^[a-z0-9._%+'-]+@" +
+    COLLAB_DOMAIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$");
+  function collabList_(p) {
+    return String(p.collabWith || "").split(",")
+      .map(function (s) { return s.trim(); })
+      .filter(Boolean);
+  }
+  function collabEmailOk_(em) { return COLLAB_EMAIL_RE.test(String(em).toLowerCase()); }
+  function collabSet_(p) {
+    if (!p.collab) return false;
+    var list = collabList_(p);
+    return list.length > 0 && list.every(collabEmailOk_);
+  }
+  function collabChipsHtml_(p) {
+    var list = collabList_(p);
+    if (!list.length) return "";
+    var h = '<div class="pcl-collab-chips">';
+    list.forEach(function (em, i) {
+      h += '<span class="pcl-collab-chip' +
+        (collabEmailOk_(em) ? "" : " is-bad") + '">' + esc(em) +
+        '<button type="button" class="pcl-collab-del" data-act="collabdel"' +
+        ' data-i="' + i + '" data-id="' + esc(p.id) +
+        '" aria-label="Remove ' + esc(em) + ' from this collab">\u00d7</button></span>';
+    });
+    return h + "</div>";
+  }
+  function addCollabChipFromInput_(inp) {
+    var p = postById(inp.getAttribute("data-id"));
+    if (!p) return;
+    var val = inp.value.trim().toLowerCase();
+    inp.value = "";
+    if (!val) return;                         // empty Enter = no-op
+    if (collabList_(p).indexOf(val) >= 0) return;   // already on the list
+    if (!collabEmailOk_(val)) {
+      p.errCollab = true;
+      p.errCollabMsg = "That is not a work email — use name@" + COLLAB_DOMAIN + ".";
+      inp.classList.add("is-error");
+      renderRows();
+      var re = postRows.querySelector('.pcl-post[data-id="' + p.id + '"] .pcl-collab-input');
+      if (re) re.focus();
+      return;
+    }
+    p.errCollab = false;
+    p.errCollabMsg = "";
+    p.collabWith = collabList_(p).concat([val]).join(", ");
+    renderRows();
+    /* keep the input focused — adding several collaborators stays one flow */
+    var again = postRows.querySelector('.pcl-post[data-id="' + p.id + '"] .pcl-collab-input');
+    if (again) again.focus();
   }
 
   function editRowHtml(p, i) {
@@ -1228,17 +1304,23 @@
       "</button>" +
       (p.collab
         ? '<div class="pcl-collabpop">' +
-          '<span class="pcl-collab-title">Collab · full points for both' +
+          '<span class="pcl-collab-title">Collab · full points for each of you' +
           (p.collabWith.trim()
             ? '<span class="pcl-collab-set">\u2713 SET</span>' : "") + "</span>" +
+          collabChipsHtml_(p) +
+          '<div class="pcl-collab-addrow">' +
           '<input class="pcl-input pcl-collab-input' + (p.errCollab ? " is-error" : "") +
           '" data-act="collabname" data-id="' + esc(p.id) +
-          '" type="text" placeholder="Partner\u2019s full name" value="' +
-          esc(p.collabWith) + '" aria-label="Partner\u2019s full name — post ' + n + '" />' +
-          '<span class="pcl-hint pcl-collab-hint">Your partner submits the same link — ' +
-          "once the backend confirms the pair, the post\u2019s FULL points are awarded to " +
-          "EACH of you. Scores are shared, never divided.</span>" +
-          (p.errCollab ? '<p class="pcl-err">Add your partner\u2019s name.</p>' : "") +
+          '" type="email" placeholder="partner@' + esc(COLLAB_DOMAIN) +
+          '" value="" aria-label="Collaborator work email — post ' + n + '" />' +
+          '<button type="button" class="pcl-collab-add" data-act="collabadd"' +
+          ' data-id="' + esc(p.id) + '">ADD</button></div>' +
+          '<span class="pcl-hint pcl-collab-hint">Add every collaborator\u2019s work ' +
+          "email — they accept from their own form, and the post\u2019s FULL points " +
+          "go to EACH of you.</span>" +
+          (p.errCollab ? '<p class="pcl-err">' +
+            esc(p.errCollabMsg || "Add at least one @" + COLLAB_DOMAIN + " email.") +
+            "</p>" : "") +
           "</div>"
         : "") +
       "</div>";
@@ -1272,45 +1354,13 @@
       ownershipHtml_(p) + "</div>";
   }
 
-  /* collab partner names — managers + every roster participant, so the
-     partner's name can be picked, not guessed (same engine as the manager
-     field, including the tap-fills-immediately fix). Built LAZILY: MANAGERS
-     and ROSTER are defined further down, so this must not run at parse. */
-  function titleCase(s) {
-    return String(s || "").replace(/\b\w/g, function (c) { return c.toUpperCase(); });
-  }
-  var COLLAB_NAMES = null;
-  function collabNames() {
-    if (!COLLAB_NAMES) {
-      COLLAB_NAMES = MANAGERS.concat(Object.keys(ROSTER).map(titleCase))
-        .sort(function (a, b) { return a.localeCompare(b); });
-    }
-    return COLLAB_NAMES;
-  }
-  /* each renderRows() rebuilds the collab popovers — bind a fresh
-     autocomplete to every partner input the first time it appears */
-  function bindCollabAcs() {
-    if (!postRows) return;
-    var names = collabNames();
-    Array.prototype.forEach.call(postRows.querySelectorAll(".pcl-collab-input"),
-      function (inp) {
-        if (inp.__acBound) return;
-        inp.__acBound = true;
-        var box = document.createElement("div");
-        box.className = "pcl-ac";
-        box.hidden = true;
-        box.setAttribute("role", "listbox");
-        inp.parentNode.appendChild(box);
-        makeAutocomplete(inp, box, names,
-          "No match — keep the name as typed.");
-      });
-  }
+  /* collab partners are WORK EMAILS now — no name autocomplete; the roster
+     picker lives on with the manager + designation fields only */
 
   function renderRows() {
     if (!posts.length) { postRows.innerHTML = ""; return; }
     postRows.innerHTML = posts.map(viewMode === "edit" ? editRowHtml : viewRowHtml)
                               .join("");
-    bindCollabAcs();
     syncSuggestions_();
     noteDraft();
   }
@@ -1362,31 +1412,27 @@
     }
     var cinp = ev.target.closest(".pcl-collab-input");
     if (cinp) {
-      var cp = postById(cinp.getAttribute("data-id"));
-      if (!cp) return;
-      cp.collabWith = cinp.value.replace(/^\s+/, "").slice(0, 60);
-      if (cp.errCollab) {
-        cp.errCollab = false;
+      /* typing is transient — chips commit only via ADD / Enter; typing
+         just clears a previous error highlight */
+      if (cinp.classList.contains("is-error")) {
         cinp.classList.remove("is-error");
-        var ce = cinp.parentNode.querySelector(".pcl-err");
-        if (ce) ce.remove();
+        var pe = postById(cinp.getAttribute("data-id"));
+        if (pe) { pe.errCollab = false; pe.errCollabMsg = ""; }
       }
+      return;
     }
   });
 
-  /* Enter inside the collab partner field confirms THAT FIELD ONLY — it
-     must never fire the submit button (the reported bug: typing the
-     partner's name and pressing Enter submitted the whole form). The
-     picker's own Enter (choose a suggestion) runs first; this then blurs
-     the field, which is the confirmation. The manager + designation
-     autocompletes had the same accident class — same fix. */
+  /* Enter inside the collab email field ADDS that chip — it must never
+     fire the submit button (the round-27 rule, kept: assist fields never
+     submit the form). The manager + designation autocompletes keep their
+     own never-submit Enter treatment. */
   postRows.addEventListener("keydown", function (ev) {
     if (ev.key !== "Enter" || ev.isComposing) return;
     if (ev.target.closest(".pcl-collab-input")) {
       ev.preventDefault();
       ev.stopPropagation();
-      ev.target.blur();
-      renderRows();               // the ✓ SET tick is render-derived
+      addCollabChipFromInput_(ev.target);
     }
   });
 
@@ -1418,17 +1464,36 @@
           '"] .pcl-collab-input');
         if (pop) pop.focus();
       }
+    } else if (act === "collabadd") {
+      /* ADD commits the typed email as a chip — one flow, many partners */
+      var ainp = postRows.querySelector('.pcl-post[data-id="' + id +
+        '"] .pcl-collab-input');
+      if (ainp) addCollabChipFromInput_(ainp);
+    } else if (act === "collabdel") {
+      /* × removes one chip; the comma-joined list stays the state */
+      var dp = postById(id);
+      if (!dp) return;
+      var dlist = collabList_(dp);
+      var di = Number(btn.getAttribute("data-i"));
+      if (di >= 0 && di < dlist.length) dlist.splice(di, 1);
+      dp.collabWith = dlist.join(", ");
+      dp.errCollab = false;
+      dp.errCollabMsg = "";
+      renderRows();
     } else if (act === "confcollab") {
-      /* the checklink banner's one-tap confirm — this video was collabed
-         with the player, so tag it as collab with the LEDGER's canonical
-         name and drop both flags (ingest will stamp CONFIRMED) */
+      /* the checklink banner's one-tap ACCEPT — the uploader invited THIS
+         session's email, so prefill the collab list with their email and
+         drop the flags (ingest will stamp CONFIRMED by email) */
       var fp = postById(id);
       if (!fp) return;
       fp.collab = true;
-      fp.collabWith = fp.collabFor || fp.collabWith;
+      fp.collabWith = fp.collabForEmail || fp.collabWith;
       fp.collabFor = "";
+      fp.collabForEmail = "";
       fp.takenBy = "";
+      fp.mine = false;
       fp.errCollab = false;
+      fp.errCollabMsg = "";
       fp.__chk = null;
       renderRows();
       var pop2 = postRows.querySelector('.pcl-post[data-id="' + id +
@@ -2369,6 +2434,9 @@
         fullName.value = entry.matchedName;
         fullName.dispatchEvent(new Event("input", { bubbles: true }));
       }
+      /* the session email changes who gets collab invites — re-ask the
+         ledger for every link already on the form */
+      try { checkAllLinks_(); } catch (e) { /* rows not ready yet */ }
     }
 
     function onCred(resp) {
@@ -2504,6 +2572,7 @@
       sessionClear();
       clearState();
       showErr("");
+      try { checkAllLinks_(); } catch (e) { /* rows not ready yet */ }
     });
 
     /* soft session restore — the chip re-appears; re-verification happens
@@ -3093,8 +3162,18 @@
       var viewsNum = Number(String(p.views).replace(/[^\d]/g, ""));
       p.errViews = !(viewsNum > 0);
       if (!p.shot && !p.errShotMsg) p.errShotMsg = "Required";
-      p.errCollab = !!p.collab && !p.collabWith.trim();
-      var taken = !!p.takenBy && !(p.collab && p.collabWith.trim());
+      /* collab = work emails only; a legacy name chip blocks with a clear
+         message so it gets replaced by an email */
+      var list = collabList_(p);
+      var badChip = list.some(function (em) { return !collabEmailOk_(em); });
+      p.errCollab = !!p.collab && (!list.length || badChip);
+      if (p.errCollab && badChip) {
+        p.errCollabMsg = "Collab partners are work emails only (name@" +
+          COLLAB_DOMAIN + ").";
+      } else if (p.errCollab) {
+        p.errCollabMsg = "Add at least one @" + COLLAB_DOMAIN + " email.";
+      }
+      var taken = !!p.takenBy && !collabSet_(p);
       if (!firstPostId && (p.errViews || p.errShotMsg || p.errCollab || taken)) {
         firstPostId = p.id;
       }
@@ -3110,7 +3189,7 @@
        screen before marking rows (setMode/renderRows re-render) */
     var postBad = posts.some(function (p) {
       return p.errViews || p.errShotMsg || p.errCollab ||
-             (!!p.takenBy && !(p.collab && p.collabWith.trim()));
+             (!!p.takenBy && !collabSet_(p));
     });
     if (postBad && viewMode !== "edit") setMode("edit");
     else renderRows();
@@ -3129,6 +3208,7 @@
   function buildPayload() {
     var data = {
       fullName: fullName.value.trim(),
+      email: sessionEmail_(),          // powers email-keyed collab pairing
       reportingManager: manager.value.trim(),
       playerDesignation: desig.value.trim(),
       playerPhoto: photoState.file

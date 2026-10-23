@@ -43,5 +43,44 @@ window.PCL_CONFIG = {
 
   // The only work domain accepted at sign-in. Must match EMPLOYEE_DOMAIN
   // in gas/Code.gs.
-  employeeDomain: "praper.in"
+  employeeDomain: "praper.in",
+
+  // ---- SEASON CLOCK + WEEKLY CHALLENGES ------------------------------------
+  // The season window drives the leaderboard's week chips (hover a W chip →
+  // its challenge; the ⓘ chip lists all ten). Keep in sync with
+  // SEASON_START_ISO in gas/Code.gs. The form and the Director's room carry
+  // their own copies — change challenge names HERE for the public board.
+  seasonStartIso: "2026-10-19T11:00:00+05:30",
+  challenges: [
+    { name: "Best Original Content",
+      crit: "Most original and creative content featuring Praper Media.",
+      pts: 6000 },
+    { name: "Best Storytelling Debut",
+      crit: "Most engaging storytelling content mentioning Praper Media.",
+      pts: 8000 },
+    { name: "A Day in My Life",
+      crit: "Give a glimpse into your daily life — routine, fun moments, work highlights.",
+      pts: 8000 },
+    { name: "Best Collaboration",
+      crit: "Create content with at least one other Praper employee.",
+      pts: 10000 },
+    { name: "Behind the Scenes at Praper",
+      crit: "Best emerging creator showcasing office culture and daily life.",
+      pts: 6000 },
+    { name: "Most Improved Creator",
+      crit: "Highest improvement in profile visits, reach, engagement and follower growth during the challenge.",
+      pts: 10000 },
+    { name: "Consistency Reward",
+      crit: "Publish at least 2 posts per week for seven consecutive weeks. Tie-break: total impressions and likes.",
+      pts: 12000 },
+    { name: "The One-Take Challenge",
+      crit: "One continuous take of minimum 30 seconds, without cuts or edits.",
+      pts: 8000 },
+    { name: "The Trend Takeover",
+      crit: "Give a popular trend or meme your own creative twist.",
+      pts: 8000 },
+    { name: "The Comment Magnet — Final Showdown",
+      crit: "Create a post that sparks meaningful conversations and invites the audience to share opinions in the comments.",
+      pts: 10000 }
+  ]
 };
