@@ -65,8 +65,9 @@
           </svg>
         </div>
         <h1 class="dir-title">DIRECTOR'S SCREENING ROOM</h1>
-        <p class="dir-sub">Private weekly-challenge screening — one passcode,
-          one viewer. Entries of the <b>current week only</b>, in submission order.</p>
+        <p class="dir-sub">Private screening — one passcode, one viewer.
+          The weekly challenge opens first; the season's full contents are
+          one tab away. Everything plays in submission order.</p>
         <form id="dirGateForm" novalidate>
           <label class="pcl-label" for="dirCode">Screening passcode</label>
           <input class="pcl-input dir-code" id="dirCode" type="password"
@@ -79,8 +80,9 @@
           <p class="dir-err" id="dirErr" role="alert"></p>
         </form>
       </div>
-      <p class="dir-foot">This room is not linked anywhere public. Entries live here
-        only for the current week's challenge.</p>
+      <p class="dir-foot">This room is not linked anywhere public. The weekly
+        challenge opens first — every submission of the season sits in the
+        ALL CONTENTS tab.</p>
     </section>
 
     <!-- ---------- THEATRE: one entry at a time, big and calm ---------- -->
@@ -88,13 +90,25 @@
       <div class="dir-banner" id="dirBanner">
         <span class="dir-banner-week" id="dirWeekTag">WEEK 1</span>
         <span class="dir-banner-name" id="dirWeekName">—</span>
-        <span class="pcl-wk-tag">LIVE</span>
+        <span class="pcl-wk-tag" id="dirLiveTag">LIVE</span>
         <span class="dir-count" id="dirCount">ENTRY 0 / 0</span>
       </div>
 
+      <div class="dir-tabs" id="dirTabs" role="tablist"
+           aria-label="What to screen">
+        <button type="button" class="dir-tabbtn is-on" id="dirTabWk"
+                role="tab" aria-selected="true">WEEKLY CHALLENGE</button>
+        <button type="button" class="dir-tabbtn" id="dirTabAll"
+                role="tab" aria-selected="false">PCL SEASON 2 · ALL CONTENTS</button>
+      </div>
+
       <article class="dir-stagecard">
+        <div class="dir-mediaswitch" id="dirMediaSwitch" hidden>
+          <button type="button" class="dir-swbtn" id="dirSwPost">POST</button>
+          <button type="button" class="dir-swbtn" id="dirSwShot">SCREENSHOT</button>
+        </div>
         <div class="dir-stage" id="dirStage">
-          <!-- media embed or fallback card renders here -->
+          <!-- media embed, screenshot, or fallback card renders here -->
         </div>
         <div class="dir-who" id="dirWho">
           <!-- participant chips render here -->
@@ -111,7 +125,6 @@
         <button type="button" class="dir-navbtn" id="dirNext"
                 aria-label="Next entry">NEXT &#8250;</button>
       </nav>
-      <p class="dir-hint">Use ← → arrow keys · entries play in submission order</p>
     </section>
 
     <section class="dir-empty" id="dirEmpty" hidden>

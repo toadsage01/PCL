@@ -276,17 +276,35 @@
 
       <div class="pcl-rv-body">
         <figure class="pcl-rv-shot">
-          <img id="rvImg" class="pcl-rv-img" alt="Analytics screenshot" />
+          <div class="pcl-rv-stagebox" id="rvStageBox">
+            <!-- shot image OR platform embed renders here (screening view) -->
+            <img id="rvImg" class="pcl-rv-img" alt="Analytics screenshot" />
+          </div>
           <figcaption class="pcl-rv-shotline">
+            <div class="pcl-rv-seg" id="rvSeg" hidden>
+              <button type="button" class="pcl-rv-segbtn" id="rvSegPost">POST</button>
+              <button type="button" class="pcl-rv-segbtn" id="rvSegShot">SCREENSHOT</button>
+            </div>
             <a id="rvShotLink" href="#" target="_blank" rel="noopener">OPEN FULL SCREENSHOT &#8599;</a>
           </figcaption>
         </figure>
 
         <div class="pcl-rv-panel">
           <p class="pcl-rv-num" id="rvNum">#1</p>
-          <p class="pcl-rv-player" id="rvPlayer">PLAYER</p>
+
+          <!-- participant card: pfp + identity + this player's season rollup -->
+          <div class="pcl-rv-pcard" id="rvPcard">
+            <button type="button" class="pcl-rv-pavawrap" id="rvPavaBtn"
+                    title="Expand photo" hidden>
+              <span class="pcl-rv-pava pcl-rv-pava--ini" id="rvPavaIni" aria-hidden="true"></span>
+              <img class="pcl-rv-pava" id="rvPava" alt="" />
+            </button>
+            <span class="pcl-rv-pid">
+              <span class="pcl-rv-player" id="rvPlayer">PLAYER</span>
+              <span class="pcl-rv-desig" id="rvDesig" hidden></span>
+            </span>
+          </div>
           <p class="pcl-rv-meta" id="rvMeta">FORMAT</p>
-          <p class="pcl-rv-desig" id="rvDesig" hidden></p>
           <a class="pcl-rv-link" id="rvLink" href="#" target="_blank" rel="noopener">POST LINK &#8599;</a>
 
           <div class="pcl-rv-stats">
@@ -304,6 +322,10 @@
             </div>
           </div>
 
+          <!-- this player's season roll-up + per-video views -->
+          <div class="pcl-rv-season" id="rvSeason" hidden></div>
+          <div class="pcl-rv-vlist" id="rvVlist" hidden></div>
+
           <div class="pcl-rv-field">
             <label class="pcl-label" for="rvOcr">OCR count <button type="button"
               class="pcl-abtn pcl-abtn--small" id="rvScanBtn">SCAN</button></label>
@@ -317,6 +339,9 @@
             <input class="pcl-input" id="rvVerified" type="text" inputmode="numeric"
                    placeholder="What the analytics really show" />
           </div>
+
+          <!-- live score preview — verified × multiplier, no math for the reviewer -->
+          <p class="pcl-rv-score" id="rvScore" hidden></p>
 
           <div class="pcl-rv-field">
             <label class="pcl-label" for="rvStatus">Cross-check</label>

@@ -1275,57 +1275,107 @@ function employeeLogin_(p) {
                      matchedName: rosterNameFor_(info.name) });
 }
 
-/** CEO SCREENING ROOM feed — the private viewer for the CURRENT week's
- *  weekly-challenge uploads. Every request carries the screening passcode;
- *  without the right one the endpoint leaks nothing. Read-only JSONP.
- *  Entries are deduped per Media ID (the newest snapshot wins) and collab
- *  partners of the same post are merged into one entry; the room plays in
- *  submission order. */
+/** CEO SCREENING ROOM feed — the private passcode-gated viewer. Without the
+ *  right passcode the endpoint leaks nothing. Read-only JSONP.
+ *  Two collections, both deduped per Media ID (the newest snapshot wins) with
+ *  collab partners of the same post merged into one entry:
+ *    entries — THIS week's weekly-challenge posts (the opening tab)
+ *    regular — the WHOLE season: every post, challenge or not, any week
+ *  Each entry carries parallel per-person arrays (names/designations/photos/
+ *  views) so the theatre chips can show the player photo and their OCR-view
+ *  count without a second round-trip. Both lists play in submission order. */
 function directorFeed_(p) {
   if (String(p.code || '').trim() !== directorCode_()) {
     return reply_(p, { ok: false, error: 'Access denied — wrong screening passcode.' });
   }
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
-  var out = { ok: true, week: currentWeek_(), entries: [],
+  var out = { ok: true, week: currentWeek_(), entries: [], regular: [],
               generatedAt: new Date().toISOString() };
   if (lastRow < 2) return reply_(p, out);
   var vals = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
   var c = {};
   HEADERS.forEach(function (h, i) { c[h] = i; });
   var want = 'Week ' + out.week;   // stored as "Week N — Challenge Name"
-  var byMedia = {};
+  function wkNumOf_(label) {
+    var m = String(label || '').match(/^Week\s+(\d+)/i);
+    return m ? Number(m[1]) : 0;
+  }
+  function numCell_(v) {
+    if (v === '' || v === null || v === undefined) return '';
+    var n = Number(String(v).replace(/[,\s]/g, ''));
+    return isNaN(n) ? '' : n;
+  }
+  var allByMedia = {};             // every post of the season
+  var challengeKeys = {};          // keys that belong to THIS week's challenge
   for (var i = vals.length - 1; i >= 0; i--) {          // newest first
     var wk = str_(vals[i][c['Weekly Challenge']]);
-    if (wk.indexOf(want) !== 0) continue;               // other weeks stay out
+    var isChallenge = String(wk).indexOf('Week ') === 0;
     var url = str_(vals[i][c['Post URL']]);
     var key = str_(vals[i][c['Media ID']]) || url;
     if (!key) continue;
     var nm = str_(vals[i][c['Full Name']]);
-    if (byMedia[key]) {                                 // older snapshot of same post
-      if (byMedia[key].names.indexOf(nm) === -1) {      // collab partner merge
-        byMedia[key].names.push(nm);
-        byMedia[key].designations.push(str_(vals[i][c['Player Designation']]));
-      }
-      continue;
+    if (!nm) continue;
+    var entry = allByMedia[key];
+    if (!entry) {
+      entry = allByMedia[key] = {
+        people: {},
+        order: [],
+        platform: str_(vals[i][c['Platform']]),
+        format: str_(vals[i][c['Format']]),
+        url: url,
+        challenge: wk,
+        weekNum: wkNumOf_(wk),
+        isChallenge: isChallenge,
+        challengeUrl: str_(vals[i][c['Challenge URL']]),
+        submittedAt: vals[i][c['Timestamp']] instanceof Date
+          ? vals[i][c['Timestamp']].toISOString() : str_(vals[i][c['Timestamp']]),
+        screenshot: str_(vals[i][c['Screenshot Link']])
+      };
     }
-    byMedia[key] = {
-      names: [nm],
-      designations: [str_(vals[i][c['Player Designation']])],
-      platform: str_(vals[i][c['Platform']]),
-      format: str_(vals[i][c['Format']]),
-      url: url,
-      challenge: wk,
-      challengeUrl: str_(vals[i][c['Challenge URL']]),
-      submittedAt: vals[i][c['Timestamp']] instanceof Date
-        ? vals[i][c['Timestamp']].toISOString() : str_(vals[i][c['Timestamp']]),
-      screenshot: str_(vals[i][c['Screenshot Link']])
+    if (isChallenge && wk.indexOf(want) === 0) challengeKeys[key] = true;
+    // collab-partner merge + per-person newest-wins photo/views
+    var views = numCell_(vals[i][c['OCR Count']]);
+    var photo = str_(vals[i][c['Player Photo']]);
+    var pkey = normName_(nm);
+    var who = entry.people[pkey];
+    if (!who) {
+      who = entry.people[pkey] = { name: nm,
+        designation: str_(vals[i][c['Player Designation']]),
+        photo: photo,
+        views: views };
+      entry.order.push(pkey);
+    } else {
+      if (who.views === '' && views !== '') who.views = views;
+      if (who.photo === '' && photo !== '') who.photo = photo;
+    }
+  }
+  function toOut_(entry) {
+    return {
+      names: entry.order.map(function (k) { return entry.people[k].name; }),
+      designations: entry.order.map(function (k) { return entry.people[k].designation; }),
+      photos: entry.order.map(function (k) { return entry.people[k].photo; }),
+      views: entry.order.map(function (k) { return entry.people[k].views; }),
+      platform: entry.platform,
+      format: entry.format,
+      url: entry.url,
+      challenge: entry.challenge,
+      weekNum: entry.weekNum,
+      isChallenge: entry.isChallenge,
+      challengeUrl: entry.challengeUrl,
+      submittedAt: entry.submittedAt,
+      screenshot: entry.screenshot
     };
   }
-  Object.keys(byMedia).forEach(function (k) { out.entries.push(byMedia[k]); });
-  out.entries.sort(function (a, b) {
-    return String(a.submittedAt).localeCompare(String(b.submittedAt));
+  Object.keys(allByMedia).forEach(function (k) {
+    if (challengeKeys[k]) out.entries.push(toOut_(allByMedia[k]));
+    out.regular.push(toOut_(allByMedia[k]));
   });
+  function chrono_(a, b) {
+    return String(a.submittedAt).localeCompare(String(b.submittedAt));
+  }
+  out.entries.sort(chrono_);       // submission order — the default tab
+  out.regular.sort(chrono_);       // the ALL CONTENTS tab
   return reply_(p, out);
 }
 

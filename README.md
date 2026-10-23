@@ -242,6 +242,25 @@ filled → points verified`.
    derive and the row is done. SCAN (Drive-side OCR) and the review modal
    can overwrite anything; every write is logged old→new.
 
+**The review modal is a screening view.** Built for the (non-technical)
+HR review team, it pairs the media with everything needed to judge a row
+without opening a second tab:
+
+- **Left — the media stage**: the post plays in-page (YouTube /
+  Instagram embed) exactly like the CEO's Screening Room; a
+  **POST / SCREENSHOT** switch flips to the analytics screenshot (the
+  only option for LinkedIn, which blocks in-page playback). A dead Drive
+  thumbnail degrades to a note, never a broken-image icon.
+- **Right — the verification rail**: participant card (photo with
+  initials fallback · designation · manager), the season roll-up
+  (**N videos · total views · season points**), a per-video list with
+  views per post (the open row highlighted), claimed/snapshot/week
+  stats, the prefilled OCR count, and a **live score preview** —
+  `verified × multiplier, rounded up` updates as you type, so nobody on
+  the review team does multiplication.
+- The workflow is unchanged: type the verified count, cross-check,
+  content type, STAGE THIS ROW → SAVE CHANGES. Every write logged.
+
 ---
 
 ## 8 · Metrics auto-tracking — what's automatic vs manual
@@ -319,9 +338,8 @@ verdict; the reviewer's own server-side SCAN remains the final word.
 ## 10.5 · The Screening Room — the Director's private theatre
 
 `director.html` (not linked anywhere public; reachable from the Control
-Room header) is a dark, cinematic, one-entry-at-a-time player for **only
-the current week's weekly-challenge uploads**. It exists so the Director
-/CEO can screen entries in a premium experience:
+Room header) is a dark, cinematic, one-entry-at-a-time player. It exists
+so the Director /CEO can screen entries in a premium experience:
 
 - **Passcode-gated, nobody else.** The feed endpoint (`directorFeed_` in
   Code.gs) refuses every request that does not carry the screening
@@ -329,16 +347,28 @@ the current week's weekly-challenge uploads**. It exists so the Director
   Script Property **`CEO_CODE`**, default `director@123` until you set
   the property. It is deliberately separate from the six admin passwords.
   The page offers "remember on this device" so the CEO types it once.
-- **What plays**: weekly-challenge submissions of the live week only,
-  deduped per post (the newest analytics snapshot wins), collab partners
-  merged onto one entry, in submission order. YouTube plays inline
-  (privacy-enhanced embed), Instagram Reels/posts embed in the stage,
-  LinkedIn falls back to a calm link card — plus OPEN ORIGINAL POST and
-  ANALYTICS SHOT chips.
-- **Judging, not scoring**: this room shows content, not claimed counts —
-  weekly challenges are judged on liking/disliking (see §3), and the
-  reward itself is granted from the Control Room's REPORTS tab.
+- **Two tabs.** **WEEKLY CHALLENGE** opens first — the live week's
+  challenge entries only. **PCL SEASON 2 · ALL CONTENTS** is the whole
+  season: every post, challenge or not, any week, tagged with its week
+  number and the post's reported view count. Both lists are deduped per
+  post (newest snapshot wins), collab partners merged onto one entry, in
+  submission order.
+- **Media that always shows.** YouTube plays inline (privacy-enhanced
+  embed), Instagram Reels/posts embed in the stage, LinkedIn — which
+  blocks in-page playback entirely — shows the participant's own
+  analytics screenshot on the stage instead, and every entry with both a
+  post and a screenshot gets a **POST / SCREENSHOT switch** so a blank
+  embed never strands the viewer. If a Drive thumbnail ever refuses to
+  load, the stage degrades to the calm link card automatically. Player
+  chips carry the participant's **photo** (initials underneath as the
+  fallback) and OPEN ORIGINAL POST / ANALYTICS SHOT chips stay.
+- **Judging, not scoring**: the weekly tab shows content, not claimed
+  counts — weekly challenges are judged on liking/disliking (see §3),
+  and the reward itself is granted from the Control Room's REPORTS tab.
 - Navigate with PREV/NEXT, the numbered squares, or the ← → keys.
+- The Control Room's **review modal** (admins/HRs) uses the same media
+  contract — embed + POST/SCREENSHOT switch — wrapped around the
+  verification workflow (see §3).
 
 ---
 
@@ -411,7 +441,7 @@ history covers the rest. Nothing in this system deletes.
 
 | Suite | Proves | Run |
 |---|---|---|
-| `scripts/test_do_post_collab.js` | 121 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats strip (verified **and manager**), review-first reorder with data survival, CEO screening feed, employee sign-in (tokeninfo stub incl. **aud mismatch**), checklink pre-check, **hardening groups 25–29: cellSafe_ formula defusal, safeUrl_ scheme rejection, javascript:-link ingest refusal, non-image screenshot REJECTED, daily backup naming/dedupe/prune** | `node scripts/test_do_post_collab.js` |
+| `scripts/test_do_post_collab.js` | ~135 assertions: ownership/dedupe/collab (FULL points, rulebook example), idempotency, OCR ingest, six-password roster + server-derived audit stamps, subcheck, awards math, public-stats strip (verified **and manager**), review-first reorder with data survival, CEO screening feed (current-week entries **+ season ALL list**, per-person photo/view arrays, newest-snapshot OCR wins, comma-cell parsing), employee sign-in (tokeninfo stub incl. **aud mismatch**), checklink pre-check, **hardening groups 25–29: cellSafe_ formula defusal, safeUrl_ scheme rejection, javascript:-link ingest refusal, non-image screenshot REJECTED, daily backup naming/dedupe/prune** | `node scripts/test_do_post_collab.js` |
 | `scripts/test_threat_matrix.js` | 107 adversarial assertions: JSONP callback charset (10 injection shapes), formula-injection vectors, hostile URL schemes (javascript/data/vbscript/file/blob, IDN homoglyphs, userinfo tricks, spoofed subdomains), esc() coverage on all four renderers, csvCell CSV-injection guard, safeHref in admin + director, hostile number shapes (Indian grouping, dot-thousands, >1e10) | `node scripts/test_threat_matrix.js` |
 | `scripts/test_ocr_parse.js` | 63 assertions: real screenshot layouts, K/M suffixes, caption-bleed guards, >1e10 rejection, **boost/sponsored/ad-badged text flags** (bare "boost" = the universal button → never flags; only the Boosted/Sponsored/Promoted STATE does), and **platform fingerprints** (wrong-platform chrome refused, chrome-less region crops never blocked) | `node scripts/test_ocr_parse.js` |
 | `scripts/test_leaderboard_rollup.js` | 16: dedup-by-media, verified-over-claimed, weekly buckets | `node scripts/test_leaderboard_rollup.js` |
@@ -420,6 +450,8 @@ history covers the rest. Nothing in this system deletes.
 | `scripts/save_e2e.sh` + `fixture_save.js` | browser E2E of the transport chain against the REAL wire shapes (Vercel-healthy / GAS-302 / dead-route) | `bash scripts/save_e2e.sh` |
 | `scripts/round27_e2e.sh` + `fixture_form.js` | browser E2E of the ownership banners (taken + collab-for + one-tap CONFIRM), the collab Enter field-confirm fix (picker-open Enter still chooses), and logo→form with content after the DONE screen | `bash scripts/round27_e2e.sh` |
 | `scripts/round28_e2e.sh` + `fixture_form.js` | browser E2E of the hardening round: Enter-in-name/challenge never submits (links Enter still commits chips), leaderboard og-font mapping, admin mock FULL collab points + review-modal meta, dark theme + 390px mobile no-h-scroll | `bash scripts/round28_e2e.sh` |
+| `scripts/round_e2e.sh` + `fixture_director.js` | browser E2E of the Screening Room round: gate deny/open, YT embed + pfp disc + hint-text removal, POST/SCREENSHOT switch, IG collab merge, LinkedIn shot stage, WEEKLY → ALL CONTENTS tabs (regular post tagged with views, no week), weekly restore, keyboard nav | `bash scripts/round_e2e.sh` |
+| `scripts/round29_admin_e2e.sh` + `fixture_form.js` | browser E2E of the admin screening view: embed stage + switch inside the review modal, participant card, per-video list with the open row highlighted, live score preview (verified × multiplier, rounded up), arrow-key stepping | `bash scripts/round29_admin_e2e.sh` |
 | `scripts/probe_live.sh` | READ-ONLY live probes (GAS stats/subcheck/checklink JSONP, wrong-password refusal, hostile-callback echo check, the four portals, YT key, GSI client) — zero sheet writes by design | `bash scripts/probe_live.sh` |
 | `scripts/ocr_e2e.sh`, `save_e2e.sh`, prior rounds | agent-browser E2E across all 3 portals (form flows, admin gate/tabs/awards, leaderboard) | see scripts/ |
 

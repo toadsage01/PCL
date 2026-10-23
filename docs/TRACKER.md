@@ -585,3 +585,46 @@ test all and fix all. we don't [want] anything to break in these 2 months."
 - LIVE FINDINGS: deployed GAS is an intermediate version (D1 paste still
   pending); pcl-form.prapermedia.in serves a GAS HtmlService error, not
   the Vercel build (D2 domain fix). Both documented in docs/TEST-REPORT.md.
+
+---
+
+## A9 · Round 29 — Screening-Room media + tabs + admin screening view (2026-10-23)
+
+**Ask:** remove the arrow-keys hint · LinkedIn/Instagram must SHOW like
+YouTube (stable way) · CEO room keeps weekly challenge as the opening tab
+but also sees ALL Season-2 content · same simple view for the admin panel
+with analytics + participant details + per-video views, minimum manual OCR
+· pfp was not visible in the room.
+
+🔧 SHIPPED:
+- CEO ROOM: hint text gone. Two tabs — **WEEKLY CHALLENGE** (default,
+  unchanged behaviour) + **PCL SEASON 2 · ALL CONTENTS** (every post,
+  challenge or not, any week; regular posts tagged by week + reported
+  views; same dedupe/merge/submission-order rules).
+- STABLE MEDIA: YouTube + Instagram embed in-page; **LinkedIn shows the
+  participant's analytics screenshot on the stage** (LinkedIn blocks
+  in-page playback entirely — no API-free embed exists); every entry with
+  post + screenshot gets a **POST / SCREENSHOT switch**; a dead Drive
+  thumbnail degrades to the calm card, never a broken-image icon.
+- PFP: directorFeed_ now ships per-person **photo + OCR views**; chips
+  render the photo disc with initials underneath as fallback.
+- Code.gs directorFeed_: adds `regular[]` (whole season) + parallel
+  photos[]/views[]/weekNum/isChallenge; newest-snapshot OCR wins per
+  person; comma-grouped cells parse.
+- ADMIN: the review modal is now a **screening view** — same media stage
+  + POST/SCREENSHOT switch on the left; on the right a participant card
+  (pfp · designation · manager), season roll-up (videos · total views ·
+  season points), **per-video list with views per post** (open row
+  highlighted), and a **live score preview** (verified × multiplier,
+  rounded up, updates as you type). Workflow unchanged (stage → save,
+  all writes logged). HRs no longer need to open the sheet or do math.
+- TESTS: harness 22i–22n (6 new directorFeed asserts — per-person views,
+  photos, season list, non-challenge flag, other-week isolation, comma
+  parse); round_e2e.sh extended (tabs, switch, LI shot stage, regular
+  post views, hint removal, pfp disc); NEW round29_admin_e2e.sh (admin
+  screening view + score preview). All unit suites + 4 E2E suites green;
+  node --check on all five JS.
+
+🧑 STILL ON THE USER (unchanged): **D1 paste Code.gs + New version** (this
+round's directorFeed_ rides the same paste) · D2 domain fix · D4
+allowlist emails. D6 packaging stays on the cloned repo.

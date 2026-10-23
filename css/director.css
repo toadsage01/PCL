@@ -231,6 +231,106 @@
 .dir-chip a:focus-visible,
 .dir-act:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
 
+/* ---------- tabs (weekly challenge · all contents) ---------- */
+.dir-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dir-tabbtn {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 1.4px;
+  color: var(--pcl-muted);
+  background: var(--pcl-surface);
+  border: 3px solid var(--pcl-line);
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.dir-tabbtn:hover { color: var(--pcl-text); border-color: var(--pcl-input-border); }
+.dir-tabbtn.is-on {
+  color: var(--pcl-on-primary);
+  background: var(--pcl-secondary);
+  border-color: var(--pcl-hard);
+  box-shadow: 3px 3px 0 var(--pcl-hard);
+}
+.dir-tabbtn:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+
+/* ---------- POST / SCREENSHOT media switch ---------- */
+.dir-mediaswitch {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.dir-swbtn {
+  font-family: var(--pcl-font-title);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 1.3px;
+  color: var(--pcl-muted);
+  background: var(--pcl-input-bg);
+  border: 2px solid var(--pcl-line);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.dir-swbtn:hover { color: var(--pcl-text); border-color: var(--pcl-input-border); }
+.dir-swbtn.is-on {
+  color: var(--pcl-on-primary);
+  background: var(--pcl-secondary);
+  border-color: var(--pcl-hard);
+}
+.dir-swbtn:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
+
+/* ---------- screenshot stage (LinkedIn + the SHOT side of the switch) ---- */
+.dir-stage--shot {
+  aspect-ratio: auto;
+  height: 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.dir-shot {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+  cursor: zoom-in;
+}
+.dir-shot-sub {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 8px 14px;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  color: #9aa3c0;
+  background: rgba(4, 5, 12, 0.82);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- player chips: photo disc with initials underneath ---------- */
+.dir-disc { position: relative; overflow: hidden; }
+.dir-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.dir-pfp {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dir-pfp.is-broken { display: none; }
+
 /* ---------- navigation ---------- */
 .dir-nav {
   display: flex;
@@ -265,12 +365,6 @@
 }
 .dir-dot.is-on { background: var(--pcl-primary); }
 .dir-dot:focus-visible { outline: 2px solid var(--pcl-cyan); outline-offset: 2px; }
-.dir-hint {
-  text-align: center;
-  font-size: 11.5px;
-  color: var(--pcl-muted);
-  margin: 0;
-}
 
 /* ---------- empty week ---------- */
 .dir-empty { display: flex; justify-content: center; }
@@ -292,9 +386,13 @@
   .dir-gatecard { padding: 24px 18px 22px; }
   .dir-banner-name { font-size: 13px; }
   .dir-stage--ig { height: 480px; }
+  .dir-stage--shot { height: 480px; }
   .dir-navbtn { padding: 10px 14px; font-size: 12px; }
+  .dir-tabbtn { flex: 1 1 auto; text-align: center; }
 }
 
 /* ---------- dark theme nudges (tokens do most of the work) ---------- */
 html[data-pcl-theme="dark"] .dir-stage { border-color: #0c0d14; }
 html[data-pcl-theme="dark"] .dir-fallback-sub { color: #8b93b4; }
+html[data-pcl-theme="dark"] .dir-shot-sub { color: #8b93b4; }
+html[data-pcl-theme="dark"] .dir-tabbtn { border-color: var(--pcl-line); }

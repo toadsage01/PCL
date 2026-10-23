@@ -1,10 +1,14 @@
 /* ============================================================================
    PCL — SCREENING ROOM (director.html)
-   The Director/CEO's private viewer for the CURRENT week's weekly-challenge
-   uploads. Nothing renders until the screening passcode unlocks the backend
-   feed (gas/Code.gs → directorFeed_, action=directorFeed) — the passcode is
-   the ONLY key (CEO_CODE Script Property overrides the built-in default).
-   Read-only, JSONP, zero CORS setup — same transport as every PCL portal.
+   The Director/CEO's private viewer. Opens on the CURRENT week's
+   weekly-challenge uploads; the ALL CONTENTS tab plays the WHOLE season —
+   every post, challenge or not, in submission order. Nothing renders until
+   the screening passcode unlocks the backend feed (gas/Code.gs →
+   directorFeed_, action=directorFeed) — the passcode is the ONLY key
+   (CEO_CODE Script Property overrides the built-in default).
+   Media: YouTube/Instagram embed when the platform allows one; LinkedIn
+   gets the participant's analytics screenshot inline; a POST/SCREENSHOT
+   switch covers every in-between case. Read-only, JSONP, zero CORS setup.
    ========================================================================== */
 (function () {
   "use strict";
@@ -91,7 +95,12 @@
     "https://script.google.com/macros/s/AKfycbxdY0N312upmv3VgfmG2DiVrlHdGGylv7jUk6Psa42Yp1NJotKURlJOoVpiKtly5iwe/exec";
 
   /* ---------- state ---------- */
-  var state = { code: "", entries: [], idx: 0, loaded: false };
+  var state = {
+    code: "", idx: 0,
+    mode: "challenge",            // "challenge" = weekly tab (default) · "all" = season
+    mediaMode: null,              // "post" | "shot" — per-entry, null = auto
+    feed: { challenge: [], all: [] }
+  };
   var CODE_KEY = "pcl_dir_code";
 
   var gate = $("dirGate");
@@ -111,7 +120,12 @@
     $("dirEmptyMsg").textContent = msg;
   }
 
-  /* ---------- embeds ---------- */
+  /* ---------- embeds + media stage ----------
+     Stability contract: a platform embed when the platform allows one
+     (YouTube, Instagram), the participant's own analytics screenshot
+     otherwise (LinkedIn blocks in-page playback entirely) — and a
+     POST / SCREENSHOT switch whenever both are available, so a blank
+     embed (IG rate-limits, private posts) never strands the viewer. */
   function ytId(url) {
     var m = String(url || "").match(
       /(?:youtube\.com\/(?:watch\?[^#]*v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{11})/);
@@ -123,22 +137,49 @@
     if (!m) return null;
     return { kind: m[1] === "p" || m[1] === "tv" ? "p" : "reel", id: m[2] };
   }
-  function stageHtml(e) {
+  /* Drive file id out of any share-link shape — the upload folder is
+     shared any-one-with-link, so thumbnail URLs render inline. */
+  function driveId(u) {
+    var s = String(u || "");
+    var m = s.match(/\/d\/([a-zA-Z0-9_-]{10,})/) ||
+            s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+    return m ? m[1] : "";
+  }
+  function shotSrc(e) {
+    var id = driveId(e.screenshot);
+    return id ? "https://drive.google.com/thumbnail?id=" +
+      encodeURIComponent(id) + "&sz=w2000" : "";
+  }
+  function mediaCaps(e) {
     var yt = ytId(e.url);
-    if (yt) {
-      return '<iframe src="https://www.youtube-nocookie.com/embed/' + esc(yt) +
-        '" title="Weekly challenge entry" allow="accelerometer; autoplay; ' +
+    var ig = yt ? null : igParts(e.url);
+    var canPost = !!(yt || ig);
+    var canShot = !!shotSrc(e);
+    return { yt: yt, ig: ig, canPost: canPost, canShot: canShot,
+      def: canPost ? "post" : (canShot ? "shot" : "none") };
+  }
+  function stageHtml(e, mode) {
+    var caps = mediaCaps(e);
+    if (mode === "post" && caps.yt) {
+      return '<iframe src="https://www.youtube-nocookie.com/embed/' + esc(caps.yt) +
+        '" title="League entry" allow="accelerometer; autoplay; ' +
         'clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
         'allowfullscreen loading="lazy"></iframe>';
     }
-    var ig = igParts(e.url);
-    if (ig) {
-      document.querySelector(".dir-stage").classList.add("dir-stage--ig");
-      return '<iframe src="https://www.instagram.com/' + ig.kind + "/" +
-        esc(ig.id) + '/embed" title="Weekly challenge entry" ' +
+    if (mode === "post" && caps.ig) {
+      return '<iframe src="https://www.instagram.com/' + caps.ig.kind + "/" +
+        esc(caps.ig.id) + '/embed" title="League entry" ' +
         'scrolling="no" loading="lazy"></iframe>';
     }
-    /* no embeddable player (LinkedIn, odd links) — a calm link card */
+    if (mode === "shot" && caps.canShot) {
+      var sub = String(e.platform || "").toLowerCase().indexOf("linkedin") === 0
+        ? '<span class="dir-shot-sub">LinkedIn does not allow in-page playback ' +
+          "— showing the participant's analytics screenshot.</span>"
+        : "";
+      return '<img class="dir-shot" src="' + esc(shotSrc(e)) +
+        '" alt="Analytics screenshot" />' + sub;
+    }
+    /* no embeddable player and no screenshot — a calm link card */
     var word = String(e.platform || "LINK").toUpperCase();
     return '<div class="dir-fallback">' +
       '<span class="dir-fallback-word">' + esc(word) + "</span>" +
@@ -156,40 +197,104 @@
   }
 
   /* ---------- render ---------- */
+  function listFor(mode) {
+    return mode === "all" ? state.feed.all : state.feed.challenge;
+  }
+  function firstView(e) {
+    var v = e.views || [];
+    for (var i = 0; i < v.length; i++) {
+      if (v[i] !== "" && v[i] != null) return v[i];
+    }
+    return "";
+  }
+  function fmtNum(n) {
+    var x = Number(String(n).replace(/[^\d.-]/g, ""));
+    return isNaN(x) ? String(n) : x.toLocaleString("en-IN");
+  }
   function renderBanner() {
+    if (state.mode === "all") {
+      $("dirWeekTag").textContent = "SEASON 2";
+      $("dirWeekName").textContent = "ALL CONTENTS";
+      $("dirLiveTag").textContent = "SEASON";
+      return;
+    }
     var w = currentWeek();
     var ch = CHALLENGES[w - 1] || { name: "" };
     $("dirWeekTag").textContent = "WEEK " + w;
     $("dirWeekName").textContent = ch.name.toUpperCase();
+    $("dirLiveTag").textContent = "LIVE";
   }
   function initials(name) {
     var parts = String(name || "?").trim().split(/\s+/);
     return ((parts[0] || "?").charAt(0) + (parts[1] ? parts[1].charAt(0) : ""))
       .toUpperCase();
   }
-  function renderEntry() {
-    var e = state.entries[state.idx];
-    if (!e) return;
+  /* the initials sit UNDER the photo — a failed Drive image just hides
+     itself and the disc degrades to the same look as a no-photo player */
+  function discHtml(name, photo) {
+    var pid = driveId(photo);
+    return '<span class="dir-disc">' +
+      '<span class="dir-initials" aria-hidden="true">' + esc(initials(name)) + "</span>" +
+      (pid ? '<img class="dir-pfp" src="https://drive.google.com/thumbnail?id=' +
+        encodeURIComponent(pid) + '&sz=w120" alt="" loading="lazy" />' : "") +
+      "</span>";
+  }
+  function renderEntry() {           // full re-render — media mode resets
+    state.mediaMode = null;
+    renderStage();
+  }
+  function renderStage() {           // stage-only (the POST/SHOT switch)
+    var list = listFor(state.mode);
+    var e = list[state.idx];
     var stage = $("dirStage");
-    stage.className = "dir-stage";
-    stage.innerHTML = stageHtml(e);
+    var sw = $("dirMediaSwitch");
+    if (!e) { renderEmptyMode(); return; }
+    var caps = mediaCaps(e);
+    if (state.mediaMode !== "post" && state.mediaMode !== "shot") {
+      state.mediaMode = caps.def;
+    }
+    if (state.mediaMode === "post" && !caps.canPost) {
+      state.mediaMode = caps.canShot ? "shot" : "none";
+    }
+    if (state.mediaMode === "shot" && !caps.canShot) {
+      state.mediaMode = caps.canPost ? "post" : "none";
+    }
+    stage.className = "dir-stage" +
+      (state.mediaMode === "post" && caps.ig ? " dir-stage--ig" : "") +
+      (state.mediaMode === "shot" ? " dir-stage--shot" : "");
+    stage.innerHTML = stageHtml(e, state.mediaMode);
+
+    if (caps.canPost && caps.canShot) {
+      sw.hidden = false;
+      $("dirSwPost").classList.toggle("is-on", state.mediaMode === "post");
+      $("dirSwShot").classList.toggle("is-on", state.mediaMode === "shot");
+    } else {
+      sw.hidden = true;
+    }
 
     var who = "";
     e.names.forEach(function (nm, i) {
       var role = (e.designations && e.designations[i]) || "";
-      who += '<div class="dir-chip">' +
-        '<span class="dir-disc" aria-hidden="true">' + esc(initials(nm)) + "</span>" +
+      var photo = (e.photos && e.photos[i]) || "";
+      who += '<div class="dir-chip">' + discHtml(nm, photo) +
         '<span class="dir-chip-id">' +
           '<span class="dir-chip-name">' + esc(nm) + "</span>" +
           (role ? '<span class="dir-chip-role">' + esc(role) + "</span>" : "") +
         "</span></div>";
     });
+    var views = firstView(e);
+    var roleLine = "entry " + (state.idx + 1) + " of " + list.length;
+    if (state.mode === "all" && e.weekNum) {
+      roleLine = "WEEK " + e.weekNum + " · " + roleLine;
+    }
+    if (views !== "" && views != null) {
+      roleLine += " · " + fmtNum(views) + " views";
+    }
     who += '<div class="dir-chip dir-chip--plat">' +
       '<span class="dir-chip-id">' +
         '<span class="dir-chip-name">' + esc(String(e.platform || "").toUpperCase() +
           (e.format ? " · " + String(e.format).toUpperCase() : "")) + "</span>" +
-        '<span class="dir-chip-role">entry ' + (state.idx + 1) + " of " +
-          state.entries.length + "</span>" +
+        '<span class="dir-chip-role">' + esc(roleLine) + "</span>" +
       "</span></div>";
     $("dirWho").innerHTML = who;
 
@@ -205,20 +310,54 @@
     $("dirActions").innerHTML = acts;
 
     $("dirCount").textContent =
-      "ENTRY " + (state.idx + 1) + " / " + state.entries.length;
+      "ENTRY " + (state.idx + 1) + " / " + list.length;
 
     var dots = "";
-    state.entries.forEach(function (_, i) {
+    list.forEach(function (_, i) {
       dots += '<button type="button" class="dir-dot' + (i === state.idx ? " is-on" : "") +
         '" data-i="' + i + '" aria-label="Entry ' + (i + 1) + '"></button>';
     });
     $("dirDots").innerHTML = dots;
     $("dirPrev").disabled = state.idx === 0;
-    $("dirNext").disabled = state.idx === state.entries.length - 1;
+    $("dirNext").disabled = state.idx === list.length - 1;
+  }
+  function renderEmptyMode() {       // this tab has nothing — the other may
+    var stage = $("dirStage");
+    stage.className = "dir-stage";
+    $("dirMediaSwitch").hidden = true;
+    var msg = state.mode === "challenge"
+      ? "No weekly-challenge entries for Week " + currentWeek() + " yet."
+      : "No submissions this season yet.";
+    var alt = state.mode === "challenge" && state.feed.all.length
+      ? '<button type="button" class="dir-act" id="dirSeeAll">SEE ALL CONTENTS &#8599;</button>'
+      : "";
+    stage.innerHTML = '<div class="dir-fallback">' +
+      '<span class="dir-fallback-word">NOTHING HERE YET</span>' +
+      '<span class="dir-fallback-sub">' + esc(msg) + "</span>" + alt + "</div>";
+    $("dirWho").innerHTML = "";
+    $("dirActions").innerHTML = "";
+    $("dirCount").textContent = "ENTRY 0 / 0";
+    $("dirDots").innerHTML = "";
+    $("dirPrev").disabled = true;
+    $("dirNext").disabled = true;
+    var sa = $("dirSeeAll");
+    if (sa) sa.addEventListener("click", function () { setMode("all"); });
+  }
+  function setMode(mode) {
+    if (state.mode === mode) return;
+    state.mode = mode;
+    state.idx = 0;
+    $("dirTabWk").classList.toggle("is-on", mode === "challenge");
+    $("dirTabAll").classList.toggle("is-on", mode === "all");
+    $("dirTabWk").setAttribute("aria-selected", mode === "challenge");
+    $("dirTabAll").setAttribute("aria-selected", mode === "all");
+    renderBanner();
+    renderEntry();
   }
   function go(delta) {
+    var list = listFor(state.mode);
     var n = state.idx + delta;
-    if (n < 0 || n >= state.entries.length) return;
+    if (n < 0 || n >= list.length) return;
     state.idx = n;
     renderEntry();
   }
@@ -235,10 +374,13 @@
           return;
         }
         state.code = code;
-        state.entries = Array.isArray(res.entries) ? res.entries : [];
-        if (!state.entries.length) {
-          showEmpty("No weekly-challenge entries for Week " + res.week +
-            " yet. The room fills up as submissions land.");
+        state.feed = {
+          challenge: Array.isArray(res.entries) ? res.entries : [],
+          all: Array.isArray(res.regular) ? res.regular : []
+        };
+        if (!state.feed.challenge.length && !state.feed.all.length) {
+          showEmpty("No submissions for Week " + res.week +
+            " yet. The room fills up as entries land.");
           return;
         }
         renderBanner();
@@ -277,7 +419,7 @@
     }
   })();
 
-  /* ---------- nav wiring ---------- */
+  /* ---------- nav + tab + media wiring ---------- */
   $("dirPrev").addEventListener("click", function () { go(-1); });
   $("dirNext").addEventListener("click", function () { go(1); });
   $("dirDots").addEventListener("click", function (ev) {
@@ -285,6 +427,37 @@
     if (!b) return;
     state.idx = Number(b.getAttribute("data-i")) || 0;
     renderEntry();
+  });
+  $("dirTabWk").addEventListener("click", function () { setMode("challenge"); });
+  $("dirTabAll").addEventListener("click", function () { setMode("all"); });
+  $("dirSwPost").addEventListener("click", function () {
+    if (state.mediaMode !== "post") { state.mediaMode = "post"; renderStage(); }
+  });
+  $("dirSwShot").addEventListener("click", function () {
+    if (state.mediaMode !== "shot") { state.mediaMode = "shot"; renderStage(); }
+  });
+  /* a photo Drive refuses to serve (permissions revoked, deep-link change)
+     hides itself — the initials disc underneath takes over seamlessly */
+  $("dirWho").addEventListener("error", function (ev) {
+    if (ev.target && ev.target.tagName === "IMG") {
+      ev.target.classList.add("is-broken");
+    }
+  }, true);
+  /* if the screenshot itself fails to load, fall back to the calm link
+     card instead of a broken-image icon in the CEO's theatre */
+  $("dirStage").addEventListener("error", function (ev) {
+    var t = ev.target;
+    if (!t || !t.classList || !t.classList.contains("dir-shot")) return;
+    var stage = $("dirStage");
+    stage.classList.remove("dir-stage--shot");
+    state.mediaMode = "none";
+    stage.innerHTML = stageHtml(listFor(state.mode)[state.idx] || {}, "none");
+  }, true);
+  /* clicking the screenshot stage opens the full-res shot in a new tab */
+  $("dirStage").addEventListener("click", function (ev) {
+    if (!ev.target.classList || !ev.target.classList.contains("dir-shot")) return;
+    var e = listFor(state.mode)[state.idx];
+    if (e && e.screenshot) window.open(safeHref(e.screenshot), "_blank", "noopener");
   });
   document.addEventListener("keydown", function (ev) {
     if (theatre.hidden) return;

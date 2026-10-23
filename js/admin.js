@@ -766,12 +766,16 @@
     });
     state.players = out.players || [];
     /* identity map — verified tick + designation per player, read by the
-       feed rows and the REPORTS player table */
+       feed rows and the REPORTS player table; points/impressions/posts
+       feed the review-modal participant card (season roll-up at a glance) */
     state.pmap = {};
     state.players.forEach(function (p) {
       state.pmap[String(p.player || "").toLowerCase()] = {
         designation: String(p.designation || ""),
-        verified: !!p.verified
+        verified: !!p.verified,
+        points: Number(p.points) || 0,
+        impressions: Number(p.impressions) || 0,
+        posts: Number(p.posts) || 0
       };
     });
     state.totals = out.totals || null;
@@ -1234,30 +1238,164 @@
 
   function bigThumb(r) {
     if (MOCK) return r.thumb || "";   // mock: stay on the offline placeholder
-    if (!r.fileId) return "";
-    return "https://drive.google.com/thumbnail?id=" + encodeURIComponent(r.fileId) + "&sz=w1600";
+    var id = r.fileId || driveIdAdm(r.shotUrl);
+    if (!id) return "";
+    return "https://drive.google.com/thumbnail?id=" + encodeURIComponent(id) + "&sz=w1600";
+  }
+
+  /* ---------- screening media (the CEO room's stability contract) -------
+     Platform embed when the platform allows one (YouTube, Instagram), the
+     participant's analytics screenshot otherwise (LinkedIn blocks in-page
+     playback entirely), and a POST / SCREENSHOT switch whenever both exist
+     — a blank IG embed never strands the reviewer. ----------------------- */
+  function ytIdAdm(url) {
+    var m = String(url || "").match(
+      /(?:youtube\.com\/(?:watch\?[^#]*v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{11})/);
+    return m ? m[1] : "";
+  }
+  function igIdAdm(url) {
+    var m = String(url || "").match(/instagram\.com\/(?:reel|reels|p|tv)\/([\w-]+)/);
+    return m ? m[1] : "";
+  }
+  function driveIdAdm(u) {
+    var s = String(u || "");
+    var m = s.match(/\/d\/([a-zA-Z0-9_-]{10,})/) ||
+            s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+    return m ? m[1] : "";
+  }
+  var rvMediaMode = null;      // "post" | "shot" — reset on every row
+  var rvCurrent = null;        // row behind the open modal
+
+  function renderRvMedia(r) {
+    var box = $("rvStageBox");
+    var seg = $("rvSeg");
+    var fileId = r.fileId || driveIdAdm(r.shotUrl);
+    var shotOk = !!fileId && !MOCK || (MOCK && !!r.thumb);
+    var yt = ytIdAdm(r.url);
+    var ig = yt ? "" : igIdAdm(r.url);
+    var postOk = !!(yt || ig);
+    if (rvMediaMode !== "post" && rvMediaMode !== "shot") {
+      rvMediaMode = postOk ? "post" : (shotOk ? "shot" : "none");
+    }
+    if (rvMediaMode === "post" && !postOk) rvMediaMode = shotOk ? "shot" : "none";
+    if (rvMediaMode === "shot" && !shotOk) rvMediaMode = postOk ? "post" : "none";
+
+    if (rvMediaMode === "post") {
+      box.classList.add("is-embed");
+      box.innerHTML = yt
+        ? '<iframe src="https://www.youtube-nocookie.com/embed/' + esc(yt) +
+          '" title="League entry" allow="accelerometer; autoplay; ' +
+          'clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
+          'allowfullscreen loading="lazy"></iframe>'
+        : '<iframe src="https://www.instagram.com/reel/' + esc(ig) +
+          '/embed" title="League entry" scrolling="no" loading="lazy"></iframe>';
+    } else {
+      box.classList.remove("is-embed");
+      var src = bigThumb(r);
+      if (src) {
+        box.innerHTML = '<img id="rvImg" class="pcl-rv-img" alt="Analytics screenshot · ' +
+          esc(r.name || "") + '" src="' + esc(src) + '" />';
+      } else {
+        box.innerHTML = '<span class="pcl-rv-missing">NO SCREENSHOT ON FILE — OPEN THE ORIGINAL POST</span>';
+      }
+    }
+    if (postOk && shotOk) {
+      seg.hidden = false;
+      $("rvSegPost").classList.toggle("is-on", rvMediaMode === "post");
+      $("rvSegShot").classList.toggle("is-on", rvMediaMode === "shot");
+    } else {
+      seg.hidden = true;
+    }
+  }
+
+  /* this player's season roll-up — unique media, newest snapshot wins,
+     views = verified when the review filled it, else claimed */
+  function playerVideos(name) {
+    var key = normName(name);
+    var byMedia = {};
+    state.rows.forEach(function (r) {
+      if (normName(r.name) !== key) return;
+      var k = r.mediaId || "row:" + r.row;
+      var cur = byMedia[k];
+      if (!cur || String(r.ts).localeCompare(String(cur.ts)) > 0) byMedia[k] = r;
+    });
+    return Object.keys(byMedia).map(function (k) { return byMedia[k]; })
+      .sort(function (a, b) { return String(a.ts).localeCompare(String(b.ts)); });
+  }
+  function viewsOf(r) {
+    var v = digitsOf(r.verified);
+    if (v === "") v = digitsOf(r.claimed);
+    return v === "" ? null : v;
+  }
+  function initialsOf(name) {
+    var parts = String(name || "?").trim().split(/\s+/);
+    return ((parts[0] || "?").charAt(0) + (parts[1] ? parts[1].charAt(0) : ""))
+      .toUpperCase();
+  }
+  function normName(s) {
+    return String(s || "").toLowerCase().trim();
+  }
+
+  /* live score preview — verified (or OCR / claimed) × multiplier, rounded
+     up exactly like the backend; the reviewer never does math */
+  function updateRvScore() {
+    var el = $("rvScore");
+    var r = rvCurrent;
+    if (!r) { el.hidden = true; return; }
+    var mult = Number(r.mult);
+    var base = digitsOf($("rvVerified").value);
+    var what = "verified";
+    if (base === "") { base = digitsOf($("rvOcr").value); what = "OCR"; }
+    if (base === "") { base = digitsOf(r.claimed); what = "claimed"; }
+    if (base === "" || isNaN(mult) || mult <= 0) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = "<b>" + fmt(Math.ceil(base * mult)) + " pts</b> if the " +
+      what + " count stands — " + fmt(base) + " " + multOf(r.mult) +
+      ", rounded up";
   }
 
   function fillReview(r, idx, total) {
     var d = displayOf(r);
-    var img = $("rvImg");
-    var src = bigThumb(r) || r.thumb || "";
-    if (src) {
-      img.classList.remove("is-missing");
-      img.src = src;
-      img.alt = "Analytics screenshot · " + r.name;
-    } else {
-      img.removeAttribute("src");
-      img.classList.add("is-missing");
-      img.alt = "No screenshot on file";
-    }
+    rvCurrent = r;
+    rvMediaMode = null;
+    renderRvMedia(r);
+
     var link = $("rvShotLink");
     if (r.shotUrl) { link.href = safeHref(r.shotUrl); link.style.display = ""; }
     else link.style.display = "none";
 
     $("rvNum").textContent = "#" + (idx + 1) + " / " + total + " · LEDGER ROW " + r.row +
       (r.mediaId ? " · " + r.mediaId : "");
-    $("rvPlayer").textContent = r.name + " · " + (r.manager || "–");
+
+    /* participant card — round pfp with an initials fallback, designation +
+       manager on the identity line (everything a reviewer cross-checks) */
+    var ident = pmapOf(r.name);
+    var avSrc = r.photoData || (r.photoId
+      ? "https://drive.google.com/thumbnail?id=" + encodeURIComponent(r.photoId) + "&sz=w160" : "");
+    var avBig = r.photoData || (r.photoId
+      ? "https://drive.google.com/thumbnail?id=" + encodeURIComponent(r.photoId) + "&sz=w800" : "");
+    var avaBtn = $("rvPavaBtn");
+    avaBtn.hidden = false;
+    avaBtn.disabled = !avSrc;
+    avaBtn.setAttribute("data-photo", avBig || "");
+    avaBtn.setAttribute("data-name", r.name || "");
+    var avaImg = $("rvPava");
+    if (avSrc) { avaImg.src = avSrc; avaImg.style.display = ""; }
+    else { avaImg.removeAttribute("src"); avaImg.style.display = "none"; }
+    $("rvPavaIni").textContent = initialsOf(r.name);
+    $("rvPlayer").textContent = r.name;
+    var dEl = $("rvDesig");
+    var dParts = [];
+    if (ident && ident.designation) dParts.push("Desg. · " + ident.designation);
+    if (r.manager) dParts.push("Manager · " + r.manager);
+    if (dParts.length) {
+      dEl.textContent = dParts.join("  ·  ");
+      dEl.hidden = false;
+    } else {
+      dEl.textContent = "";
+      dEl.hidden = true;
+    }
+
     $("rvMeta").textContent = fmtShort(r.format) + " " + multOf(r.mult) +
       " · " + (r.type === "UPDATE" ? "UPDATE SNAPSHOT S" + r.snap : "FIRST REPORT") +
       (r.collabStatus === "CONFIRMED"
@@ -1271,20 +1409,41 @@
     $("rvClaimed").textContent = fmt(r.claimed);
     $("rvSnap").textContent = "S" + r.snap;
     $("rvWeek").textContent = r.weekNum ? "W" + r.weekNum : "–";
+
+    /* season roll-up — videos + total views + points, then per-video rows
+       (newest snapshot of each post; the open one highlighted) */
+    var vids = playerVideos(r.name);
+    var totalViews = 0, anyView = false;
+    vids.forEach(function (v) {
+      var x = viewsOf(v);
+      if (x != null) { totalViews += x; anyView = true; }
+    });
+    var season = $("rvSeason");
+    season.hidden = false;
+    season.innerHTML =
+      '<span class="pcl-rv-sitem"><b>' + vids.length + "</b> VIDEO" +
+        (vids.length === 1 ? "" : "S") + "</span>" +
+      '<span class="pcl-rv-sitem"><b>' + (anyView ? fmt(totalViews) : "–") +
+        "</b> TOTAL VIEWS</span>" +
+      (ident && ident.points
+        ? '<span class="pcl-rv-sitem"><b>' + fmt(ident.points) + "</b> SEASON PTS</span>"
+        : "");
+    var vl = $("rvVlist");
+    vl.hidden = vids.length === 0;
+    vl.innerHTML = vids.map(function (v) {
+      var x = viewsOf(v);
+      return '<span class="pcl-rv-vitem' + (v.row === r.row ? " is-cur" : "") + '">' +
+        '<span class="pcl-rv-vfmt">' + brandBadgeAdm(v.format) + "</span>" +
+        '<span class="pcl-rv-vviews">' + (x == null ? "–" : fmt(x)) + " views</span>" +
+        '<span class="pcl-rv-vs">S' + esc(v.snap) + " · W" + (v.weekNum || "?") + "</span>" +
+        "</span>";
+    }).join("");
+
     $("rvOcr").value = d.ocr === "" ? "" : d.ocr;
     $("rvVerified").value = d.verified === "" ? "" : d.verified;
     $("rvStatus").value = d.check;
     $("rvCtype").value = d.ctype || "";
-    /* full designation visibility for the reviewer (user spec) */
-    var dEl = $("rvDesig");
-    var pd = pmapOf(r.name);
-    if (pd && pd.designation) {
-      dEl.textContent = "Desg. · " + pd.designation;
-      dEl.hidden = false;
-    } else {
-      dEl.textContent = "";
-      dEl.hidden = true;
-    }
+    updateRvScore();
     $("rvOcrNote").textContent = "";
     $("rvScanBtn").disabled = false;
   }
@@ -1297,6 +1456,42 @@
     else if (act === "prev") rvStep(-1);
     else if (act === "next") rvStep(1);
   });
+  /* POST / SCREENSHOT switch — same contract as the CEO screening room */
+  $("rvSegPost").addEventListener("click", function () {
+    if (rvCurrent && rvMediaMode !== "post") {
+      rvMediaMode = "post";
+      renderRvMedia(rvCurrent);
+    }
+  });
+  $("rvSegShot").addEventListener("click", function () {
+    if (rvCurrent && rvMediaMode !== "shot") {
+      rvMediaMode = "shot";
+      renderRvMedia(rvCurrent);
+    }
+  });
+  /* the score preview follows every keystroke in the count fields */
+  $("rvOcr").addEventListener("input", updateRvScore);
+  $("rvVerified").addEventListener("input", updateRvScore);
+  /* expanding the participant photo reuses the shared picture lightbox */
+  $("rvPavaBtn").addEventListener("click", function () {
+    var big = this.getAttribute("data-photo");
+    if (big) PhotoLb.open(big, this.getAttribute("data-name"));
+  });
+  /* clicking the screenshot stage opens the full-res shot */
+  $("rvStageBox").addEventListener("click", function (ev) {
+    if (!ev.target.classList || !ev.target.classList.contains("pcl-rv-img")) return;
+    if (rvCurrent && rvCurrent.shotUrl) {
+      window.open(safeHref(rvCurrent.shotUrl), "_blank", "noopener");
+    }
+  });
+  /* a Drive thumbnail that refuses to load degrades to the missing-shot
+     note instead of a broken-image icon in the reviewer's face */
+  $("rvStageBox").addEventListener("error", function (ev) {
+    var t = ev.target;
+    if (!t || !t.classList || !t.classList.contains("pcl-rv-img")) return;
+    $("rvStageBox").innerHTML =
+      '<span class="pcl-rv-missing">SCREENSHOT UNAVAILABLE — OPEN THE ORIGINAL POST</span>';
+  }, true);
   document.addEventListener("keydown", function (ev) {
     if ($("reviewModal").hidden) return;
     if (ev.target.tagName === "INPUT" || ev.target.tagName === "SELECT") {
@@ -1337,6 +1532,7 @@
         $("rvOcrNote").textContent = "Suggested from the screenshot" +
           (extra.length ? " · also saw: " + extra.slice(0, 4).map(fmt).join(", ") : "") +
           " — confirm against the image before staging.";
+        updateRvScore();
       })
       .catch(function (err) {
         btn.disabled = false;
