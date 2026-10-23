@@ -1,11 +1,8 @@
-/ Updated scratchpad to now work towards the leaderboard
+1. Add this in the right place in the RULEBOOK.
 
-these 3 we will done after the leaderboard
-we have already worked upon the form (few changes to be done later)
-we have the built the backend using gas and given the hosting platform vercel env variable our gas /exec url (more changes left are: such as fall back (when this designed form, leadboard,, need to store logins from user, also if possible to keep something like cache so users who are filling the form, they can get the suggestion for what they typed before (ig that is default chromium based browsers behavior) and mandatory even if i don't get access to reporting manager data list that who are all the reporting managers, so to ensure that a user doesn't mis type once vikram and next time vikrm for the same person and on backend accidentally storing them as two different reporting manager entities,   or admin dashboard is not opening because of poor network, and data backup should always be there, i.e, whatever calamity happens we need to keep the data saved, without data corruption), live excel sheet connection, defining required data or more important data columns, readbility, then ocr, then find a stable hack/trick to fetch the analytics of any content url from instagram, youtube and linkedin)
-we have done our hosting on vercel. we might change the frontend a little, for the dashboard especially to make it friendly for the review team.
+Please ensure that no client names, client faces, or project timelines are visible in any content you create or post on any platform.
+Kindly review your content carefully before posting and make sure all client-related information remains confidential.
 
-Let's work right now on the leaderboard dashboard, need to have a dashboard,  ensure that you never write anything like walkthrough or what you would talk to me (dev) on the pages which will be public or anypages, we can talk in development UI itself or in readme or scope specified docs
-the leaderboard, i have already shared the pic for what they want from me in the leaderboard, but that is no where near suffice, as i have the creative and development liberty, I want to leave a good impression. 
-the leaderboard should have the 5 specified columns only, we will follow our theme but this one should be more complimenting towards the leaderboard screenshot, and font we will use should be even more readable,
-let's work on the dashboard now, we'll iterate towrds improvement, bug fixing,  glitch solving per next iteration.
+
+
+2. 
