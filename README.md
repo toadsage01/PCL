@@ -1,13 +1,5 @@
 # Praper Content League — Season 2 · The Complete System Guide
 
-> **This copy = company-internal hosting.** The public repo
-> (`Praper-Contest-League`) stays on Vercel; this PCL repo carries the
-> Docker / docker-compose / Terraform setup for the internal portal.
-> See **[INTERNAL-HOSTING.md](INTERNAL-HOSTING.md)** to run it.
-> Code flows one-way from the public repo (`git fetch upstream`); the
-> public repo never receives these infra files.
-
-
 **This document explains everything that was built, how it fits together,
 what it enforces, and how to run it for the next 10 weeks without losing
 or corrupting a single data point.**
@@ -270,7 +262,12 @@ filled → points verified`.
    matches promotes the row to MATCH automatically.
 3. **The reviewer writes the final number** (Verified Count) — points
    derive and the row is done. SCAN (Drive-side OCR) and the review modal
-   can overwrite anything; every write is logged old→new.
+   can overwrite anything; every write is logged old→new. SCAN runs the
+   SAME parser as the form (`ocrParse_`, the server twin of `parseCounts_`)
+   and re-checks the ad rules (`ocrBoost_`): a Boosted / Sponsored /
+   Promoted / paid-partnership mark found in the screenshot surfaces as
+   **AD MARK FOUND** in the scan note even when the form-side attach check
+   somehow missed it.
 
 **The review modal is a screening view.** Built for the (non-technical)
 HR review team, it pairs the media with everything needed to judge a row
@@ -314,10 +311,18 @@ the working key made them moot — YT participants type and screenshot
 nothing.
 
 **OCR compliance reads (form-side, on every attached screenshot):** the
-recognition now runs up to three passes — the plain image, an **inverted
-retry for dark-mode screenshots** (white-on-black phones), and an
+recognition now runs up to four passes — the plain image, an **inverted
+retry for dark-mode screenshots** (white-on-black phones), an
 **upscaled PSM-6 retry for small region crops** (a phone crop of just the
-stats strip, which carries no UI words at all). The extracted text is then
+stats strip, which carries no UI words at all), and a **directed zoom**
+(word bounding boxes locate each Views/Plays/Impressions label, the region
+under/right of it is cropped out and re-read with a digits-only alphabet —
+the rescue when the full-page text mangles Instagram's card grid). The
+number parser anchors four layout shapes (inline "2,027 impressions",
+keyword-above-number, the fused insights-card grid "Views Viewers /
+1,082 422", and number-above-keyword) with strict single-token captures —
+fused side-by-side cells ("7 0") can never anchor, and comma-split soup
+rejoins ("1,981" is 1981, never 981). The extracted text is then
 policed by two unit-tested detectors: `detectBoost_` (Boosted / Sponsored /
 Promoted / Paid partnership / a standalone "Ad" badge → the row refuses to
 submit: *"Boosted / sponsored content is not allowed"*) and

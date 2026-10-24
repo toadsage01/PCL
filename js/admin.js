@@ -1523,15 +1523,23 @@
           $("rvOcrNote").textContent = (out && out.error) || "OCR failed.";
           return;
         }
+        /* ad/boost mark re-check — the same verdict the form enforces at
+           attach, now from the reviewer's side (server re-reads the shot
+           with Drive OCR; ocrBoost_ scans its text) */
+        var adWarn = out.boost
+          ? "  ⚠ AD MARK FOUND: " + out.boost + " — boosted/sponsored content scores nothing (rulebook §6). Stage BOOST? or reject."
+          : "";
         if (out.suggested === "" || out.suggested == null) {
-          $("rvOcrNote").textContent = "OCR ran but found no view/impression numbers — type it manually.";
+          $("rvOcrNote").textContent = out.boost
+            ? "AD MARK FOUND: " + out.boost + " — no view count to suggest. This screenshot shows boosted/sponsored content; stage BOOST? or reject."
+            : "OCR ran but found no view/impression numbers — type it manually.";
           return;
         }
         $("rvOcr").value = out.suggested;
         var extra = (out.found || []).filter(function (n) { return n !== out.suggested; });
         $("rvOcrNote").textContent = "Suggested from the screenshot" +
           (extra.length ? " · also saw: " + extra.slice(0, 4).map(fmt).join(", ") : "") +
-          " — confirm against the image before staging.";
+          " — confirm against the image before staging." + adWarn;
         updateRvScore();
       })
       .catch(function (err) {

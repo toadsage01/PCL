@@ -2233,6 +2233,93 @@ function playerProfile_(name) {
 // Converts the screenshot with Drive OCR into a temp Doc, reads its text,
 // extracts candidate counts and suggests the one closest to the claim.
 // Needs "Drive API" enabled as an Advanced Service in the editor.
+/** The review-side twin of the form's OCR brain (js/app.js parseCounts_ +
+ *  pickCount_): the same four anchor shapes — inline, keyword-above-number,
+ *  the IG insights card grid (fused "Views Viewers" / "1,082 422" rows),
+ *  number-above-keyword — with strict single-token number captures and the
+ *  comma-join fallback. Keeping both brains identical means the SCAN button
+ *  reads a screenshot exactly the way the participant's form did.
+ *  Returns {suggested, found}; claimed (the player's typed number) breaks
+ *  ties by proximity, keyword priority arbitrates otherwise. */
+function ocrParse_(text, claimed) {
+  var t = String(text || ''), cands = [], m, seen = {}, anchors = 0;
+  function km(s) {
+    var mm = String(s).match(/^\s*([\d][\d,\.\s]*?)\s*([KkMm])?\s*$/);
+    if (!mm) return 0;
+    var raw = mm[1].replace(/[,\s]/g, '');
+    if (!mm[2] && /^\d{1,3}(\.\d{3})+$/.test(raw)) raw = raw.replace(/\./g, '');
+    var n = Number(raw);
+    if (!isFinite(n)) return 0;
+    if (mm[2] === 'K' || mm[2] === 'k') n *= 1e3;
+    else if (mm[2] === 'M' || mm[2] === 'm') n *= 1e6;
+    return n;
+  }
+  function push(n, kw) {
+    n = Math.round(n);
+    if (!isFinite(n) || n <= 0 || n >= 1e10) return;
+    var key = n + '|' + kw;
+    if (seen[key]) return;
+    seen[key] = 1;
+    cands.push({ n: n, kw: kw });
+  }
+  var reA = /([\d][\d,.]*[KkMm]?)[ \t]*(views|impressions|plays|replays)(?![\w-])/ig;
+  while ((m = reA.exec(t))) { anchors += 1; push(km(m[1]), m[2].toLowerCase()); }
+  var reB1 = /(views|impressions|plays|replays|accounts reached|accounts engaged|members reached)[ \t]*:?[ \t]+([\d][\d,.]*[KkMm]?)(?![\w-])/ig;
+  while ((m = reB1.exec(t))) { anchors += 1; push(km(m[2]), m[1].toLowerCase()); }
+  var reB2 = /(^|\n)[ \t]*(accounts reached|accounts engaged|members reached|impressions|views|plays|replays)(?![\w-])[ \t]*:?[ \t]*(?!over\b|time\b|last\b|days?\b|week\b|month\b)(?:[A-Za-z\u00c0-\u024f\u00ae]+[ \t]*){0,2}(?:\n+)[ \t]*([\d][\d,.]*[KkMm]?)(?![\w-])/ig;
+  while ((m = reB2.exec(t))) { anchors += 1; push(km(m[3]), m[2].toLowerCase()); }
+  var reC = /(^|\n)[ \t]*([\d][\d,.]*[KkMm]?)(?:[ \t]*\n)+[ \t]*(views|impressions|plays|replays|accounts reached|accounts engaged|members reached)(?![\w-])(?![ \t]*:?[\d])/ig;
+  while ((m = reC.exec(t))) { anchors += 1; push(km(m[2]), m[3].toLowerCase()); }
+  if (!anchors) {
+    var flat = t, guard = 0;
+    while (guard++ < 4) {
+      var nf = flat.replace(/(\d),(\d{3})(?!\d)/g, '$1$2');
+      if (nf === flat) break;
+      flat = nf;
+    }
+    var reN = /(\d{2,9})/g;
+    while ((m = reN.exec(flat))) {
+      var n = Number(m[1]);
+      if (n > 9 && n < 1e9) push(n, '');
+    }
+  }
+  var found = [];
+  cands.forEach(function (c) { if (found.indexOf(c.n) < 0) found.push(c.n); });
+  var suggested = '';
+  if (cands.length) {
+    if (claimed > 0) {
+      var best = cands.reduce(function (a, b) {
+        return Math.abs(b.n - claimed) < Math.abs(a.n - claimed) ? b : a;
+      });
+      suggested = best.n;
+    } else {
+      var KW = ['views', 'impressions', 'plays', 'replays',
+                'accounts reached', 'accounts engaged', 'members reached'];
+      for (var i = 0; i < KW.length && suggested === ''; i++) {
+        var hits = cands.filter(function (c) { return c.kw === KW[i]; });
+        if (hits.length) {
+          suggested = Math.max.apply(null, hits.map(function (c) { return c.n; }));
+        }
+      }
+      if (suggested === '') suggested = Math.max.apply(null, found);
+    }
+  }
+  return { suggested: suggested, found: found };
+}
+
+/** The review-side twin of the form's detectBoost_: an ad/boost/sponsor
+ *  mark found in the SCAN text means the screenshot itself shows boosted
+ *  or sponsored content — banned by rulebook §6. Bare "boost" is the CTA
+ *  button every business post carries (organic included) and never flags. */
+function ocrBoost_(text) {
+  var t = String(text || '').toLowerCase();
+  if (!t) return '';
+  var hit = t.match(/\b(boost(ed|ing)|sponsored|promoted|paid partnership|paid promotion)\b/);
+  if (hit) return hit[0];
+  if (/^[ \t\W]*ad[ \t\W]*$/im.test(t) && !/\badd(ing|ed|s)?\b/.test(t)) return 'ad';
+  return '';
+}
+
 function ocrSuggest_(fileId, claimed) {
   if (!fileId) return { ok: false, error: 'This row has no screenshot on file.' };
   var advanced;
@@ -2259,20 +2346,10 @@ function ocrSuggest_(fileId, claimed) {
   } finally {
     try { advanced.remove(docFile.getId()); } catch (ignore) { /* cleanup best effort */ }
   }
-  var nums = [], m;
-  var re = /([\d][\d,\.\s]*)\s*(?:views|impressions|plays|replays|accounts)/ig;
-  while ((m = re.exec(text))) {
-    var n = Number(String(m[1]).replace(/[^\d]/g, ''));
-    if (n > 0 && n < 1e10) nums.push(n);
-  }
-  var suggested = '';
-  if (nums.length) {
-    suggested = claimed
-      ? nums.reduce(function (a, b) {
-          return Math.abs(b - claimed) < Math.abs(a - claimed) ? b : a; })
-      : Math.max.apply(null, nums);
-  }
-  return { ok: true, suggested: suggested, found: nums,
+  var read = ocrParse_(text, claimed || 0);
+  var boost = ocrBoost_(text);
+  return { ok: true, suggested: read.suggested, found: read.found,
+           boost: boost,
            text: String(text).replace(/\s+/g, ' ').slice(0, 400) };
 }
 
