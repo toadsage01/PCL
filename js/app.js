@@ -727,38 +727,64 @@
   }
 
   /* keyword-anchored candidates — solid=true when a metric word anchors
-     them. Real analytics layouts come in three shapes, each with its own
+     them. Real analytics layouts come in four shapes, each with its own
      anchor (guards stop caption bleed like "Impressions\n7-day window"):
        · INLINE            "12,345 views" · "1,204 impressions"   (reA/reB1)
        · WORD ABOVE NUMBER "Accounts reached\n9K" · LI tables    (reB2)
-       · NUMBER ABOVE WORD IG/Studio hero: "8,741\nPlays\n…"     (reC)      */
+       · LABEL CARD        "Views Viewers\n1,981 1,378" — the IG insights
+                           grid: label row (Tesseract merges the side-by-side
+                           cards onto one line) with the number row below   (reB2)
+       · NUMBER ABOVE WORD IG/Studio hero: "8,741\nPlays\n…"     (reC)
+     Number captures are STRICT single tokens (digits/comma/dot only — no
+     spaces): Tesseract fuses side-by-side cells into one line ("7 0"), and
+     a space-friendly class once read that as 70 anchored to the next
+     line's "Views over time" heading. "1,082 422" now correctly stops at
+     the first complete comma group instead of fusing into 1082422. */
   function parseCounts_(text) {
     var t = String(text || ""), out = [], m, seen = {}, anchors = 0;
     function push(n, kw) {
       n = Math.round(n);
-      if (!isFinite(n) || n <= 0 || n >= 1e10 || seen[n]) return;
-      seen[n] = 1;
+      if (!isFinite(n) || n <= 0 || n >= 1e10) return;
+      /* dedupe per keyword, not per number: the same 5,102 can genuinely
+         read as plays (hero layout) AND accounts reached (table layout) —
+         keeping both lets the priority pick arbitrate */
+      var key = n + "|" + kw;
+      if (seen[key]) return;
+      seen[key] = 1;
       out.push({ n: n, kw: kw, solid: true });
     }
     /* number BEFORE keyword, same line — [ \t] never crosses newlines, so
        "9K\nPlays 2,100" cannot read 9K as a play count */
-    var reA = /([\d][\d,. \t]*[KkMm]?)[ \t]*(views|impressions|plays|replays)(?![\w-])/ig;
+    var reA = /([\d][\d,.]*[KkMm]?)[ \t]*(views|impressions|plays|replays)(?![\w-])/ig;
     while ((m = reA.exec(t))) { anchors += 1; push(km_(m[1]), m[2].toLowerCase()); }
     /* keyword BEFORE number, same line ("Impressions 8,741", "views: 1,204") */
-    var reB1 = /(views|impressions|plays|replays|accounts reached|accounts engaged|members reached)[ \t]*:?[ \t]+([\d][\d,. \t]*[KkMm]?)(?![\w-])/ig;
+    var reB1 = /(views|impressions|plays|replays|accounts reached|accounts engaged|members reached)[ \t]*:?[ \t]+([\d][\d,.]*[KkMm]?)(?![\w-])/ig;
     while ((m = reB1.exec(t))) { anchors += 1; push(km_(m[2]), m[1].toLowerCase()); }
-    /* keyword ALONE on its line, number alone on the next (analytics tables
-       + "Accounts reached" stacked labels); (?![\w-]) rejects "7-day" */
-    var reB2 = /(^|\n)[ \t]*(accounts reached|accounts engaged|members reached|impressions)[ \t]*:?[ \t]*(?:[ \t]*\n)+[ \t]*([\d][\d,. \t]*[KkMm]?)(?![\w-])/ig;
+    /* keyword line, number on the NEXT line — analytics tables, stacked
+       "Accounts reached" labels AND the IG insights card grid, where
+       Tesseract fuses side-by-side card labels ("Views Viewers") and their
+       numbers ("1,082 422") into shared lines: up to two trailing words
+       may follow the metric word, but never chart words (over/time/days —
+       those are the "Views over time" headings, whose next line can be a
+       chart's y-axis number); (?![\w-]) rejects "7-day" */
+    var reB2 = /(^|\n)[ \t]*(accounts reached|accounts engaged|members reached|impressions|views|plays|replays)(?![\w-])[ \t]*:?[ \t]*(?!over\b|time\b|last\b|days?\b|week\b|month\b)(?:[A-Za-z\u00c0-\u024f\u00ae]+[ \t]*){0,2}(?:\n+)[ \t]*([\d][\d,.]*[KkMm]?)(?![\w-])/ig;
     while ((m = reB2.exec(t))) { anchors += 1; push(km_(m[3]), m[2].toLowerCase()); }
     /* number ALONE on its line, metric word on the next — the IG/Studio hero
        layout ("8,741\nPlays"); the word must NOT carry its own number
        ("Plays 2,100" would mean the word belongs to the next row) */
-    var reC = /(^|\n)[ \t]*([\d][\d,. \t]*[KkMm]?)(?:[ \t]*\n)+[ \t]*(views|impressions|plays|replays|accounts reached|accounts engaged|members reached)(?![\w-])(?![ \t]*:?[\d])/ig;
+    var reC = /(^|\n)[ \t]*([\d][\d,.]*[KkMm]?)(?:[ \t]*\n)+[ \t]*(views|impressions|plays|replays|accounts reached|accounts engaged|members reached)(?![\w-])(?![ \t]*:?[\d])/ig;
     while ((m = reC.exec(t))) { anchors += 1; push(km_(m[2]), m[3].toLowerCase()); }
     if (!anchors) {            // garbled keywords — bare numbers, chip-only
+      /* comma groups are rejoined first: "1,981" must surface as 1981,
+         not the 981 Tesseract's comma split leaves lying around */
+      var flat = t, guard = 0;
+      while (guard++ < 4) {
+        var nf = flat.replace(/(\d),(\d{3})(?!\d)/g, "$1$2");
+        if (nf === flat) break;
+        flat = nf;
+      }
       var bs = {}, reN = /(\d{2,9})/g;
-      while ((m = reN.exec(t))) {
+      while ((m = reN.exec(flat))) {
         var n = Number(m[1]);
         if (n > 9 && n < 1e9 && !bs[n]) { bs[n] = 1; out.push({ n: n, kw: "", solid: false }); }
       }
@@ -828,7 +854,10 @@
               ctx.putImageData(d, 0, 0);
             } catch (e) { /* tainted canvas can't happen on data: URLs */ }
           }
-          res(cv.toDataURL("image/jpeg", 0.92));
+          /* {url,w,h} — the directed leg needs the same coordinate space
+             the word boxes were measured in */
+          res({ url: cv.toDataURL("image/jpeg", 0.92),
+                w: cv.width, h: cv.height });
         };
         img.onerror = function () { rej(new Error("image decode failed")); };
         img.src = fr.result;
@@ -841,7 +870,7 @@
   /* dark-mode probe — a 64px thumbnail's mean luminance tells whether the
      inverted retry pass is worth one more recognition run */
   function isDarkShot_(file) {
-    return prepOcr_(file, 64, 0, false).then(function (url) {
+    return prepOcr_(file, 64, 0, false).then(function (prep) {
       return new Promise(function (res) {
         var img = new Image();
         img.onload = function () {
@@ -860,7 +889,7 @@
           } catch (e) { res(false); }
         };
         img.onerror = function () { res(false); };
-        img.src = url;
+        img.src = prep.url;
       });
     }).catch(function () { return false; });
   }
@@ -940,6 +969,106 @@
   }
   function readFlags_(text, fmt) {
     return { boost: detectBoost_(text), plat: platformCheck_(text, fmt) };
+  }
+
+  /* ---------- DIRECTED RE-READ — zoom into the exact number region ----------
+     The anchor regexes read the FULL page text; when Tesseract mangles the
+     layout (label rows fused, numbers merged with chart axes) nothing
+     anchors and the read degrades to the bare-number soup. The rescue:
+     Tesseract's own word bounding boxes tell us where the metric LABEL
+     sits, the number lives just below it (IG insights cards) or just to
+     the right (inline rows) — so crop exactly that region out of the
+     prepared screenshot and re-recognise it as a digits-only single line
+     (PSM 7 + 0-9 whitelist). Big glyphs + tiny alphabet = near-perfect
+     reads, with zero extra services: still one library, one pass each.
+
+     Pure functions (unit-tested): directedCrops_ turns word boxes into
+     crop rectangles, parseDirected_ turns a crop's text into a number. */
+  function directedCrops_(words, imgW, imgH) {
+    var out = [], seen = {};
+    var W = Number(imgW) || 0, H = Number(imgH) || 0;
+    if (!words || !words.length) return out;
+    for (var i = 0; i < words.length && out.length < 6; i++) {
+      var w = words[i];
+      if (!w || !w.bbox) continue;
+      var label = String(w.text || "").toLowerCase().replace(/[.:!,]+$/, "");
+      if (!/^(views|impressions|plays|replays)$/.test(label)) continue;
+      var bx = w.bbox, bw = bx.x1 - bx.x0, bh = bx.y1 - bx.y0;
+      if (bw <= 0 || bh <= 0) continue;
+      var key = label + "@" + Math.round(bx.y0 / (bh || 1));
+      if (seen[key]) continue;
+      seen[key] = 1;
+      var span = Math.round(bw * 6 + 40), grow = Math.round(bh * 2.2 + 10);
+      /* the number sits UNDER the label (IG insights card grid)… */
+      var below = { kw: label, mode: "below", x: Math.max(0, Math.round(bx.x0 - 6)),
+        y: Math.round(bx.y1 + 2), w: span, h: grow };
+      /* …or to its RIGHT ("Impressions  12,345") */
+      var right = { kw: label, mode: "right", x: Math.round(bx.x1 + 6),
+        y: Math.max(0, Math.round(bx.y0 - 4)), w: span, h: Math.round(bh + 10) };
+      [below, right].forEach(function (r) {
+        if (W > 0) r.w = Math.min(r.w, W - r.x);
+        if (H > 0) r.h = Math.min(r.h, H - r.y);
+        if (r.w >= 12 && r.h >= 10) out.push(r);
+      });
+    }
+    return out;
+  }
+  function parseDirected_(txt) {
+    var m = String(txt || "").replace(/\s+/g, " ").match(/[\d][\d,.]*[KkMm]?/);
+    if (!m) return null;
+    var n = km_(m[0]);
+    if (!isFinite(n) || n <= 0 || n >= 1e10) return null;
+    return { n: Math.round(n) };
+  }
+  /* crop one rectangle out of a prepared (data-URL) screenshot */
+  function cropFromUrl_(url, rc) {
+    return new Promise(function (res, rej) {
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var x = Math.max(0, Math.min(rc.x, img.naturalWidth - 2));
+          var y = Math.max(0, Math.min(rc.y, img.naturalHeight - 2));
+          var w = Math.max(2, Math.min(rc.w, img.naturalWidth - x));
+          var h = Math.max(2, Math.min(rc.h, img.naturalHeight - y));
+          var cv = document.createElement("canvas");
+          cv.width = w; cv.height = h;
+          var ctx = cv.getContext("2d");
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+          res(cv.toDataURL("image/jpeg", 0.95));
+        } catch (e) { rej(e); }
+      };
+      img.onerror = function () { rej(new Error("crop decode failed")); };
+      img.src = url;
+    });
+  }
+  /* the directed leg itself — up to three crops, one digit-only read each;
+     resolves with extra solid candidates (never throws into the main chain) */
+  function directedRead_(keep) {
+    var rects = directedCrops_(keep.words, keep.prep.w, keep.prep.h).slice(0, 3);
+    if (!rects.length || typeof window === "undefined" || !window.Tesseract) {
+      return Promise.resolve([]);
+    }
+    var extra = [];
+    var chain = Promise.resolve();
+    rects.forEach(function (rc) {
+      chain = chain.then(function () {
+        return cropFromUrl_(keep.prep.url, rc).then(function (cropUrl) {
+          /* PSM 6 (uniform block), NOT the single-line modes — a card crop
+             always bleeds one neighbouring glyph in (tested: PSM 7/8 return
+             empty on real IG card crops, PSM 6 reads the number anyway),
+             and parseDirected_ skips any non-digit prefix */
+          return window.Tesseract.recognize(cropUrl, "eng",
+            { tessedit_pageseg_mode: "6",
+              tessedit_char_whitelist: "0123456789,.KkMm" });
+        }).then(function (rr) {
+          var dr = parseDirected_((rr && rr.data && rr.data.text) || "");
+          if (dr) extra.push({ n: dr.n, kw: rc.kw, solid: true, directed: true });
+        });
+      }).catch(function () { /* one bad crop never kills the read */ });
+    });
+    return chain.then(function () { return extra; });
   }
   /* the verdicts land in the shot cell's error line — the same slot the
      form already blocks submission on. Replacing the screenshot clears it
@@ -1084,10 +1213,13 @@
       .catch(function () { /* silent — the manual field still works */ });
   }
 
-  /* OCR leg — up to THREE passes per attached screenshot, stopping at the
+  /* OCR leg — up to FOUR passes per attached screenshot, stopping at the
      first solid read (a boost verdict short-circuits everything): the
      plain screenshot → an inverted retry for dark-mode shots → a 2×
-     upscale read as one uniform block for small region crops. */
+     upscale read as one uniform block for small region crops → a DIRECTED
+     zoom that re-reads just the pixels under/right of the metric label
+     with a digits-only alphabet. prepOcr_ resolves {url,w,h} so every
+     pass can hand its image + dimensions to the directed leg. */
   function runOcr_(p, file) {
     p.ocrN = 0; p.ocrSolid = false; p.ocrAll = []; p.ocrStatus = "";
     p.ocrFlag = ""; p.ocrLooks = "";
@@ -1095,58 +1227,90 @@
     p.ocrStatus = "working";
     patchSug_(p);
     var flags = { boost: "", plat: { ok: true } };
+    var keep = { prep: null, words: null };   // image + word boxes for the directed leg
+    function noteWords_(res, prep) {
+      if (prep) keep.prep = prep;
+      try {
+        var ws = res && res.data && res.data.words;
+        if (ws && ws.length) keep.words = ws;
+      } catch (e) { /* word boxes are optional */ }
+    }
     loadOcrLib_()
       .then(function () {
         /* PASS 1 — the plain screenshot at reading size (≤2000px) */
-        return prepOcr_(file, 2000, 0, false)
-          .then(function (img) { return window.Tesseract.recognize(img, "eng", {}); });
+        return prepOcr_(file, 2000, 0, false).then(function (prep) {
+          return window.Tesseract.recognize(prep.url, "eng", {})
+            .then(function (res) { noteWords_(res, prep); return res; });
+        });
       })
       .then(function (res) {
         var text = (res && res.data && res.data.text) || "";
         var cands = parseCounts_(text);
         flags = readFlags_(text, p.format);
-        if (flags.boost || cands.some(function (c) { return c.solid; })) return text;
+        if (flags.boost || cands.some(function (c) { return c.solid; })) {
+          return { text: text };
+        }
         /* PASS 2 — dark-mode screenshot (white-on-black): invert and retry */
         return isDarkShot_(file).then(function (dark) {
-          if (!dark) return text;
-          return prepOcr_(file, 2000, 0, true).then(function (img) {
-            return window.Tesseract.recognize(img, "eng", {});
-          }).then(function (r2) {
-            var t2 = (r2 && r2.data && r2.data.text) || "";
-            if (parseCounts_(t2).some(function (c) { return c.solid; })) {
-              flags = readFlags_(t2, p.format);
-              return t2;
-            }
-            return text;
+          if (!dark) return { text: text };
+          return prepOcr_(file, 2000, 0, true).then(function (prep2) {
+            return window.Tesseract.recognize(prep2.url, "eng", {})
+              .then(function (r2) {
+                noteWords_(r2, prep2);
+                var t2 = (r2 && r2.data && r2.data.text) || "";
+                if (parseCounts_(t2).some(function (c) { return c.solid; })) {
+                  flags = readFlags_(t2, p.format);
+                  return { text: t2 };
+                }
+                return { text: text };
+              });
           });
         });
       })
-      .then(function (text) {
+      .then(function (bundle) {
+        var text = bundle.text;
         var cands = parseCounts_(text);
         /* PASS 3 — still nothing solid and nothing disqualifying: the shot
            may be a SMALL CROP (just the stats strip) — pull it up to at
            least 1400px and read it as one uniform block (PSM 6) */
         if (flags.boost || cands.some(function (c) { return c.solid; }) ||
-            !file) return text;
-        return prepOcr_(file, 2600, 1400, false).then(function (img) {
-          return window.Tesseract.recognize(img, "eng",
+            !file) return bundle;
+        return prepOcr_(file, 2600, 1400, false).then(function (prep3) {
+          return window.Tesseract.recognize(prep3.url, "eng",
                   { tessedit_pageseg_mode: "6" }).then(function (r3) {
+            noteWords_(r3, prep3);
             var t3 = (r3 && r3.data && r3.data.text) || "";
             var c3 = parseCounts_(t3);
             if (c3.length > cands.length ||
                 c3.some(function (c) { return c.solid; })) {
               flags = readFlags_(t3, p.format);
-              return t3;
+              return { text: t3 };
             }
-            return text;
+            return bundle;
           });
-        }).catch(function () { return text; });
+        }).catch(function () { return bundle; });
       })
-      .then(function (text) {
+      .then(function (bundle) {
+        /* PASS 4 — DIRECTED ZOOM: only when the full-page passes produced
+           nothing solid — word boxes aim digit-only crops at the exact
+           number regions (under/right of each Views/Plays/Impressions
+           label). Extra solid candidates ride with the page text. */
+        var text = bundle.text;
+        var cands = parseCounts_(text);
+        if (flags.boost || cands.some(function (c) { return c.solid; }) ||
+            !keep.words || !keep.prep) {
+          return { text: text, extra: [] };
+        }
+        return directedRead_(keep).then(function (extra) {
+          return { text: text, extra: extra };
+        }).catch(function () { return { text: text, extra: [] }; });
+      })
+      .then(function (bundle) {
+        var text = bundle.text;
         if (window.console && console.log) {
           console.log("[PCL OCR]", JSON.stringify(text).slice(0, 400));
         }
-        var cands = parseCounts_(text);
+        var cands = parseCounts_(text).concat(bundle.extra || []);
         p.ocrAll = cands;
         var picked = pickCount_(cands, viewsNum_(p));
         p.ocrN = picked.n; p.ocrSolid = picked.solid;
