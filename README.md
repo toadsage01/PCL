@@ -1,20 +1,9 @@
-# Praper Content League — Season 2 · The Complete System Guide
-
-**This document explains everything that was built, how it fits together,
-what it enforces, and how to run it for the next 10 weeks without losing
-or corrupting a single data point.**
-
-> Audience: Manas (league engineer) first, the reviewer team second, and
-> anyone who has to maintain this after the season. Read sections 1–5 once
-> and you understand the machine; sections 10–14 are the operations
-> runbook you will actually live in.
-
----
+# Media Content League — Season 2
 
 ## 1 · What this is — the 30-second version
 
 A free, zero-dependency contest system for a **views-first content league**
-(100+ Praper Media participants, 10 weeks, LinkedIn + Instagram + YouTube):
+(100+ company's participants, 10 weeks, LinkedIn + Instagram + YouTube):
 
 | Piece | Where | What it does |
 |---|---|---|
