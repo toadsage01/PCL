@@ -294,16 +294,18 @@
 /* subtle champion glow on the whole top bar */
 .pcl-row.is-r1 { box-shadow: 4px 4px 0 var(--pcl-hard), 4px 4px 0 3px var(--pcl-glow); }
 
-/* ---- ROUND 40 — pixel trophies + week-winner badge + entry previews ------ */
+/* ---- ROUND 40/41 — pixel trophies + week-winner badge + entry previews --- */
 
-/* season top-3: the pixel trophy replaces the 01/02/03 chip entirely */
+/* season top-3: the pixel trophy replaces the 01/02/03 chip entirely.
+   R41 — a size down (the R40 cups ran a touch large) and a heavier
+   drop-shadow so the saturated v2 art sits proud of the row. */
 .pcl-trophy {
   display: inline-flex;
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
-  filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.5));
 }
 .pcl-trophy-svg { width: 100%; height: 100%; display: block; }
 .pcl-trophy--g { animation: pcl-trophy-pop 2.4s ease-in-out infinite; }
@@ -315,7 +317,10 @@
   .pcl-trophy--g { animation: none; }
 }
 
-/* week-winner badge — mini gold cup + the week number, rides the name */
+/* week-winner badge — mini gold cup + the week number, rides the name.
+   R41 — text-shadow: none on purpose: the hovered name's solid black pixel
+   shadow is a TEXT effect and must never crawl onto the badge (league call),
+   which otherwise inherits it from .pcl-name on hover. */
 .pcl-wbadge {
   display: inline-flex;
   align-items: center;
@@ -326,6 +331,7 @@
   letter-spacing: 1px;
   line-height: 1;
   color: #14235f;
+  text-shadow: none;
   background: var(--pcl-gold, #f2b63c);
   border: 2px solid rgba(255, 255, 255, 0.75);
   box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
@@ -334,6 +340,30 @@
 }
 .pcl-wbadge-cup { width: 14px; height: 14px; display: inline-flex; }
 .pcl-wbadge-cup svg { width: 100%; height: 100%; display: block; }
+
+/* ROUND 41 — pinned winner strip: shown in a W tab when the appointed
+   winner has no entry rows there (the award went to a player who never
+   posted that week, or posts under another spelling). Weeks with no
+   appointment get nothing — the board states appointments, never invents. */
+.pcl-winline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  font-family: var(--pcl-font-title);
+  font-size: 14px;
+  letter-spacing: 2px;
+  line-height: 1.25;
+  text-transform: uppercase;
+  color: #14235f;
+  text-shadow: none;
+  background: var(--pcl-gold, #f2b63c);
+  border: 3px solid var(--pcl-hard, #14235f);
+  box-shadow: 4px 4px 0 var(--pcl-hard, #14235f);
+}
+.pcl-winline-cup { width: 22px; height: 22px; flex: 0 0 auto; display: inline-flex; }
+.pcl-winline-cup svg { width: 100%; height: 100%; display: block; }
 
 /* the W-tab entry preview chip: platform tile (or YT thumbnail) + open link */
 .pcl-entry-prev {
@@ -496,11 +526,13 @@
     font-size: 16px;
   }
 
-  .pcl-trophy { width: 34px; height: 34px; }
+  .pcl-trophy { width: 30px; height: 30px; }
   .pcl-entry-thumb { width: 64px; height: 40px; }
   .pcl-entry-tile { width: 38px; height: 38px; }
   .pcl-rankchip { min-width: 38px; }
   .pcl-row { box-shadow: 3px 3px 0 var(--pcl-hard); }
+  .pcl-winline { margin-bottom: 12px; padding: 8px 10px; font-size: 12px; letter-spacing: 1px; gap: 8px; }
+  .pcl-winline-cup { width: 18px; height: 18px; }
 }
 
 /* ============================================================================

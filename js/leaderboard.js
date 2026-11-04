@@ -63,29 +63,31 @@
   }
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
 
-  /* ---------- ROUND 40 — pixel trophy cups (gold / silver / bronze) ----------
-     Hand-set 12×12 pixel matrices in the league's arcade style: cup bowl,
-     handles, stem, base + floating sparkle pixels — the shape of the
-     reference art the league picked, rebuilt as crisp <rect>s so it stays
-     sharp at any size and ships with zero image assets. */
+  /* ---------- ROUND 41 — pixel trophy cups v2 (gold / silver / bronze) ----
+     R40's cups read pale and ran a size large. v2 keeps the hand-set 12×12
+     matrix but redraws the goblet with real dimension — rim, handles, a
+     left-lit bowl (highlight → mid → shade), stem, two-step plinth, two
+     floating sparkle pixels — and swaps the muted fills for saturated,
+     hard-outlined palettes so each metal pops off the orange rows. Rendered
+     as crisp <rect>s: sharp at any size, zero image assets. */
   var TROPHY_PIX = [
-    "............",
-    "..s......s..",
-    ".aaaaaaaaaa.",
-    "bsaaaaaaaaab",
-    "baaaaaaaaaab",
-    ".baaaaaaaab.",
-    "..baaaaaab..",
-    "....baab....",
-    ".....bb.....",
-    "...aaaaaa...",
-    "..aaaaaaaa..",
-    "..dddddddd.."
+    ".s........s.",
+    ".oooooooooo.",
+    "oohhmmmmddoo",
+    "oohhmmmmddoo",
+    ".ohhmmmmddo.",
+    "..ohmmmmdo..",
+    "...ohmmdo...",
+    "....ommo....",
+    ".....oo.....",
+    "..oooooooo..",
+    ".ommmmmmmdo.",
+    ".oooooooooo."
   ];
   var TROPHY_META = {
-    g: { a: "#f2b63c", b: "#c78d16", d: "#7a5410", s: "#ffe9a8" },
-    s: { a: "#d7dee8", b: "#a7b2c2", d: "#66748b", s: "#ffffff" },
-    b: { a: "#d98e4a", b: "#a9642e", d: "#6e3c17", s: "#ffd9ad" }
+    g: { o: "#8a450c", h: "#ffe792", m: "#ffb627", d: "#e07c00", s: "#fffdf0" },
+    s: { o: "#3f4c63", h: "#ffffff", m: "#c7d0dc", d: "#8b99ac", s: "#ffffff" },
+    b: { o: "#57280b", h: "#f5bc85", m: "#c87137", d: "#93481c", s: "#ffddb8" }
   };
   function pixelSvg(map, col) {
     var r = "";
@@ -345,25 +347,39 @@
              a.name.localeCompare(b.name);
     });
     var weeks = data.weeks && data.weeks.byWeek ? data.weeks : null;
-    /* ROUND 40 — week winners + per-player win lists. The server ranks each
-       week's roll-up (post points + judge-panel awards) — its first entry IS
-       that week's winner, so every view can wear the W-badge without a new
-       endpoint. Keyed by the normalized name. */
+    /* ROUND 41 — the week winner is an APPOINTMENT, not a rank. The R40
+       build read "top of the weekly roll-up", which crowned whoever led the
+       points table that week (Mitali W1) and silently announced unannounced
+       weeks (aryan maddeshiya W2). Wrong instrument: per the weekly challenge
+       rules only the panels appoint — the Control Room's weekly-challenge
+       award (rulebook §4) IS the appointment. So the winner of a week is the
+       player holding that week's largest panel award; a week with no award
+       has no winner yet and wears no badge. The awards ride the public stats
+       payload, so this works against the current live backend — no paste.
+       weekWinners[w] = { key: normKey, name: display as appointed }. */
     var weekWinners = {};
     var wonBy = {};
-    if (weeks && weeks.byWeek) {
-      Object.keys(weeks.byWeek).forEach(function (w) {
-        var top = weeks.byWeek[w][0];
-        if (!top || !top.player) return;
-        var k = normKey(top.player);
-        weekWinners[w] = k;
-        if (!wonBy[k]) wonBy[k] = [];
-        wonBy[k].push(Number(w));
-      });
-      Object.keys(wonBy).forEach(function (k) {
-        wonBy[k].sort(function (a, b) { return a - b; });
-      });
-    }
+    (Array.isArray(data.awards) ? data.awards : []).forEach(function (a) {
+      if (!a) return;
+      var w = Number(a.week);
+      var name = String(a.player || "").trim();
+      if (!(w >= 1) || !name) return;
+      w = String(w);
+      var pts = Number(a.points) || 0;
+      var cur = weekWinners[w];
+      if (!cur || pts > cur.points ||
+          (pts === cur.points && normKey(name) < cur.key)) {
+        weekWinners[w] = { key: normKey(name), name: name, points: pts };
+      }
+    });
+    Object.keys(weekWinners).forEach(function (w) {
+      var k = weekWinners[w].key;
+      if (!wonBy[k]) wonBy[k] = [];
+      wonBy[k].push(Number(w));
+    });
+    Object.keys(wonBy).forEach(function (k) {
+      wonBy[k].sort(function (a, b) { return a - b; });
+    });
     return {
       players: players,
       weeks: weeks,
@@ -402,7 +418,8 @@
     var wKey = String(state.view);
     var list = (d.weeks && d.weeks.byWeek && d.weeks.byWeek[wKey]) || [];
     var gal = d.gallery || {};
-    var winnerKey = (d.weekWinners || {})[wKey] || "";
+    var winner = (d.weekWinners || {})[wKey] || null;
+    var winnerKey = winner ? winner.key : "";
     var out = list.map(function (p, si) {
       var g = gal[normKey(p.player)];
       var post = null;
@@ -518,8 +535,22 @@
       $("pclRows").innerHTML = "";
       return;
     }
-    $("pclRows").innerHTML =
-      list.map(weekMode ? rowHtmlWeek : rowHtml).join("");
+    var html = list.map(weekMode ? rowHtmlWeek : rowHtml).join("");
+    /* ROUND 41 — a week whose appointed winner has NO entry rows in this
+       tab (the award was granted to a player who never posted that week,
+       or posted under a different spelling) still must show the truth:
+       a pinned winner strip above the list. Weeks with no appointment
+       (yet to be announced) get nothing — the board never invents one. */
+    if (weekMode) {
+      var winner = ((state.data || {}).weekWinners || {})[String(state.view)];
+      if (winner && !list.some(function (p) { return p.won; })) {
+        html = '<div class="pcl-winline" role="note">' +
+          '<span class="pcl-winline-cup">' + TROPHY_SVGS.g + '</span>' +
+          'WEEK ' + Number(state.view) + ' WINNER &#8212; ' +
+          esc(String(winner.name).toUpperCase()) + '</div>' + html;
+      }
+    }
+    $("pclRows").innerHTML = html;
     show("rows");
   }
 
