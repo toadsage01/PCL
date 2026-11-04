@@ -2793,7 +2793,74 @@ function slugify_(s) {
  *  player's designation + verified tick so the form can prefill the
  *  first-time fields for returning players. No key needed — the leaderboard
  *  is public anyway. */
+/** ROUND 42 — email leg. A player whose data is already on file types ONLY
+ *  their work email and the form prefills the identity section (full name,
+ *  reporting manager, designation — the photo follows through the existing
+ *  name-keyed path). Reads the same ledger the ingest writes: the most
+ *  recent row carrying that Player Email wins. Deliberately narrow: the
+ *  asker supplied the email themselves and gets back only what they
+ *  submitted (name/manager/designation) — the same trust model checklink
+ *  already applies. No allowlist gate here (that one guards EMPLOYEE
+ *  sign-in, not "look up my own entry"); an unknown email simply answers
+ *  ok:false and the form leaves every field as typed. */
+function playerLookupByEmail_(p, email) {
+  try {
+    var sheet = getSheet_();
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return reply_(p, { ok: false, error: 'no registration on file' });
+    }
+    var c = {};
+    HEADERS.forEach(function (h, i) { c[h] = i; });
+    var eCol = c['Player Email'], nCol = c['Full Name'],
+        mCol = c['Reporting Manager'], dCol = c['Player Designation'],
+        tCol = c['Timestamp'];
+    if (eCol === undefined || nCol === undefined) {
+      return reply_(p, { ok: false, error: 'no registration on file' });
+    }
+    var vals = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+    var best = null, bestTs = -1;
+    vals.forEach(function (r) {
+      if (str_(r[eCol]).trim().toLowerCase() !== email) return;
+      var name = str_(r[nCol]).trim();
+      if (!name) return;
+      var ts = r[tCol] instanceof Date ? r[tCol].getTime() : 0;
+      if (best && ts < bestTs) return;
+      best = {
+        name: name,
+        manager: mCol !== undefined ? str_(r[mCol]).trim() : '',
+        designation: dCol !== undefined ? str_(r[dCol]).trim() : ''
+      };
+      bestTs = ts;
+    });
+    if (!best) {
+      return reply_(p, { ok: false, error: 'no registration on file' });
+    }
+    var out = { ok: true, email: email, name: best.name,
+                manager: best.manager, designation: best.designation };
+    // photo + verified ride the SAME name-keyed path (PFP removal included)
+    var profile = playerProfile_(best.name);
+    out.verified = profile.verified;
+    if (!out.designation && profile.designation) out.designation = profile.designation;
+    var f = findPhotoByPrefix_(getPhotoFolder_(getDriveFolder_()),
+                               slugify_(best.name));
+    if (f) {
+      out.url = f.getUrl();
+      out.thumb = 'https://drive.google.com/thumbnail?id=' + f.getId() + '&sz=w400';
+    }
+    return reply_(p, out);
+  } catch (err) {
+    return reply_(p, { ok: false, error: String(err) });
+  }
+}
+
 function playerPhotoEndpoint_(p) {
+  // ROUND 42 — email first: a registered player typing just their work
+  // email prefills the whole identity section. A typed NAME always wins
+  // (a borrowed browser may be starting a brand-new identity).
+  var email = str_(p.email).trim().toLowerCase();
+  var nameParam = str_(p.name).trim();
+  if (email && !nameParam) return playerLookupByEmail_(p, email);
   var nameSlug = slugify_(p.name);
   if (!nameSlug) {
     return reply_(p, { ok: false, error: 'Type your full name first.' });

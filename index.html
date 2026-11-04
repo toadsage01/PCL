@@ -30,7 +30,7 @@
 
   <!-- PCL custom form engine — no form framework. js/app.js renders the
        chips, post rows and lightbox into this markup. -->
-  <link rel="stylesheet" href="css/theme.css?v=20261029a" />
+  <link rel="stylesheet" href="css/theme.css?v=20261104b" />
 </head>
 <body>
   <!-- Arcade marquee: the PCL logo's native dark band, both themes.
@@ -184,7 +184,7 @@
         <p class="pcl-empty" id="postEmpty">No posts yet — add links above.</p>
       </section>
 
-      <!-- 4 · WEEKLY CHALLENGE (mandatory pick — a week or "Not entering") -->
+      <!-- 4 · WEEKLY CHALLENGE (mandatory pick — a week or "Not entering or later") -->
       <section class="pcl-panel">
         <h2 class="pcl-panel-title">4 &middot; Weekly Challenge</h2>
         <div class="pcl-field" data-field="challengeWeek">
@@ -192,7 +192,8 @@
           <div class="pcl-weekrow">
             <div class="pcl-selectwrap">
               <select class="pcl-input pcl-select" id="challengeWeek">
-                <option value="">Not entering</option>
+                <option value="">Select an option</option>
+                <option value="none">Not entering or later</option>
               </select>
               <span class="pcl-chevron" aria-hidden="true"></span>
             </div>
@@ -200,6 +201,8 @@
                     aria-label="About the weekly challenges"
                     title="About the weekly challenges">i</button>
           </div>
+          <p class="pcl-week-hint" id="weekHint" hidden>The weekly challenge keeps
+            only <b>one entry</b> — submitting again updates it.</p>
           <p class="pcl-err">Select an option.</p>
         </div>
         <div class="pcl-field" data-field="challengeUrl" hidden>
@@ -309,6 +312,6 @@
   </div>
 
   <script src="js/gas-endpoint.js?v=20261027c"></script>
-  <script src="js/app.js?v=20261103a"></script>
+  <script src="js/app.js?v=20261104b"></script>
 </body>
 </html>

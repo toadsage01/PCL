@@ -2009,11 +2009,11 @@
     if (list.indexOf(cur) === -1 && curClosed) list.push(cur);   // keep the closed live week visible (disabled)
     list.sort(function (a, b) { return a - b; });
     /* ROUND 40 — the section is a MANDATORY pick: the select opens on a
-       "Select an option" placeholder, and "Not entering" is a deliberate
-       choice (value "none", normalized back to "" on the wire so the
-       backend's empty-string contract is untouched). */
+       "Select an option" placeholder, and "Not entering or later" (R42
+       rename) is a deliberate choice (value "none", normalized back to ""
+       on the wire so the backend's empty-string contract is untouched). */
     var opts = '<option value="">Select an option</option>' +
-               '<option value="none">Not entering</option>';
+               '<option value="none">Not entering or later</option>';
     list.forEach(function (w) {
       var c = CHALLENGES[w - 1];
       if (!c) return;
@@ -2042,9 +2042,9 @@
           "form. Please try again a little later."
         : noneOpen
           ? "Weekly challenge entries are closed right now — regular " +
-            "(\u201cNot entering\u201d) posts still go through."
+            "(\u201cNot entering or later\u201d) posts still go through."
           : "Week " + cur + " challenge entries are closed right now — " +
-            "switch to \u201cNot entering\u201d to send regular posts.";
+            "switch to \u201cNot entering or later\u201d to send regular posts.";
       note.hidden = false;
     } else if (note) {
       note.hidden = true;
@@ -2553,6 +2553,7 @@
       rosterDesigFill();
       lookupPhoto();
       nameHintCheck();
+      weekOwnCheck();                       // R42 — name may unlock the own-entry note
     }, 600);
   });
 
@@ -2563,6 +2564,11 @@
      roster/ledger name but not exact, surface a tap-to-use hint BEFORE
      the entry lands. Advisory only — it never blocks typing. */
   var statNames = null;               // ledger names, lazily fetched once
+  /* ROUND 42 — the same stats call also lands the payload's public rows
+     (name / url / week / ts — the gallery fields, nothing internal). The
+     Q4 own-entry check scans them: pick a week you already entered and the
+     form shows your earlier link. [] until the fetch answers. */
+  var statRows = [];
   /* ROUND 35 — the Control Room's submission switches, refreshed at boot:
      { seasonOpen: true, weeks: {"1": true, …} }. Absent = everything open
      (old backend / offline) — the backend ingest re-checks regardless. */
@@ -2632,6 +2638,12 @@
         statNames = out.players.map(function (p) { return p.player; });
         nameHintCheck();
       }
+      /* ROUND 42 — the payload's public rows feed the Q4 own-entry check;
+         landing late is fine — the check re-runs the moment they arrive. */
+      if (out && out.ok && Array.isArray(out.rows)) {
+        statRows = out.rows;
+        weekOwnCheck();
+      }
       /* ROUND 35 — the Control Room's submission gates ride the same call:
          a closed season or a closed live week re-renders the week select
          and blocks challenge entries at submit (the backend re-checks). */
@@ -2680,6 +2692,53 @@
       })
       .catch(function () { /* no photo / offline — field stays as-is */ });
   }
+  /* ROUND 42 — WORK-EMAIL PREFILL. A player whose data is already on file
+     types just their work email; the ledger's newest row for that email
+     fills full name + reporting manager + designation, and the photo on
+     file arrives through the existing name-keyed lookup. Hand-typed values
+     always win: a field is only filled when it is EMPTY or still holding
+     what a previous prefill put there — a new participant entering their
+     details by hand is never clobbered, and the next player on a shared
+     browser starts from whatever they type the moment the email changes. */
+  var emailPrefill = { asked: "", name: "", manager: "", desig: "" };
+  function prefillFromEmail() {
+    var em = playerEmail.value.trim().toLowerCase();
+    if (!em || em.indexOf("@") < 1 || !cfg.gasWebAppUrl) return;
+    if (em === emailPrefill.asked) return;
+    emailPrefill.asked = em;
+    jsonpGet({ action: "playerPhoto", email: em })
+      .then(function (out) {
+        if (!out || out.ok !== true || !out.name) return;   // unknown email — free typing
+        if (playerEmail.value.trim().toLowerCase() !== em) return;  // stale answer
+        if (!fullName.value.trim() ||
+            (emailPrefill.name && normId(fullName.value) === emailPrefill.name)) {
+          emailPrefill.name = normId(out.name);
+          if (normId(fullName.value) !== emailPrefill.name) {
+            fullName.value = String(out.name);
+            fullName.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }
+        if (out.manager &&
+            (!manager.value.trim() ||
+             manager.value.trim() === emailPrefill.manager)) {
+          emailPrefill.manager = String(out.manager);
+          manager.value = emailPrefill.manager;
+        }
+        if (out.designation &&
+            (!desig.value.trim() || desigLocked ||
+             (emailPrefill.desig && desig.value.trim() === emailPrefill.desig))) {
+          emailPrefill.desig = String(out.designation);
+          desig.value = emailPrefill.desig;
+          desigLocked = true;
+          desigOwner = normId(fullName.value);
+          updateDesigCapsule();
+        }
+        refreshPhoto();
+        weekOwnCheck();                     // identity may unlock the own-entry note
+      })
+      .catch(function () { /* offline — fields stay as typed */ });
+  }
+  playerEmail.addEventListener("blur", prefillFromEmail);
   function jsonpGet(params) {
     return new Promise(function (resolve, reject) {
       var cb = "pclPhotoCb" + Date.now() + "_" + Math.floor(Math.random() * 1e5);
@@ -3036,7 +3095,13 @@
                takenBy: "", collabFor: "",
                ctype: p.ctype === "PERSONAL" ? "PERSONAL" : "PRAPER" };
     });
-    if (raw.week) {   // only if that week is STILL open (options come from the clock)
+    /* ROUND 42 — a restored not-entering pick is exactly the sticky-select
+       confusion the user reported: come back to the form and section 4
+       already says not-entering before anyone looked at it. Real week
+       labels still restore (that is the accidental-reload insurance); the
+       explicit not-entering pick NEVER does — every visit opens on the
+       "Select an option" placeholder. */
+    if (raw.week && raw.week !== "none") {   // only if that week is STILL open (options come from the clock)
       for (var i = 0; i < week.options.length; i++) {
         if (week.options[i].value === raw.week) {
           week.value = raw.week;
@@ -3090,6 +3155,7 @@
     }, 3200);
     if (fullName.value.trim().length >= 2) lookupPhoto();
     refreshPhoto();
+    weekOwnCheck();                         // R42 — a restored real week re-checks
     /* the restored links re-ask the ledger who owns them — a draft can be
        hours old and someone may have posted the same link meanwhile */
     checkAllLinks_();
@@ -3479,6 +3545,7 @@
     fieldOf("additionalNotes").hidden = !entering;
     challengeUrl.__chk = null;              // identity of the question changed
     challengeCheck_();
+    weekOwnCheck();                         // R42 — already-submitted for THIS week?
   });
 
   /* ==========================================================================
@@ -3491,10 +3558,13 @@
                     submitting is still fine, the ledger LINKS the content
                     to the challenge instead of counting it twice
        taken      — red: another player's content; the ingest refuses it too
+       own (R42)  — picking a week they ALREADY entered (before any URL is
+                    typed): the payload's public rows carry name/url/week,
+                    so their earlier entry shows with a USE THIS LINK button
        first time — silence: exactly as it has always been
      ======================================================================== */
   var chalNote = $("chalNote");
-  var chalState = "";                       // "" | "mine" | "taken"
+  var chalState = "";                       // "" | "mine" | "taken" | "own"
   function sniffFmt_(url) {
     var s = String(url || "");
     if (/(?:instagram\.com|instagr\.am)/i.test(s)) return "ig_reel";
@@ -3508,13 +3578,80 @@
     chalNote.hidden = true;
     chalNote.innerHTML = "";
     chalNote.className = "pcl-chal-note";
+    weekOwnCheck();                         // the own-note owns empty-URL silence
   }
   function showChalNote(kind, html) {
     chalState = kind;
     chalNote.className = "pcl-chal-note " +
-      (kind === "taken" ? "is-taken" : "is-mine");
+      (kind === "taken" ? "is-taken"
+        : kind === "own" ? "is-own" : "is-mine");
     chalNote.innerHTML = html;
     chalNote.hidden = false;
+  }
+  /* R42 — the submitted URL shown AS TEXT (clickable), not hidden behind an
+     "open ↗" label: the user asked to notably see what they uploaded. */
+  function chalUrlHtml_(url) {
+    var s = String(url || "");
+    var shown = s.length > 72 ? s.slice(0, 69) + "…" : s;
+    return '<a class="pcl-chal-url" href="' + esc(s) +
+           '" target="_blank" rel="noopener">' + esc(shown) + "</a>";
+  }
+  /* ---------- R42 — "you already uploaded for THIS week" ----------
+     The stats payload's public rows (the same call the form already makes
+     for names + gates) carry name / url / week label / timestamp. When the
+     player picks a real week, and their typed name matches a row of that
+     week, the form states it — cross-device, straight from the ledger's
+     public face, no local memory involved. Deliberately quiet rules:
+       · only while the challenge link box is EMPTY (once a URL is typed,
+         the checklink mine/taken verdicts take over the note)
+       · a normalized-name match only — never guessing across spellings
+       · no match → nothing shows; first submission looks like the first */
+  function weekOwnCheck() {
+    var hint = $("weekHint");
+    var picked = weekChoice();
+    /* the one-entry hint rides the pick, not the notice */
+    if (hint) hint.hidden = !picked;
+    if (!picked) { if (chalState === "own") clearOwnNote_(); return; }
+    if (chalState === "mine" || chalState === "taken") return;  // URL verdict wins
+    if (challengeUrl.value.trim()) return;                      // URL asks for itself
+    var who = normId(fullName.value);
+    if (!who) { if (chalState === "own") clearOwnNote_(); return; }
+    var wnum = wkNumOf_(picked);
+    var rows = (typeof statRows !== "undefined" && statRows) || [];
+    var best = null, bestTs = -1;
+    rows.forEach(function (r) {
+      if (!r || normId(r.name) !== who) return;
+      var m = String(r.week || "").match(/^Week (\d+)/i);
+      var rw = m ? Number(m[1]) : 0;
+      if (rw !== wnum) return;
+      var url = String(r.url || "").trim();
+      if (!url) return;
+      var ts = Date.parse(r.ts) || 0;
+      if (best && ts < bestTs) return;
+      best = { url: url, ts: ts };
+      bestTs = ts;
+    });
+    if (!best) { if (chalState === "own") clearOwnNote_(); return; }
+    var when = best.ts ? new Date(best.ts).toISOString().slice(0, 10) : "";
+    showChalNote("own",
+      "<b>" + esc(picked.replace(/ — .*$/, "")) +
+      " entry already uploaded" + (when ? " on " + esc(when) : "") +
+      ".</b> The weekly challenge keeps only one entry — submitting the " +
+      "same link again just updates it. " + chalUrlHtml_(best.url) +
+      ' <button type="button" class="pcl-chal-use" data-use="' +
+      esc(best.url) + '">USE THIS LINK</button>');
+    var btn = chalNote.querySelector(".pcl-chal-use");
+    if (btn) btn.addEventListener("click", function () {
+      challengeUrl.value = btn.getAttribute("data-use") || "";
+      challengeUrl.dispatchEvent(new Event("input", { bubbles: true }));
+      challengeUrl.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+  function clearOwnNote_() {
+    chalState = "";
+    chalNote.hidden = true;
+    chalNote.innerHTML = "";
+    chalNote.className = "pcl-chal-note";
   }
   function challengeCheck_() {
     var url = challengeUrl.value.trim();
@@ -3540,15 +3677,18 @@
         } else if (out.mine) {
           var when = out.mineTs ? String(out.mineTs).slice(0, 10) : "";
           var wkN = Number(out.mineWeek) || 0;
+          /* R42 — the earlier link shows AS TEXT (clickable), not hidden
+             behind an "open ↗" label: the player should SEE what they
+             uploaded for that week and update it if need be. */
           showChalNote("mine",
             "<b>" +
             (wkN ? "Week " + wkN + " submission already made" +
                   (when ? " on " + esc(when) : "")
                  : "You already submitted this content" +
                    (when ? " on " + esc(when) : "")) +
-            ".</b> It will be linked to this challenge — not counted twice. " +
-            "<a href=\"" + esc(out.mineUrl || url) + "\" target=\"_blank\" " +
-            "rel=\"noopener\">open your earlier link ↗</a>");
+            ".</b> The weekly challenge keeps only one entry — submitting " +
+            "the same link again just updates it. " +
+            chalUrlHtml_(out.mineUrl || url));
         } else {
           clearChalNote();                 // first time — exactly as before
         }
@@ -3585,10 +3725,11 @@
       bad("postLinks", "Submissions are paused right now");
     }
     /* ROUND 40 — section 4 is a deliberate pick: placeholder, a real
-       "Not entering" choice, or a week. Submitting without choosing stops
-       here, the same as any other required field. */
+       "Not entering or later" choice, or a week. Submitting without
+       choosing stops here, the same as any other required field. */
     if (!week.value) {
-      bad("challengeWeek", "Select an option — a week or \u201cNot entering\u201d.");
+      bad("challengeWeek",
+          "Select an option — a week or \u201cNot entering or later\u201d.");
     }
     if (weekChoice() && weekClosed_(wkNumOf_(weekChoice()))) {
       bad("challengeWeek", "Entries closed right now");

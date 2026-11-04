@@ -645,6 +645,48 @@ html[data-pcl-theme="dark"] .pcl-toggle .pcl-px-moon { display: none; }
   border-color: var(--pcl-error, #c02626);
   background: rgba(192, 38, 38, 0.07);
 }
+/* R42 — own-entry note: calm info-blue (nothing is wrong — the league is
+   showing them what they already uploaded), the link breaks so long URLs
+   stay readable, USE THIS LINK is a deliberate one-tap fill. */
+.pcl-chal-note.is-own {
+  border-color: var(--pcl-info, #1d4ed8);
+  background: rgba(29, 78, 216, 0.07);
+}
+.pcl-chal-url {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+}
+.pcl-chal-use {
+  margin: 2px 0 0 6px;
+  padding: 3px 8px;
+  font-family: var(--pcl-font-title, inherit);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border: 2px solid var(--pcl-ink, #1e3a8a);
+  border-radius: 5px;
+  background: var(--pcl-paper, #fffdf6);
+  color: var(--pcl-ink, #1e3a8a);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--pcl-shadow, rgba(0, 0, 0, 0.35));
+}
+.pcl-chal-use:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--pcl-shadow, rgba(0, 0, 0, 0.35)); }
+/* R42 — the one-entry hint under the week select: visible only while a
+   real week is picked (the JS toggles hidden). */
+.pcl-week-hint {
+  margin: 6px 2px 0;
+  font-family: var(--pcl-font-sans, inherit);
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--pcl-text, #17181d);
+  opacity: 0.68;
+}
+.pcl-week-hint b { color: var(--pcl-text, #17181d); }
+.pcl-week-hint[hidden] { display: none; }
 .pcl-chal-note b { font-family: var(--pcl-font-title, inherit); }
 .pcl-chal-note a { font-weight: 700; color: inherit; }
 .pcl-chal-note[hidden] { display: none; }
